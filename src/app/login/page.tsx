@@ -1,0 +1,138 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { Utensils, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+
+export default function LoginPage() {
+  const { user, login, loading } = useAuth();
+  const router = useRouter();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/');
+    }
+  }, [user, loading, router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSubmitting(true);
+
+    try {
+      const { error } = await login(email, password);
+      if (error) {
+        setErrorMsg(error.message || 'Credenciales inválidas. Por favor intente de nuevo.');
+      } else {
+        router.push('/');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Ocurrió un error inesperado al iniciar sesión.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#09090b] text-zinc-100">
+        <Loader2 className="h-10 w-10 text-emerald-550 animate-spin mb-4" />
+        <p className="text-zinc-400 text-sm">Cargando...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Decorative background glow circles */}
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-emerald-600/10 blur-[100px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-96 h-96 rounded-full bg-emerald-950/20 blur-[120px] pointer-events-none"></div>
+
+      <div className="max-w-md w-full bg-zinc-900/40 border border-zinc-800 p-8 rounded-3xl backdrop-blur-lg shadow-2xl relative z-10 space-y-6">
+        {/* Brand Header */}
+        <div className="text-center space-y-2">
+          <div className="h-12 w-12 bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-inner">
+            <Utensils className="h-6 w-6" />
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight mt-4">Bienvenido de nuevo</h2>
+          <p className="text-sm text-zinc-400">Ingresa tus credenciales para acceder al sistema</p>
+        </div>
+
+        {errorMsg && (
+          <div className="bg-rose-950/20 border border-rose-900/50 p-3.5 rounded-xl flex items-start gap-2.5 text-rose-450 leading-relaxed text-xs animate-shake">
+            <AlertCircle className="h-4.5 w-4.5 shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Email field */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Correo Electrónico</label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="ejemplo@restaurante.com"
+                className="w-full bg-zinc-950/50 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 py-3.5 pl-11 pr-4 rounded-xl text-xs outline-none transition-all placeholder:text-zinc-600 font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Password field */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Contraseña</label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-zinc-950/50 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 py-3.5 pl-11 pr-4 rounded-xl text-xs outline-none transition-all placeholder:text-zinc-600 font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-semibold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-950/20 hover:shadow-emerald-500/10 transition-all cursor-pointer mt-6"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Iniciando Sesión...
+              </>
+            ) : (
+              'Iniciar Sesión'
+            )}
+          </button>
+        </form>
+
+        {/* Register redirection */}
+        <div className="text-center pt-2">
+          <p className="text-xs text-zinc-550">
+            ¿Nuevo miembro del personal?{' '}
+            <Link href="/signup" className="text-emerald-450 hover:underline font-semibold transition-colors">
+              Regístrate aquí
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

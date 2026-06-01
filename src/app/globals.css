@@ -25,3 +25,119 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Estilos de impresión profesionales para Reportes PDF */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Inter', Arial, sans-serif !important;
+  }
+
+  /* Ocultar elementos no imprimibles */
+  aside, 
+  header, 
+  .no-print, 
+  button, 
+  select, 
+  input[type="range"],
+  .fixed,
+  .toast {
+    display: none !important;
+  }
+
+  /* Eliminar scroll lateral e interno en el contenedor principal */
+  main, 
+  section, 
+  div, 
+  body {
+    overflow: visible !important;
+    height: auto !important;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+
+  /* Contenedor del reporte para abarcar todo el ancho */
+  .print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Convertir elementos oscuros a claros para legibilidad y ahorro de tinta */
+  .bg-zinc-950\/40,
+  .bg-zinc-950\/45,
+  .bg-zinc-950\/20,
+  .bg-zinc-900\/50,
+  .bg-zinc-900\/60,
+  .bg-zinc-950,
+  .bg-zinc-900 {
+    background: #f4f4f5 !important; /* zinc-100 */
+    border-color: #e4e4e7 !important; /* zinc-200 */
+    color: #18181b !important; /* zinc-900 */
+  }
+
+  .border-zinc-900,
+  .border-zinc-800,
+  .border-zinc-850,
+  .border-zinc-700,
+  .border {
+    border-color: #d4d4d8 !important; /* zinc-300 */
+  }
+
+  /* Re-ajustar texto para legibilidad sobre papel blanco */
+  .text-zinc-100,
+  .text-zinc-200,
+  .text-zinc-300,
+  .text-zinc-400,
+  .text-zinc-150 {
+    color: #18181b !important;
+  }
+
+  .text-zinc-500,
+  .text-zinc-550,
+  .text-zinc-600,
+  .text-zinc-650 {
+    color: #52525b !important; /* zinc-600 */
+  }
+
+  /* Tablas de reporte con estilo claro limpio */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+  
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead tr {
+    background-color: #e4e4e7 !important;
+    color: #000000 !important;
+  }
+
+  td, th {
+    padding: 8px 12px !important;
+    border-bottom: 1px solid #d4d4d8 !important;
+  }
+
+  /* Asegurar que las imágenes/gráficos no se alteren */
+  svg {
+    filter: none !important;
+    color-scheme: light !important;
+  }
+
+  /* Evitar saltos de página huérfanos en secciones */
+  section, .bg-zinc-950\/40 {
+    page-break-inside: avoid !important;
+    margin-bottom: 20px !important;
+  }
+}
+

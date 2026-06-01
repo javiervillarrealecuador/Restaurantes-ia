@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
+
+async function verifyAdmin(req: NextRequest) {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return null;
+  const token = authHeader.replace('Bearer ', '');
+
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return null;
+
+  const { data: staff } = await supabaseAdmin
+    .from('restaurant_staff')
+    .select('role, restaurant_id')
+    .eq('profile_id', user.id)
+    .eq('role', 'admin_general')
+    .limit(1);
+
+  if (!staff || staff.length === 0) return null;
+  return { user, restaurantId: staff[0].restaurant_id };
+}
+
+// GET: List all staff members for the restaurant
+export async function GET(req: NextRequest) {
+  try {
+    const adminSession = await verifyAdmin(req);
+    if (!adminSession) {
+      return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 401 });
+    }
+
+    const { restaurantId } = adminSession;
+
+    // Fetch staff records with permissions
+    const { data: staffList, error: staffErr } = await supabaseAdmin
+      .from('restaurant_staff')
+      .select(`
+        id,
+        role,
+        permissions,
+        created_at,
+        profiles (
+          id,
+          first_name,
+          last_name,
+          avatar_url
+        )
+      `)
+      .eq('restaurant_id', restaurantId);
+
+    if (staffErr) throw staffErr;
+
+    // Fetch auth users to match emails
+    const { data: { users: authUsers }, error: authErr } = await supabaseAdmin.auth.admin.listUsers();
+    if (authErr) throw authErr;
+
+    // Map emails to staff list
+    const staffWithEmails = staffList.map((staff: any) => {
+      const authUser = authUsers.find((u) => u.id === staff.profiles?.id);
+      return {
+        ...staff,
+        email: authUser?.email || 'N/D',
+        last_sign_in: authUser?.last_sign_in_at || null,
+      };
+    });
+
+    return NextResponse.json({ success: true, staff: staffWithEmails });
+  } catch (error: any) {
+    console.error('Error listing staff:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+// POST: Create a new user (admin-only)
+export async function POST(req: NextRequest) {
+  try {
+    const adminSession = await verifyAdmin(req);
+    if (!adminSession) {
+      return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 401 });
+    }
+
+    const { user: adminUser, restaurantId } = adminSession;
+    const body = await req.json();
+    const { email, password, fullName, role, permissions } = body;
+
+    if (!email || !password || !fullName || !role) {
+      return NextResponse.json({ error: 'All fields (email, password, fullName, role) are required' }, { status: 400 });
+    }
+
+    // 1. Create auth user
+    const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
+
+    if (createErr || !newUser.user) {
+      throw createErr || new Error('Failed to create authentication user.');
+    }
+
+    const userId = newUser.user.id;
+
+    // 2. The database trigger automatically creates the profiles row. Let's verify or wait a brief second if needed.
+    // Insert into restaurant_staff
+    const { error: staffErr } = await supabaseAdmin
+      .from('restaurant_staff')
+      .insert({
+        restaurant_id: restaurantId,
+        profile_id: userId,
+        role: role,
+        permissions: permissions || {},
+      });
+
+    if (staffErr) {
+      // Cleanup auth user if staff link failed
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      throw staffErr;
+    }
+
+    // 3. Log this action in activity_logs
+    await supabaseAdmin.from('activity_logs').insert({
+      restaurant_id: restaurantId,
+      profile_id: adminUser.id,
+      action: 'staff_created',
+      details: `Creado usuario ${fullName} (${email}) con rol ${role}.`,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Staff member created successfully.',
+      user: {
+        id: userId,
+        email,
+        fullName,
+        role,
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Error creating staff user:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
