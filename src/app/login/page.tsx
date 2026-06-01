@@ -92,7 +92,12 @@ export default function LoginPage() {
 
           {/* Password field */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Contraseña</label>
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Contraseña</label>
+              <Link href="/forgot-password" className="text-[10px] font-semibold text-emerald-450 hover:text-emerald-400 hover:underline transition-colors">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <input
