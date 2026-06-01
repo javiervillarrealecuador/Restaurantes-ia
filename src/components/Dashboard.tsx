@@ -11,6 +11,7 @@ import MenuPanel from './MenuPanel';
 import SimulatorPanel from './SimulatorPanel';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   Utensils, 
   ClipboardList, 
@@ -38,7 +39,8 @@ import {
   EyeOff,
   X,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -881,6 +883,17 @@ export default function Dashboard() {
               <span>Configuración / Perfil</span>
             </button>
           )}
+
+          <div className="pt-4 mt-4 border-t border-zinc-800/50">
+            <Link
+              href="/privacidad"
+              target="_blank"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-emerald-400 hover:bg-emerald-950/20 transition-all"
+            >
+              <ShieldCheck className="h-4.5 w-4.5" />
+              <span>Privacidad LOPDP</span>
+            </Link>
+          </div>
         </nav>
 
         {/* User profile card & Logout */}
