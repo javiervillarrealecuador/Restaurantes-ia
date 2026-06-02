@@ -379,7 +379,9 @@ export async function POST(req: NextRequest) {
       } catch (agentError: unknown) {
         const agentErr = agentError as Error;
         console.error('AI Agent failed, using fallback:', agentErr);
+        // Fallback to basic agent if AI fails, but append the error so the user can debug it!
         agentResult = runFallbackAgent(customerMessage, customerName, menuItems);
+        agentResult.human_response += `\n\n[DIAGNÓSTICO TÉCNICO DE DEEPSEEK]: ${agentErr.message}`;
       }
     }
 
