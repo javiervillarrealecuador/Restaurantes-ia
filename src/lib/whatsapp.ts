@@ -32,10 +32,12 @@ export async function sendWhatsAppMessage(to: string, text: string, phoneId: str
     if (!response.ok) {
       const errBody = await response.text();
       console.error(`Error response from Meta WhatsApp API: ${response.status} - ${errBody}`);
+      throw new Error(`Meta API Error: ${errBody}`);
     } else {
       console.log('Successfully dispatched WhatsApp notification via Meta API.');
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to send WhatsApp message through Meta API:', error);
+    throw error;
   }
 }
