@@ -364,16 +364,18 @@ export async function POST(req: NextRequest) {
       category_name: row.menu_categories?.name || null,
     }));
 
-    // 5b. Run the unified AI Agent (handles ALL message types in one Gemini call)
-    const geminiKey = process.env.GEMINI_API_KEY || '';
+    // --- 4. RUN AI AGENT ---
+    // Pass the message and menu items to DeepSeek to figure out the intent and the response
+    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+
     let agentResult: AgentResult;
 
-    if (!geminiKey || geminiKey === 'tu_api_key_de_gemini') {
-      console.warn('Gemini API key not configured. Using fallback agent.');
+    if (!deepseekKey || deepseekKey === 'tu_api_key_de_deepseek') {
+      console.warn('DeepSeek API key not configured. Using fallback agent.');
       agentResult = runFallbackAgent(customerMessage, customerName, menuItems);
     } else {
       try {
-        agentResult = await runAIAgent(customerMessage, customerName, menuItems, geminiKey);
+        agentResult = await runAIAgent(customerMessage, customerName, menuItems, deepseekKey);
       } catch (agentError: unknown) {
         const agentErr = agentError as Error;
         console.error('AI Agent failed, using fallback:', agentErr);
@@ -711,32 +713,33 @@ REGLAS CRÍTICAS:
 
 4. Sé conversacional y natural. Nunca respondas como un robot.`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = 'https://api.deepseek.com/chat/completions';
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        { role: 'model', parts: [{ text: 'Entendido. Soy Appy y estoy listo para atender al cliente.' }] },
-        { role: 'user', parts: [{ text: userPrompt }] },
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'assistant', content: 'Entendido. Soy Appy y estoy listo para atender al cliente respondiendo estrictamente en formato JSON.' },
+        { role: 'user', content: userPrompt },
       ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.4,
-        maxOutputTokens: 2048,
-      },
+      response_format: { type: 'json_object' },
+      temperature: 0.4,
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Gemini Agent API error: ${response.status} — ${errText}`);
+    throw new Error(`DeepSeek Agent API error: ${response.status} — ${errText}`);
   }
 
   const resJson = await response.json();
-  const raw = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!raw) throw new Error('Empty response from Gemini agent.');
+  const raw = resJson.choices?.[0]?.message?.content?.trim();
+  if (!raw) throw new Error('Empty response from DeepSeek agent.');
 
   const result = JSON.parse(raw) as AgentResult;
 
