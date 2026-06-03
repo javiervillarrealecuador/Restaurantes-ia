@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 
+const formatOrderCode = (code: string | null): string => {
+  if (!code) return '';
+  const match = code.match(/(\d{13})/);
+  if (!match) return code;
+  
+  const numCode = match[1];
+  const year = numCode.slice(0, 4);
+  const month = numCode.slice(4, 6);
+  const day = numCode.slice(6, 8);
+  const seq = numCode.slice(8);
+  return code.replace(numCode, `${year}-${month}-${day}-${seq}`);
+};
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -9,10 +22,10 @@ export async function PATCH(
   try {
     const orderId = params.id;
     const body = await req.json();
-    const { status } = body;
+    const { status, is_paid } = body;
 
-    if (!status) {
-      return NextResponse.json({ error: 'Status is required' }, { status: 400 });
+    if (status === undefined && is_paid === undefined) {
+      return NextResponse.json({ error: 'Status or is_paid is required' }, { status: 400 });
     }
 
     // 1. Fetch current order details
@@ -28,13 +41,14 @@ export async function PATCH(
 
     const previousStatus = order.status;
 
+    const updatePayload: any = { updated_at: new Date().toISOString() };
+    if (status !== undefined) updatePayload.status = status;
+    if (is_paid !== undefined) updatePayload.is_paid = is_paid;
+
     // 2. Update order status in database
     const { data: updatedOrder, error: updateErr } = await supabaseAdmin
       .from('orders')
-      .update({ 
-        status, 
-        updated_at: new Date().toISOString() 
-      })
+      .update(updatePayload)
       .eq('id', orderId)
       .select()
       .single();
@@ -42,7 +56,7 @@ export async function PATCH(
     if (updateErr) throw updateErr;
 
     // 3. Send WhatsApp notification based on the status change
-    if (previousStatus !== status) {
+    if (status !== undefined && previousStatus !== status) {
       // Fetch WhatsApp Phone Number ID from restaurant settings
       const { data: settings } = await supabaseAdmin
         .from('settings')
@@ -55,7 +69,7 @@ export async function PATCH(
       let notificationText = '';
       const clientName = order.customer_name || 'Cliente';
       const clientPhone = order.customer_phone;
-      const orderCodeText = order.order_code ? ` *${order.order_code}*` : ' de tu pedido';
+      const orderCodeText = order.order_code ? ` *${formatOrderCode(order.order_code)}*` : ' de tu pedido';
 
       if (status === 'confirmed') {
         notificationText = `¡Hola, ${clientName}! 👋 El restaurante ha confirmado tu pedido${orderCodeText} y ya está siendo procesado. 📝🍳`;

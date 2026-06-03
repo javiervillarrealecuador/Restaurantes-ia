@@ -117,12 +117,14 @@ export function useOrders(restaurantId: string | null) {
   // Update order payment status
   const updateOrderPaymentStatus = useCallback(async (orderId: string, isPaid: boolean): Promise<boolean> => {
     try {
-      const { error: updateErr } = await supabase
-        .from('orders')
-        .update({ is_paid: isPaid, updated_at: new Date().toISOString() })
-        .eq('id', orderId);
-
-      if (updateErr) throw updateErr;
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_paid: isPaid })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update payment status');
+      }
 
       // Optimistically update local state
       setOrders((prevOrders) =>

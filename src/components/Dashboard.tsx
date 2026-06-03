@@ -12,6 +12,10 @@ import SimulatorPanel from './SimulatorPanel';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { TableSkeleton, MetricSkeleton, CardSkeleton } from '@/components/Skeletons';
 import { 
   Utensils, 
   ClipboardList, 
@@ -43,6 +47,19 @@ import {
   ShieldCheck
 } from 'lucide-react';
 
+const formatOrderCode = (code: string | null): string => {
+  if (!code) return '';
+  const match = code.match(/(\d{13})/);
+  if (!match) return code;
+  
+  const numCode = match[1];
+  const year = numCode.slice(0, 4);
+  const month = numCode.slice(4, 6);
+  const day = numCode.slice(6, 8);
+  const seq = numCode.slice(8);
+  return code.replace(numCode, `${year}-${month}-${day}-${seq}`);
+};
+
 export default function Dashboard() {
   const { user, profile, role, permissions, logout, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -56,7 +73,6 @@ export default function Dashboard() {
   const [logsLoading, setLogsLoading] = useState<boolean>(false);
   
   // Real-time toast alert state
-  const [newOrderAlert, setNewOrderAlert] = useState<string | null>(null);
   const prevOrdersCount = useRef<number | null>(null);
 
   // Self-profile states
@@ -216,7 +232,7 @@ export default function Dashboard() {
     const success = await updateOrderStatus(orderId, status);
     if (success && restaurant?.id && profile?.id) {
       const order = orders.find(o => o.id === orderId);
-      const code = order?.order_code || orderId.substring(0, 8);
+      const code = formatOrderCode(order?.order_code || orderId.substring(0, 8));
       const customer = order?.customer_name || 'Cliente';
       
       await fetch('/api/activity', {
@@ -237,7 +253,7 @@ export default function Dashboard() {
     const success = await updateOrderPaymentStatus(orderId, isPaid);
     if (success && restaurant?.id && profile?.id) {
       const order = orders.find(o => o.id === orderId);
-      const code = order?.order_code || orderId.substring(0, 8);
+      const code = formatOrderCode(order?.order_code || orderId.substring(0, 8));
       const customer = order?.customer_name || 'Cliente';
       
       await fetch('/api/activity', {
@@ -542,8 +558,9 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(data.error || 'Error al eliminar usuario');
 
       fetchStaff();
+      toast.success('Usuario eliminado exitosamente.');
     } catch (err: any) {
-      alert(err.message || 'Error al eliminar miembro del personal.');
+      toast.error(err.message || 'Error al eliminar miembro del personal.');
     }
   };
 
@@ -565,12 +582,10 @@ export default function Dashboard() {
     if (prevOrdersCount.current !== null && orders.length > prevOrdersCount.current) {
       // Find the latest inserted order
       const latestOrder = orders[0];
-      setNewOrderAlert(`¡Nuevo pedido recibido de ${latestOrder.customer_name} por $${Number(latestOrder.total_price).toFixed(2)}!`);
-      
-      // Auto-hide alert after 7 seconds
-      const timer = setTimeout(() => {
-        setNewOrderAlert(null);
-      }, 7000);
+      toast.success(`¡Nuevo pedido recibido de ${latestOrder.customer_name} por $${Number(latestOrder.total_price).toFixed(2)}!`, {
+        duration: 7000,
+        icon: <Bell className="h-5 w-5 animate-pulse text-emerald-500" />
+      });
 
       // Play subtle chime sound if possible
       try {
@@ -580,8 +595,6 @@ export default function Dashboard() {
       } catch {
         // browser block audio autoplay
       }
-
-      return () => clearTimeout(timer);
     }
     
     prevOrdersCount.current = orders.length;
@@ -595,12 +608,13 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.success) {
         setRestaurant(data.restaurant);
+        toast.success('Base de datos inicializada correctamente');
       } else {
-        alert('Error: ' + data.error);
+        toast.error('Error: ' + data.error);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      alert('Error initializing: ' + errorMsg);
+      toast.error('Error initializing: ' + errorMsg);
     } finally {
       setBootstrapping(false);
     }
@@ -715,25 +729,8 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col md:flex-row antialiased">
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 flex flex-col md:flex-row antialiased transition-colors duration-300">
       
-      {/* Real-time Order Alert Toast Banner */}
-      {newOrderAlert && (
-        <div className="fixed top-6 right-6 z-50 max-w-sm w-full bg-emerald-950/90 border border-emerald-500 text-emerald-350 p-4 rounded-2xl shadow-2xl shadow-emerald-950/40 backdrop-blur-lg flex items-start gap-3 animate-bounce">
-          <Bell className="h-5.5 w-5.5 text-emerald-450 shrink-0 mt-0.5 animate-pulse" />
-          <div className="flex-1">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-300">¡Pedido Entrante!</h4>
-            <p className="text-xs mt-1 leading-relaxed text-zinc-200">{newOrderAlert}</p>
-          </div>
-          <button 
-            onClick={() => setNewOrderAlert(null)}
-            className="text-emerald-500 hover:text-emerald-300 transition-colors text-xs font-medium"
-          >
-            Cerrar
-          </button>
-        </div>
-      )}
-
       {/* Navigation Sidebar */}
       <aside className="w-full md:w-64 bg-zinc-950 border-r border-zinc-900 flex flex-col shrink-0">
         {/* Restaurant Header */}
@@ -951,20 +948,32 @@ export default function Dashboard() {
           </h2>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <button 
               onClick={() => {
                 refreshOrders();
                 if (activeTab === 'logs') fetchWebhookLogs();
               }}
-              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 hover:border-zinc-800 transition-colors text-zinc-400 hover:text-zinc-250 cursor-pointer"
+              className="p-2 rounded-xl bg-zinc-200 dark:bg-zinc-900 hover:bg-zinc-300 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-850 transition-colors text-zinc-600 dark:text-zinc-400 cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
-            <span className="text-[11px] text-zinc-500 bg-zinc-900/80 px-2.5 py-1 rounded-lg border border-zinc-850">
+            <span className="text-[11px] text-zinc-600 dark:text-zinc-400 bg-zinc-200 dark:bg-zinc-900/80 px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-850">
               ID Local: {restaurant.id.substring(0, 8)}...
             </span>
           </div>
         </header>
+
+        {/* Main Content Animated Wrapper */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="flex-1 overflow-y-auto flex flex-col"
+          >
 
         {/* Statistical Summary Cards */}
         {activeTab === 'orders' && (role === 'admin_general' || role === 'vendedor_cajero') && (
@@ -1796,6 +1805,8 @@ export default function Dashboard() {
             </div>
           )}
         </section>
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );

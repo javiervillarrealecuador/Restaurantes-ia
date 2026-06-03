@@ -13,8 +13,33 @@ import {
   X, 
   AlertCircle, 
   Loader2, 
-  UtensilsCrossed
+  UtensilsCrossed,
+  Banknote,
+  Landmark,
+  Store,
+  ShoppingBag,
+  Printer
 } from 'lucide-react';
+import { useReactToPrint } from 'react-to-print';
+import { ReceiptPrinter } from './ReceiptPrinter';
+
+const getMapDestination = (address: string) => {
+  if (!address) return '';
+  const match = address.match(/Latitud\s*([-\d.]+),\s*Longitud\s*([-\d.]+)/);
+  if (match) {
+    return `${match[1]},${match[2]}`;
+  }
+  return address;
+};
+
+const formatOrderCode = (code: string | null): string => {
+  if (!code || code.length < 13) return code || '';
+  const year = code.slice(0, 4);
+  const month = code.slice(4, 6);
+  const day = code.slice(6, 8);
+  const seq = code.slice(8);
+  return `${year}-${month}-${day}-${seq}`;
+};
 
 interface OrderTableProps {
   orders: Order[];
@@ -31,6 +56,21 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const componentRef = React.useRef<HTMLDivElement>(null);
+  const [printingOrder, setPrintingOrder] = useState<Order | null>(null);
+
+  const handlePrintAction = useReactToPrint({
+    content: () => componentRef.current,
+    onAfterPrint: () => setPrintingOrder(null)
+  });
+
+  const handlePrint = (order: Order) => {
+    setPrintingOrder(order);
+    setTimeout(() => {
+      handlePrintAction();
+    }, 100);
+  };
+
   const toggleExpand = (orderId: string) => {
     setExpandedOrders(prev => ({
       ...prev,
@@ -45,7 +85,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   };
 
   const handlePaymentToggle = async (orderId: string, currentPaid: boolean) => {
-    if (readOnly || role === 'cocinero' || role === 'repartidor') {
+    if (role === 'cocinero' || role === 'repartidor') {
       console.warn('Unauthorized payment status modification.');
       return;
     }
@@ -59,7 +99,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
     const safeName = order.customer_name || '';
     const safePhone = order.customer_phone || '';
-    const safeCode = order.order_code || '';
+    const safeCode = formatOrderCode(order.order_code) || '';
     
     const matchesSearch = 
       safeName.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -297,6 +337,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
   return (
     <div className="w-full flex flex-col space-y-4">
+      <ReceiptPrinter ref={componentRef} order={printingOrder} />
       {/* Search & Tabs Filter Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-950/40 border border-zinc-800/80 p-3.5 rounded-2xl backdrop-blur-md">
         
@@ -347,11 +388,13 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         </div>
       </div>
 
-      {/* Orders List / Grid */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-zinc-950/20 border border-zinc-900 rounded-2xl">
-          <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-3" />
-          <p className="text-zinc-500 text-sm">Cargando pedidos en tiempo real...</p>
+        <div className="space-y-3">
+          {/* Skeleton loader defined in Skeletons could be used, but since we are replacing Loader2 */}
+          <div className="flex flex-col items-center justify-center py-20 bg-zinc-950/20 border border-zinc-900 rounded-2xl">
+            <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-3" />
+            <p className="text-zinc-500 text-sm">Cargando pedidos en tiempo real...</p>
+          </div>
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-zinc-950/20 border border-zinc-850 rounded-2xl text-center px-4">
@@ -394,7 +437,59 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                         <span>{order.customer_name}</span>
                         {order.order_code && (
                           <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-2 py-0.5 rounded-lg select-all">
-                            {order.order_code}
+                            {formatOrderCode(order.order_code)}
+                          </span>
+                        )}
+                        
+                        {/* Order Type Badge */}
+                        {order.type === 'delivery' && order.delivery_address ? (
+                          <a 
+                            href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('Avenida Bolívar 396 y las gradas, Tulcán')}&destination=${encodeURIComponent(getMapDestination(order.delivery_address))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                            title="Abrir Ruta en Google Maps"
+                          >
+                            <MapPin className="h-3 w-3" /> Domicilio
+                          </a>
+                        ) : (
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                            order.type === 'dine_in' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' :
+                            order.type === 'delivery' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          }`}>
+                            {order.type === 'dine_in' ? <Coffee className="h-3 w-3" /> : 
+                             order.type === 'delivery' ? <MapPin className="h-3 w-3" /> : 
+                             <ShoppingBag className="h-3 w-3" />}
+                            {order.type === 'dine_in' ? 'En Mesa' : 
+                             order.type === 'delivery' ? 'Domicilio' : 'Retiro local'}
+                          </span>
+                        )}
+
+                        {/* Payment Method Badge */}
+                        {order.payment_method === 'transfer' && order.payment_receipt_url ? (
+                          <a
+                            href={order.payment_receipt_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
+                            title="Ver Comprobante de Transferencia"
+                          >
+                            <Landmark className="h-3 w-3" /> Transferencia
+                          </a>
+                        ) : (
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                            order.payment_method === 'transfer' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                            order.payment_method === 'cash' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                            'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                          }`}>
+                            {order.payment_method === 'transfer' ? <Landmark className="h-3 w-3" /> : 
+                             order.payment_method === 'cash' ? <Banknote className="h-3 w-3" /> : 
+                             <AlertCircle className="h-3 w-3" />}
+                            {order.payment_method === 'transfer' ? 'Transferencia' : 
+                             order.payment_method === 'cash' ? 'Efectivo' : 'Por decidir'}
                           </span>
                         )}
                       </h4>
@@ -447,8 +542,15 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                     </div>
 
                     {/* Action buttons */}
-                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                       {getActionButton(order)}
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handlePrint(order); }}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all shadow-md"
+                        title="Imprimir Ticket"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                      </button>
                     </div>
 
                     {/* Expand icon */}
@@ -508,12 +610,12 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                           </p>
                           {order.type === 'delivery' && order.delivery_address && (
                             <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.delivery_address)}`}
+                              href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('Avenida Bolívar 396 y las gradas, Tulcán')}&destination=${encodeURIComponent(order.delivery_address)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 mt-2 ml-6 text-[10px] bg-emerald-650/15 hover:bg-emerald-600/25 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
                             >
-                              <MapPin className="h-3 w-3 shrink-0" /> Ver en Google Maps
+                              <MapPin className="h-3 w-3 shrink-0" /> Ver Ruta en Google Maps
                             </a>
                           )}
                         </div>
@@ -561,10 +663,24 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                       </a>
                                       {!order.is_paid && role !== 'cocinero' && role !== 'repartidor' && (
                                         <button
-                                          onClick={() => handlePaymentToggle(order.id, order.is_paid)}
-                                          className="inline-flex items-center justify-center gap-1 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-all font-semibold cursor-pointer max-w-[200px]"
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handlePaymentToggle(order.id, order.is_paid);
+                                          }}
+                                          disabled={updatingId === order.id + '-payment'}
+                                          className={`inline-flex items-center justify-center gap-1 text-[10px] text-white px-3 py-1.5 rounded-lg transition-all font-semibold max-w-[200px] ${
+                                            updatingId === order.id + '-payment' ? 'bg-emerald-600/50 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'
+                                          }`}
                                         >
-                                          Validar y Confirmar Pago
+                                          {updatingId === order.id + '-payment' ? (
+                                            <>
+                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              Procesando...
+                                            </>
+                                          ) : (
+                                            'Validar y Confirmar Pago'
+                                          )}
                                         </button>
                                       )}
                                     </div>

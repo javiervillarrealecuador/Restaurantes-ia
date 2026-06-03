@@ -14,6 +14,7 @@ interface ParsedOrder {
   order_type: 'dine_in' | 'delivery' | 'pickup';
   delivery_address: string | null;
   table_number: string | null;
+  payment_method: 'cash' | 'transfer' | null;
   notes: string | null;
 }
 
@@ -24,6 +25,23 @@ interface DBMenuItem {
   description: string | null;
   code?: string | null;
   category_name?: string | null;
+}
+
+// Helper function to format order_code from YYYYMMDDXXXXX to YYYY-MM-DD-XXXXX
+function formatOrderCode(code: string | null): string {
+  if (!code) return '';
+  // Extract the 13-digit numeric part (e.g., from "Para llevar 2026060200016")
+  const match = code.match(/(\d{13})/);
+  if (!match) return code;
+  
+  const numCode = match[1];
+  const year = numCode.slice(0, 4);
+  const month = numCode.slice(4, 6);
+  const day = numCode.slice(6, 8);
+  const seq = numCode.slice(8);
+  
+  // Replace the 13-digit number in the original string with the formatted one
+  return code.replace(numCode, `${year}-${month}-${day}-${seq}`);
 }
 
 // GET: WhatsApp Webhook Verification (Meta Verification Challenge)
@@ -59,8 +77,8 @@ export async function POST(req: NextRequest) {
     const value = change?.value;
     const message = value?.messages?.[0];
 
-    if (!message || (message.type !== 'text' && message.type !== 'image')) {
-      return NextResponse.json({ status: 'ignored', message: 'No text or image message found.' });
+    if (!message || (message.type !== 'text' && message.type !== 'image' && message.type !== 'location')) {
+      return NextResponse.json({ status: 'ignored', message: 'No valid message type found.' });
     }
 
     const whatsappMsgId = message.id;
@@ -170,7 +188,8 @@ async function processMessageInBackground(
                 const blob = await mediaRes.blob();
                 
                 // 3. Upload to Supabase Storage
-                const fileName = `receipt_${activePendingOrder.id}_${Date.now()}.jpg`;
+                const formattedCode = activePendingOrder.order_code ? formatOrderCode(activePendingOrder.order_code) : activePendingOrder.id.substring(0, 8);
+                const fileName = `TR-${formattedCode}.jpg`;
                 const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
                   .from('receipts')
                   .upload(fileName, blob, { contentType: blob.type });
@@ -201,7 +220,7 @@ async function processMessageInBackground(
             status: 'receipt_uploaded',
           });
 
-          const orderCodeText = activePendingOrder.order_code ? ` para el pedido *${activePendingOrder.order_code}*` : '';
+          const orderCodeText = activePendingOrder.order_code ? ` para el pedido *${formatOrderCode(activePendingOrder.order_code)}*` : '';
           const replyMsg = `¡Comprobante de pago recibido con éxito! 📄✨\n\nEl administrador verificará tu depósito${orderCodeText} por un valor total de *Monto: $${Number(activePendingOrder.total_price).toFixed(2)}*. Una vez confirmado el pago, el pedido ingresará a la cocina y empezaremos a prepararlo. ¡Te avisaremos cuando el repartidor vaya en camino!`;
           await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
 
@@ -212,65 +231,9 @@ async function processMessageInBackground(
           return NextResponse.json({ status: 'ignored_image', reply_message: replyMsg });
         }
       }
-
-      // Case B: Customer sent text and order is waiting for payment choice
-      if (message.type === 'text' && activePendingOrder.payment_method === 'undecided') {
-        const textLower = message.text.body.trim().toLowerCase();
-
-        if (textLower === '1' || textLower.includes('efectivo') || textLower.includes('recibir')) {
-          const { error: updateErr } = await supabaseAdmin
-            .from('orders')
-            .update({ payment_method: 'cash' })
-            .eq('id', activePendingOrder.id);
-
-          if (updateErr) throw updateErr;
-
-          await supabaseAdmin.from('whatsapp_webhook_logs').insert({
-            whatsapp_message_id: whatsappMsgId,
-            restaurant_id: restaurantId,
-            sender_phone: customerPhone,
-            message_body: `Seleccionó Efectivo: ${message.text.body}`,
-            raw_payload: payload,
-            status: 'payment_method_selected',
-          });
-
-          const orderCodeText = activePendingOrder.order_code ? ` *${activePendingOrder.order_code}*` : 'tu pedido';
-          const replyMsg = `¡Perfecto! Has seleccionado pago en **Efectivo al recibir** 💵. Hemos enviado el pedido${orderCodeText} al administrador para su confirmación. En cuanto aprueben tu pedido, empezaremos a cocinarlo en cocina y te notificaremos.`;
-          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
-
-          return NextResponse.json({ success: true, status: 'payment_method_selected_cash', reply_message: replyMsg });
-        } else if (textLower === '2' || textLower.includes('transfer') || textLower.includes('banco') || textLower.includes('deposito')) {
-          const { error: updateErr } = await supabaseAdmin
-            .from('orders')
-            .update({ payment_method: 'transfer' })
-            .eq('id', activePendingOrder.id);
-
-          if (updateErr) throw updateErr;
-
-          await supabaseAdmin.from('whatsapp_webhook_logs').insert({
-            whatsapp_message_id: whatsappMsgId,
-            restaurant_id: restaurantId,
-            sender_phone: customerPhone,
-            message_body: `Seleccionó Transferencia: ${message.text.body}`,
-            raw_payload: payload,
-            status: 'payment_method_selected',
-          });
-
-          const orderCodeText2 = activePendingOrder.order_code ? ` para el pedido *${activePendingOrder.order_code}*` : '';
-          const replyMsg = `Has seleccionado **Transferencia Bancaria** 🏦.\n\nPor favor realiza el depósito o transferencia${orderCodeText2} a:\n- *Banco Pichincha*\n- *Cuenta Ahorros: 123456789*\n- *Titular: Restaurante Sabor Latino*\n- *Monto Total: $${Number(activePendingOrder.total_price).toFixed(2)}*\n\nUna vez realizada, *envíanos la captura o foto del comprobante* por este medio. ¡Empezaremos a preparar tu comida en cuanto confirmemos el pago!`;
-          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
-
-          return NextResponse.json({ success: true, status: 'payment_method_selected_transfer', reply_message: replyMsg });
-        } else {
-          const replyMsg = `Por favor, selecciona tu método de pago respondiendo con el número correspondiente:\n\n1️⃣ **Efectivo al recibir** (pagas al llegar)\n2️⃣ **Transferencia bancaria** (pagas antes de cocinar)\n\nResponde únicamente con el número *1* o *2*.`;
-          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
-          return NextResponse.json({ status: 'awaiting_payment_choice', reply_message: replyMsg });
-        }
-      }
-
       // Case C: Customer sent text but order is already waiting for receipt image
       if (message.type === 'text' && activePendingOrder.payment_method === 'transfer' && !activePendingOrder.payment_receipt_url) {
-        const orderCodeText = activePendingOrder.order_code ? ` del pedido *${activePendingOrder.order_code}*` : '';
+        const orderCodeText = activePendingOrder.order_code ? ` del pedido *${formatOrderCode(activePendingOrder.order_code)}*` : '';
         const replyMsg = `Aún estamos esperando que nos envíes la captura o foto del comprobante de transferencia bancaria${orderCodeText} por un total de *$${Number(activePendingOrder.total_price).toFixed(2)}* para poder confirmar el pedido y enviarlo a cocina. Por favor, envíanos la imagen.`;
         await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
         return NextResponse.json({ status: 'awaiting_receipt_image', reply_message: replyMsg });
@@ -278,11 +241,16 @@ async function processMessageInBackground(
     }
 
     // If customer sent an image but has no pending order, ignore it
-    if (message.type !== 'text') {
-      return NextResponse.json({ status: 'ignored', message: 'No new text order message found.' });
+    if (message.type !== 'text' && message.type !== 'location') {
+      return NextResponse.json({ status: 'ignored', message: 'No new text or location order message found.' });
     }
 
-    const customerMessage = message.text.body;
+    let customerMessage = '';
+    if (message.type === 'location') {
+      customerMessage = `[Ubicación Compartida: Latitud ${message.location.latitude}, Longitud ${message.location.longitude}${message.location.address ? ', Dirección: ' + message.location.address : ''}]`;
+    } else {
+      customerMessage = message.text.body;
+    }
 
     // 4. Create initial log record in Supabase (status = 'received')
     const { data: logData } = await supabaseAdmin
@@ -348,7 +316,7 @@ async function processMessageInBackground(
         // 1. Notify the customer
         const clientPhone = targetOrder.customer_phone;
         const clientName = targetOrder.customer_name || 'Cliente';
-        const orderCodeText = targetOrder.order_code ? ` *${targetOrder.order_code}*` : '';
+        const orderCodeText = targetOrder.order_code ? ` *${formatOrderCode(targetOrder.order_code)}*` : '';
         const customerMsg = `¡Hola, ${clientName}! ✨ Tu pedido${orderCodeText} ha sido entregado en tu domicilio. ¡Muchas gracias por tu compra! ❤️🍽️`;
         await sendWhatsAppMessage(clientPhone, customerMsg, whatsappPhoneId);
 
@@ -432,7 +400,7 @@ async function processMessageInBackground(
     // Fetch conversation history and active cart
     const { data: logsData } = await supabaseAdmin
       .from('whatsapp_webhook_logs')
-      .select('message_body, ai_parsed_response, created_at')
+      .select('message_body, ai_parsed_response, created_at, status')
       .eq('sender_phone', customerPhone)
       .order('created_at', { ascending: false })
       .limit(6);
@@ -441,11 +409,20 @@ async function processMessageInBackground(
     let cartContext = 'El carrito está vacío.';
     
     if (logsData && logsData.length > 0) {
-      const msgs = logsData.reverse().map(l => `- Cliente: ${l.message_body}`);
+      // Find the index of the last confirmed order to cut off older history
+      const lastOrderIndex = logsData.findIndex(l => 
+        l.status === 'order_created' || 
+        (l.ai_parsed_response && (l.ai_parsed_response as AgentResult).intent === 'confirm_order')
+      );
+
+      // Only keep messages after the last order
+      const sessionLogs = lastOrderIndex >= 0 ? logsData.slice(0, lastOrderIndex) : logsData;
+
+      const msgs = sessionLogs.reverse().map(l => `- Cliente: ${l.message_body}`);
       historyContext = msgs.join('\n');
       
-      // Find the latest active cart (add_to_order)
-      const lastCartLog = [...logsData].find(l => {
+      // Find the latest active cart (add_to_order) within the current session
+      const lastCartLog = [...sessionLogs].reverse().find(l => {
         const parsed = l.ai_parsed_response as AgentResult | null;
         return parsed && parsed.intent === 'add_to_order' && parsed.order && parsed.order.items.length > 0;
       });
@@ -474,6 +451,21 @@ async function processMessageInBackground(
         // Fallback to basic agent if AI fails, but append the error so the user can debug it!
         agentResult = runFallbackAgent(customerMessage, customerName, menuItems);
         agentResult.human_response += `\n\n[DIAGNÓSTICO TÉCNICO DE DEEPSEEK]: ${agentErr.message}`;
+      }
+    }
+
+    // --- STRICT BACKEND ENFORCEMENT ---
+    // If the AI hallucinates and tries to confirm the order prematurely, we forcefully intercept it.
+    if (agentResult.intent === 'confirm_order' && agentResult.order) {
+      if (!agentResult.order.order_type) {
+        agentResult.intent = 'add_to_order';
+        agentResult.human_response = '¡Casi listo! Pero antes de confirmar... ¿tu pedido es para consumir en la mesa, para retirar en el local, o para envío a domicilio?';
+      } else if (agentResult.order.order_type === 'delivery' && !agentResult.order.delivery_address) {
+        agentResult.intent = 'add_to_order';
+        agentResult.human_response = '¡Excelente! Para enviarte el pedido, por favor escríbeme tu dirección exacta o envíame tu Ubicación Compartida por WhatsApp.';
+      } else if (!agentResult.order.payment_method) {
+        agentResult.intent = 'add_to_order';
+        agentResult.human_response = '¡Entendido! Por último, ¿cómo deseas cancelar tu pedido? ¿En Efectivo o mediante Transferencia Bancaria?';
       }
     }
 
@@ -566,7 +558,7 @@ async function processMessageInBackground(
         tax,
         delivery_fee: deliveryFee,
         total_price: total,
-        payment_method: isDelivery ? 'undecided' : 'cash',
+        payment_method: parsedOrder.payment_method || 'cash',
         is_paid: false,
       })
       .select('id, order_code')
@@ -600,17 +592,12 @@ async function processMessageInBackground(
     // 9. Generate and send confirmation WhatsApp message
     // Use the AI agent's pre-generated response as base, then append the order summary
     let confirmationMessage = '';
-    const orderCodeStr = order?.order_code ? `*Código de Pedido:* ${order.order_code}\n\n` : '';
+    const orderCodeStr = order?.order_code ? `*Código de Pedido:* ${formatOrderCode(order.order_code)}\n\n` : '';
 
-    if (isDelivery) {
-      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido a domicilio con éxito. 🛵📋\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (10%): $${tax.toFixed(2)}\n- Costo Envío: $${deliveryFee.toFixed(2)}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Dirección de entrega:* ${parsedOrder.delivery_address || 'Por confirmar'}\n\nPor favor, responde indicando tu método de pago con el número correspondiente:\n\n1️⃣ **Efectivo al recibir** (pagas al motorizado en casa)\n2️⃣ **Transferencia bancaria** (pagas antes de que cocinemos)\n\nResponde con *1* o *2* para continuar.`;
+    if (parsedOrder.payment_method === 'transfer') {
+      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (10%): $${tax.toFixed(2)}${isDelivery ? `\n- Costo Envío: $${deliveryFee.toFixed(2)}` : ''}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${isDelivery ? `Domicilio (${parsedOrder.delivery_address || 'Sin dirección'})` : parsedOrder.order_type === 'dine_in' ? `Consumo en Mesa` : 'Retiro en Local'}\n*Método de Pago:* Transferencia Bancaria\n\n⚠️ *Para procesar tu pedido, por favor envíanos la FOTO DEL COMPROBANTE de transferencia por este medio.* Quedamos a la espera.`;
     } else {
-      const orderTypeLabel =
-        parsedOrder.order_type === 'dine_in'
-          ? `Consumo en Mesa (Mesa ${parsedOrder.table_number})`
-          : 'Retiro en Local (Takeaway)';
-
-      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (10%): $${tax.toFixed(2)}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${orderTypeLabel}\n*Estado:* Pendiente de Aceptación por el Restaurante\n\nTu pedido está siendo procesado en cocina. Te notificaremos por aquí cuando cambie su estado. ¡Buen provecho!`;
+      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (10%): $${tax.toFixed(2)}${isDelivery ? `\n- Costo Envío: $${deliveryFee.toFixed(2)}` : ''}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${isDelivery ? `Domicilio (${parsedOrder.delivery_address || 'Sin dirección'})` : parsedOrder.order_type === 'dine_in' ? `Consumo en Mesa` : 'Retiro en Local'}\n*Método de Pago:* Efectivo al ${isDelivery ? 'recibir' : 'entregar'}\n\nTu pedido está siendo procesado en cocina. Te notificaremos por aquí cuando cambie su estado. ¡Buen provecho!`;
     }
 
     await sendWhatsAppMessage(customerPhone, confirmationMessage, whatsappPhoneId);
@@ -802,9 +789,10 @@ Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta
     "items": [
       { "product_id": "UUID exacto del menú", "quantity": 1, "notes": null }
     ],
-    "order_type": "pickup" | "delivery" | "dine_in",
+    "order_type": "pickup" | "delivery" | "dine_in" | null,
     "delivery_address": null,
     "table_number": null,
+    "payment_method": "cash" | "transfer" | null,
     "notes": null
   } | null
 }
@@ -819,13 +807,18 @@ REGLAS CRÍTICAS:
    - "confirm_order": El cliente explícitamente dice que ya no quiere nada más, que eso es todo, o que procedas a cobrar.
    - "other": Otra cosa.
 
-2. Para "add_to_order":
-   - Agrega los nuevos items solicitados. 
-   - El human_response debe listar lo que has agregado y preguntar explícitamente: "¿Deseas agregar algo más a tu pedido o confirmamos?"
+2. Para "add_to_order" y "confirm_order":
+   - El arreglo "items" dentro de "order" DEBE contener SIEMPRE el pedido completo (es decir, TODOS los items que ya estaban en el ESTADO DEL CARRITO ACTUAL + los nuevos items que haya solicitado el cliente ahora). NUNCA borres los items anteriores.
+   - Si es "add_to_order", el human_response debe listar lo que lleva hasta ahora y preguntar explícitamente: "¿Deseas agregar algo más a tu pedido o confirmamos?"
 
 3. Para "confirm_order":
-   - Asegúrate de incluir todos los items que el cliente solicitó en la conversación.
-   - El human_response debe ser una confirmación final con el total.
+   - ES OBLIGATORIO que el JSON final incluya "order_type", "delivery_address" (si aplica) y "payment_method".
+   - NUNCA uses "confirm_order" si aún no conoces la modalidad (order_type) o la forma de pago (payment_method). Si falta alguno, mantén el intent en "add_to_order" y pregúntaselo.
+   - Si el cliente NO ha especificado la modalidad de entrega, es OBLIGATORIO preguntarle explícitamente: "¿Su pedido es para consumir en la mesa, para retirar en el local, o para envío a domicilio? (También puedes enviarme tu ubicación de WhatsApp si es para domicilio)".
+   - EXCEPCIÓN y REGLA DE ORO: Si el cliente ya indica la modalidad (ej. dice "es a domicilio", "para llevar", "en la mesa", o envía una dirección o [Ubicación Compartida]), DEDUCE inmediatamente el "order_type" (delivery, pickup, dine_in). NO VUELVAS a preguntarle si es para mesa/llevar/domicilio. Si es "delivery" y falta la dirección, pídesela. Si ya tienes la modalidad (y dirección si aplica), pasa directo a preguntar el método de pago.
+   - Una vez tengas el tipo de pedido (y la dirección si aplica), pregúntale SIEMPRE por su método de pago de forma muy empática y cortés (Efectivo o Transferencia) manteniendo el intent "add_to_order".
+   - SOLO cuando el cliente te confirme el método de pago (ej. responde "efectivo" o "transferencia"), puedes cambiar el intent a "confirm_order".
+   - El human_response de "confirm_order" debe ser un mensaje breve y amable despidiéndose, indicando que el pedido está siendo generado.
 
 4. Para "full_menu" o "menu_query":
    - ES OBLIGATORIO usar listas verticales. Cada plato debe ir en una nueva línea.
@@ -1056,6 +1049,7 @@ function runFallbackParser(message: string, menuItems: DBMenuItem[]): ParsedOrde
     order_type: orderType,
     delivery_address: deliveryAddress,
     table_number: tableNumber,
+    payment_method: null,
     notes: null,
   };
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MenuItem, MenuCategory } from '@/types';
+import Image from 'next/image';
 import { 
   Plus, 
   Search, 
@@ -420,7 +421,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                   <thead>
                     <tr className="border-b border-zinc-900 bg-zinc-950/80 text-[10px] font-bold text-zinc-550 uppercase tracking-wider">
                       <th className="py-3.5 px-4 w-16">Código</th>
-                      <th className="py-3.5 px-4">Nombre / Descripción</th>
+                      <th className="py-3.5 px-4">Platillo</th>
                       <th className="py-3.5 px-4 w-28">Categoría</th>
                       <th className="py-3.5 px-4 w-20 text-right">Precio</th>
                       <th className="py-3.5 px-4 w-28 text-center">Cocción</th>
@@ -439,13 +440,30 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                           <td className="py-3.5 px-4 font-mono font-bold text-emerald-450">
                             {item.code ? `#${item.code}` : '-'}
                           </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-zinc-205">{item.name}</div>
-                            {item.description && (
-                              <div className="text-[10px] text-zinc-500 font-normal line-clamp-1 mt-0.5 max-w-sm">
-                                {item.description}
-                              </div>
-                            )}
+                          <td className="py-3.5 px-4 flex items-center gap-3">
+                            <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800">
+                              {item.image_url ? (
+                                <Image 
+                                  src={item.image_url} 
+                                  alt={item.name} 
+                                  fill 
+                                  className="object-cover"
+                                  sizes="40px"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                                  <UtensilsCrossed className="h-4 w-4" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <div className="font-bold text-zinc-205">{item.name}</div>
+                              {item.description && (
+                                <div className="text-[10px] text-zinc-500 font-normal line-clamp-1 mt-0.5 max-w-sm">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3.5 px-4 text-zinc-400 font-medium text-[11px]">
                             {category?.name || 'Sin Categoría'}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Order, MenuCategory, MenuItem } from '@/types';
+import * as XLSX from 'xlsx';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -25,6 +26,19 @@ interface ReportsPanelProps {
   loading: boolean;
   restaurantId: string | null;
 }
+
+const formatOrderCode = (code: string | null): string => {
+  if (!code) return '';
+  const match = code.match(/(\d{13})/);
+  if (!match) return code;
+  
+  const numCode = match[1];
+  const year = numCode.slice(0, 4);
+  const month = numCode.slice(4, 6);
+  const day = numCode.slice(6, 8);
+  const seq = numCode.slice(8);
+  return code.replace(numCode, `${year}-${month}-${day}-${seq}`);
+};
 
 export default function ReportsPanel({ orders, loading, restaurantId }: ReportsPanelProps) {
   // Database catalog states
@@ -409,7 +423,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
     };
   }, [filteredData]);
 
-  // EXCEL EXPORTERS (CSV semicolons + UTF8 BOM)
+  // EXCEL EXPORTERS (Using xlsx library)
   const exportSummaryExcel = () => {
     const { orders: filteredOrders } = filteredData;
     if (filteredOrders.length === 0) {
@@ -417,69 +431,33 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       return;
     }
 
-    // CSV Headers
-    const headers = [
-      'Nº Pedido',
-      'Código',
-      'Fecha',
-      'Hora',
-      'Cliente',
-      'Teléfono',
-      'Tipo de Entrega',
-      'Estado',
-      'Mesa',
-      'Dirección Entrega',
-      'Subtotal',
-      'Envío',
-      'Impuesto',
-      'Total',
-      'Método de Pago',
-      'Pagado',
-      'Notas'
-    ];
-
-    const rows = filteredOrders.map(o => {
+    const exportData = filteredOrders.map(o => {
       const dateObj = new Date(o.created_at);
-      const fecha = dateObj.toLocaleDateString('es-ES');
-      const hora = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-      
-      const tipo = o.type === 'dine_in' ? 'Mesa' : o.type === 'delivery' ? 'Domicilio' : 'Llevar';
-      const estado = o.status.toUpperCase();
-      const pagado = o.is_paid ? 'SÍ' : 'NO';
-
-      return [
-        o.order_number,
-        o.order_code || '',
-        fecha,
-        hora,
-        o.customer_name.replace(/"/g, '""'),
-        o.customer_phone,
-        tipo,
-        estado,
-        o.table_number || '',
-        (o.delivery_address || '').replace(/"/g, '""').replace(/\n/g, ' '),
-        Number(o.subtotal).toFixed(2),
-        Number(o.delivery_fee).toFixed(2),
-        Number(o.tax).toFixed(2),
-        Number(o.total_price).toFixed(2),
-        o.payment_method.toUpperCase(),
-        pagado,
-        (o.notes || '').replace(/"/g, '""').replace(/\n/g, ' ')
-      ];
+      return {
+        'Nº Pedido': o.order_number,
+        'Código': formatOrderCode(o.order_code) || '',
+        'Fecha': dateObj.toLocaleDateString('es-ES'),
+        'Hora': dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        'Cliente': o.customer_name,
+        'Teléfono': o.customer_phone,
+        'Tipo de Entrega': o.type === 'dine_in' ? 'Mesa' : o.type === 'delivery' ? 'Domicilio' : 'Llevar',
+        'Estado': o.status.toUpperCase(),
+        'Mesa': o.table_number || '',
+        'Dirección Entrega': o.delivery_address || '',
+        'Subtotal': Number(o.subtotal),
+        'Envío': Number(o.delivery_fee),
+        'Impuesto': Number(o.tax),
+        'Total': Number(o.total_price),
+        'Método de Pago': o.payment_method.toUpperCase(),
+        'Pagado': o.is_paid ? 'SÍ' : 'NO',
+        'Notas': o.notes || ''
+      };
     });
 
-    const csvContent = 
-      '\uFEFF' + // UTF-8 BOM
-      [headers.join(';'), ...rows.map(r => r.map(val => `"${val}"`).join(';'))].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Reporte_Pedidos_Resumen_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Resumen_Pedidos');
+    XLSX.writeFile(workbook, `Reporte_Pedidos_Resumen_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportDetailedExcel = () => {
@@ -489,55 +467,28 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       return;
     }
 
-    const headers = [
-      'Nº Pedido',
-      'Fecha',
-      'Hora',
-      'Cliente',
-      'Teléfono',
-      'Categoría',
-      'Producto',
-      'Cantidad',
-      'Precio Unitario',
-      'Total Item',
-      'Tipo de Entrega',
-      'Estado Pedido'
-    ];
-
-    const rows = filteredItems.map(it => {
+    const exportData = filteredItems.map(it => {
       const dateObj = new Date(it.createdAt);
-      const fecha = dateObj.toLocaleDateString('es-ES');
-      const hora = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-      const tipo = it.type === 'dine_in' ? 'Mesa' : it.type === 'delivery' ? 'Domicilio' : 'Llevar';
-
-      return [
-        it.orderNumber,
-        fecha,
-        hora,
-        it.customerName.replace(/"/g, '""'),
-        it.customerPhone,
-        it.categoryName.replace(/"/g, '""'),
-        it.itemName.replace(/"/g, '""'),
-        it.quantity,
-        it.unitPrice.toFixed(2),
-        it.totalPrice.toFixed(2),
-        tipo,
-        it.status.toUpperCase()
-      ];
+      return {
+        'Nº Pedido': it.orderNumber,
+        'Fecha': dateObj.toLocaleDateString('es-ES'),
+        'Hora': dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        'Cliente': it.customerName,
+        'Teléfono': it.customerPhone,
+        'Categoría': it.categoryName,
+        'Producto': it.itemName,
+        'Cantidad': it.quantity,
+        'Precio Unitario': Number(it.unitPrice),
+        'Total Item': Number(it.totalPrice),
+        'Tipo de Entrega': it.type === 'dine_in' ? 'Mesa' : it.type === 'delivery' ? 'Domicilio' : 'Llevar',
+        'Estado Pedido': it.status.toUpperCase()
+      };
     });
 
-    const csvContent = 
-      '\uFEFF' + // UTF-8 BOM
-      [headers.join(';'), ...rows.map(r => r.map(val => `"${val}"`).join(';'))].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Reporte_Ventas_Productos_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Ventas_Productos');
+    XLSX.writeFile(workbook, `Reporte_Ventas_Productos_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   // TRIGGER BROWSER NATIVE PRINT
