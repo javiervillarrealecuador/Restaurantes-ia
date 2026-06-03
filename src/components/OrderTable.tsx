@@ -60,7 +60,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [printingOrder, setPrintingOrder] = useState<Order | null>(null);
 
   const handlePrintAction = useReactToPrint({
-    content: () => componentRef.current,
+    contentRef: componentRef,
     onAfterPrint: () => setPrintingOrder(null)
   });
 
