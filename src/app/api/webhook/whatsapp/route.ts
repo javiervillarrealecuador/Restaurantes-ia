@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 
@@ -47,28 +48,23 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: Handle Incoming WhatsApp Messages
-export async function POST(req: NextRequest) {
-  let webhookLogId: string | null = null;
-  let restaurantId: string | null = null;
 
+export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
     console.log('Incoming WhatsApp Payload:', JSON.stringify(payload, null, 2));
 
-    // 1. Extract message details from WhatsApp payload
     const entry = payload.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;
     const message = value?.messages?.[0];
 
-    // If there is no message or not text/image type, ignore
     if (!message || (message.type !== 'text' && message.type !== 'image')) {
       return NextResponse.json({ status: 'ignored', message: 'No text or image message found.' });
     }
 
-    const whatsappMsgId = message.id; // Extract WhatsApp message UUID
+    const whatsappMsgId = message.id;
 
-    // Check message idempotency (duplicate prevention)
     if (whatsappMsgId) {
       const { data: existingLog, error: logError } = await supabaseAdmin
         .from('whatsapp_webhook_logs')
@@ -90,6 +86,41 @@ export async function POST(req: NextRequest) {
     const customerName = value?.contacts?.[0]?.profile?.name || 'Cliente WhatsApp';
     const whatsappPhoneId = value?.metadata?.phone_number_id || 'default_phone_id';
 
+    // TRIGGER BACKGROUND PROCESSING TO PREVENT VERCEL TIMEOUTS
+    waitUntil(
+      processMessageInBackground(
+        payload,
+        message,
+        whatsappMsgId,
+        customerPhone,
+        customerName,
+        whatsappPhoneId
+      ).catch((err) => {
+        console.error('Background Webhook Processing Error:', err);
+      })
+    );
+
+    // IMMEDIATELY RETURN 200 OK TO META
+    return NextResponse.json({ status: 'processing_in_background' }, { status: 200 });
+
+  } catch (error: any) {
+    console.error('Critical Webhook Entry Error:', error);
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
+  }
+}
+
+async function processMessageInBackground(
+  payload: any,
+  message: any,
+  whatsappMsgId: string,
+  customerPhone: string,
+  customerName: string,
+  whatsappPhoneId: string
+) {
+  let webhookLogId: string | null = null;
+  let restaurantId: string | null = null;
+
+  try {
     // 2. Fetch or create a restaurant in a multi-tenant fashion
     const { data: settingsData } = await supabaseAdmin
       .from('settings')
