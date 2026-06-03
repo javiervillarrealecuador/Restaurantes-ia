@@ -57,9 +57,15 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   // Filter orders based on status tab and search text
   const filteredOrders = orders.filter(order => {
     const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
+    const safeName = order.customer_name || '';
+    const safePhone = order.customer_phone || '';
+    const safeCode = order.order_code || '';
+    
     const matchesSearch = 
-      order.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      order.customer_phone.includes(searchQuery);
+      safeName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      safePhone.includes(searchQuery) ||
+      safeCode.toLowerCase().includes(searchQuery.toLowerCase());
+      
     return matchesStatus && matchesSearch;
   });
 
