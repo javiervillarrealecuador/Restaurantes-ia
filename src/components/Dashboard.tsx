@@ -172,35 +172,35 @@ export default function Dashboard() {
   }, [profile]);
 
   // Fetch restaurant profile
-  const fetchRestaurant = React.useCallback(async () => {
-    // Only show the full loading screen on the first load (no restaurant data yet)
-    // On subsequent calls (e.g. after window focus), use a subtle refresh indicator
-    if (!restaurant) {
-      setRestaurantLoading(true);
-    } else {
-      setIsRefreshing(true);
-    }
-    try {
-      const { data, error } = await supabase
-        .from('restaurants')
-        .select('*')
-        .limit(1);
-
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setRestaurant(data[0]);
-      }
-    } catch (err) {
-      console.error('Error fetching restaurant:', err);
-    } finally {
-      setRestaurantLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [restaurant]);
-
   useEffect(() => {
+    let isMounted = true;
+    const fetchRestaurant = async () => {
+      setRestaurantLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('restaurants')
+          .select('*')
+          .limit(1);
+
+        if (error) throw error;
+        if (data && data.length > 0 && isMounted) {
+          setRestaurant(data[0]);
+        }
+      } catch (err) {
+        console.error('Error fetching restaurant:', err);
+      } finally {
+        if (isMounted) {
+          setRestaurantLoading(false);
+        }
+      }
+    };
+
     fetchRestaurant();
-  }, [fetchRestaurant]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Hook into orders real-time stream
   const { 
