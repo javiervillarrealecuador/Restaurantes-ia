@@ -8,7 +8,7 @@ Este documento detalla la estructura completa de la aplicación, flujos de datos
 
 - **Framework Frontend/Backend:** Next.js (App Router)
 - **Base de Datos y Tiempo Real:** Supabase (PostgreSQL, Supabase Realtime)
-- **Estilos y UI:** Tailwind CSS, Framer Motion (animaciones), Sonner (notificaciones toast), Lucide React (íconos).
+- **Estilos y UI:** Tailwind CSS, Framer Motion (animaciones de login), Sonner (notificaciones toast), Lucide React (íconos).
 - **Inteligencia Artificial:** DeepSeek API (modelo `deepseek-chat`). *Nota: El motor de IA configurado actualmente en el código es DeepSeek, actuando bajo la directriz del sistema.*
 - **Exportación / Impresión:** `xlsx` para Excel, `react-to-print` para tickets térmicos POS.
 - **Integración de Mensajería:** WhatsApp Cloud API (Webhooks).
@@ -23,92 +23,92 @@ Este documento detalla la estructura completa de la aplicación, flujos de datos
  │   ├── api/
  │   │   └── webhook/
  │   │       └── whatsapp/
- │   │           └── route.ts     # (CRÍTICO) Webhook de WhatsApp y Lógica del Agente IA
+ │   │           └── route.ts     # (CRÍTICO) Webhook de WhatsApp, Lógica IA y CRM
  │   ├── globals.css              # Estilos globales y tokens de Tailwind
  │   ├── layout.tsx               # Layout raíz (Next-themes context, Sonner Toaster)
+ │   └── login/                   # Interfaz de autenticación animada
  │   └── page.tsx                 # Punto de entrada de la UI administrativa
  ├── components/
- │   ├── Dashboard.tsx            # Contenedor principal SPA (Navegación por pestañas)
+ │   ├── Dashboard.tsx            # Contenedor principal SPA (Navegación por roles)
  │   ├── MenuPanel.tsx            # Gestión del menú (CRUD, Optimización con next/image)
- │   ├── OrderTable.tsx           # Vista y gestión de pedidos
- │   ├── ReceiptPrinter.tsx       # Componente oculto para formato de impresión térmica (80mm)
+ │   ├── OrderTable.tsx           # Vista y gestión de pedidos (Vendedores/Admins)
+ │   ├── KitchenDisplay.tsx       # (KDS) Vista optimizada para el rol de Cocinero
+ │   ├── DeliveryDisplay.tsx      # (Delivery Tracker) Vista móvil para Repartidores
+ │   ├── CustomersPanel.tsx       # Gestión CRM y Fidelización (Ranking en DB)
  │   ├── ReportsPanel.tsx         # Lógica de métricas y exportación nativa a Excel (.xlsx)
- │   └── Skeletons.tsx            # Componentes de carga (Loading states)
+ │   └── ReceiptPrinter.tsx       # Componente oculto para impresión térmica (80mm)
  ├── context/
+ │   ├── AuthContext.tsx          # Gestión de estado de sesión, Roles y Permisos (RBAC)
  │   └── ThemeProvider.tsx        # Proveedor de Modo Claro/Oscuro
  ├── hooks/
  │   └── useOrders.ts             # Custom hook que maneja la suscripción a Supabase Realtime
  ├── lib/
  │   ├── supabase.ts              # Cliente Supabase público (Frontend)
- │   ├── supabaseAdmin.ts         # Cliente Supabase con Service Role (Bypass RLS para Backend)
+ │   ├── supabaseAdmin.ts         # Cliente Supabase con Service Role (Bypass RLS)
  │   └── whatsapp.ts              # Utilidades para enviar mensajes a la API de WhatsApp
  └── types/
-     └── index.ts                 # Interfaces y tipos de TypeScript (Order, MenuItem, etc.)
+     └── index.ts                 # Interfaces TypeScript (Order, MenuItem, Roles, etc.)
 ```
 
 ---
 
-## 3. Arquitectura del Agente de Inteligencia Artificial (API / Backend)
+## 3. Seguridad y Autenticación Basada en Roles (RBAC)
 
-La inteligencia de la aplicación reside enteramente en el archivo **`src/app/api/webhook/whatsapp/route.ts`**. Este endpoint maneja la comunicación bidireccional entre el usuario de WhatsApp y la base de datos de Supabase, intermediada por un LLM (DeepSeek).
+La aplicación utiliza un sistema de roles robusto apoyado por **Supabase Auth** y políticas de seguridad a nivel de fila (RLS):
 
-### 3.1. Flujo de Procesamiento del Agente
-Cuando un cliente envía un mensaje por WhatsApp, ocurre lo siguiente:
+- **Roles Definidos:** `admin_general`, `vendedor_cajero`, `cocinero`, `repartidor`.
+- **Seguridad UI (`AuthContext.tsx` y `Dashboard.tsx`):** La interfaz oculta o muestra los componentes dinámicamente según los permisos. 
+  - *Cocineros:* Solo ven el KDS (`KitchenDisplay.tsx`) y opciones básicas.
+  - *Repartidores:* Solo ven el Delivery Tracker (`DeliveryDisplay.tsx`).
+  - *Vendedores:* Acceden a CRM y Pedidos, pero no a reportes.
+  - *Admins:* Tienen acceso total.
+- **Seguridad Backend (RLS en Postgres):** Se usa la función `is_restaurant_staff` para verificar que solo los empleados autenticados puedan acceder a tablas sensibles (como `customers` o `logs`).
 
-1. **Ingesta y Validación (`POST`)**: Se verifica la firma del webhook y se extrae el número de teléfono y el cuerpo del mensaje.
-2. **Construcción de Contexto**: El backend consulta a Supabase:
-   - Catálogo de productos disponibles (`menu_items`).
-   - Últimos 6 mensajes de la sesión del cliente (`whatsapp_webhook_logs`) para mantener memoria contextual.
-   - Estado del "carrito" activo si hay una orden en proceso (filtrando logs recientes).
-3. **Inyección de Prompts (Prompt Engineering)**: Se construye un `systemPrompt` altamente estructurado que obliga al modelo `deepseek-chat` a adoptar la personalidad de **"Appy"** y a responder **estrictamente en un objeto JSON**.
-4. **Inferencia LLM**: Se hace un request asíncrono a la API de DeepSeek pasando el historial y el menú inyectados dinámicamente.
-5. **Decodificación de `Intent`**: El JSON retornado por la IA contiene un atributo clave llamado `intent`.
+---
 
-### 3.2. Los 6 Intents Fundamentales del Agente
-El mantenimiento del comportamiento de la IA depende de comprender cómo el agente clasifica la intención del usuario. El JSON estructurado obliga a elegir entre:
+## 4. Arquitectura del Agente de Inteligencia Artificial (API / Backend)
 
+La inteligencia de la aplicación reside enteramente en el archivo **`src/app/api/webhook/whatsapp/route.ts`**. Este endpoint maneja la comunicación bidireccional entre el usuario de WhatsApp y la base de datos de Supabase.
+
+### 4.1. Memoria Contextual Avanzada (CRM Inyectado)
+Antes de invocar al modelo, el backend lee la tabla `customers` y detecta si es un cliente nuevo o recurrente. Si es recurrente, inyecta métricas como *total gastado* y *cantidad de pedidos* en el System Prompt. Esto permite a la IA saludar de manera personalizada reconociendo la lealtad del cliente.
+
+### 4.2. Los Intents Fundamentales del Agente
 - `greeting`: Saludos básicos.
 - `full_menu`: El cliente solicita la carta completa.
 - `menu_query`: El cliente pregunta por una categoría específica.
-- `add_to_order`: **(Fase de Borrador)** El cliente está armando su pedido. La IA acumula los ítems pero NO cierra la orden.
-- `confirm_order`: **(Cierre)** El cliente indica que ha finalizado su pedido.
-- `other`: Conversación fuera de dominio.
+- `add_to_order`: **(Fase de Borrador)** El cliente arma su pedido.
+- `confirm_order`: **(Cierre)** El cliente cierra el pedido y elige método de pago.
+- `other`: Utilizado para conversaciones fuera de dominio o para la **evaluación de Calificaciones (Post-Entrega)**.
 
-### 3.3. Strict Backend Enforcement (Prevención de Alucinaciones)
-*Esta es la capa de seguridad más importante.* Si el LLM intenta confirmar una orden (`intent === 'confirm_order'`) prematuramente, el backend intercepta el resultado y fuerza un retroceso a `add_to_order` si faltan datos obligatorios:
-- **`order_type`** (Mesa, Retiro, o Domicilio)
-- **`delivery_address`** (Si es a domicilio)
-- **`payment_method`** (Efectivo o Transferencia)
+### 4.3. Calificaciones y Automatización Logística
+Al marcar un pedido como `delivered` (ejecutado por el repartidor en el `DeliveryDisplay`), el backend envía automáticamente un mensaje de WhatsApp pidiendo calificar el servicio del 1 al 5. Si el usuario responde con estrellas o números, la IA (bajo la regla 6 de calificaciones) asume el intent `other` y responde agradeciendo el feedback sin intentar tomar una orden nueva.
 
-Solo cuando estos datos son estrictamente capturados, el sistema procede a registrar los datos en Supabase (`orders` y `order_items`).
+### 4.4. Strict Backend Enforcement (Prevención de Alucinaciones)
+*Esta es la capa de seguridad más importante.* Si el LLM intenta confirmar una orden (`intent === 'confirm_order'`) prematuramente, el backend intercepta el resultado y fuerza un retroceso a `add_to_order` si faltan datos obligatorios (Tipo de orden, Dirección, Método de Pago).
 
-### 3.4. Fallback NLP (Plan de Contingencia)
-Si la API de DeepSeek falla, agota su tiempo de espera o no tiene configurada la `DEEPSEEK_API_KEY`, el sistema invoca automáticamente `runFallbackAgent()`. 
-Este es un **Analizador de Lenguaje Natural basado en Regex y Heurística**. Detecta coincidencias de códigos de producto o nombres exactos en la cadena de texto, extrayendo cantidades y notas básicas. Garantiza que el restaurante jamás quede fuera de línea aunque el servicio de IA caiga.
+### 4.5. Fallback NLP (Plan de Contingencia)
+Si la API de DeepSeek falla, agota su tiempo de espera o no tiene configurada la llave, el sistema invoca automáticamente `runFallbackAgent()`, garantizando la resiliencia del chatbot mediante expresiones regulares (Regex).
 
 ---
 
-## 4. Frontend y Actualizaciones en Tiempo Real
+## 5. Módulos Visuales de la SPA (Frontend)
 
-La interfaz administrativa está diseñada como una Single Page Application (SPA).
-
-1. **Supabase Realtime (`useOrders.ts`)**: Utiliza `supabase.channel` para suscribirse a los eventos de tipo `INSERT` o `UPDATE` en la tabla `orders`. Cuando un cliente termina de armar su pedido por WhatsApp y el Agente inserta el registro, el Dashboard frontend captura el evento instantáneamente, actualiza el estado de React, y dispara un `toast` notificando al comercio.
-2. **Generación de Reportes (`ReportsPanel.tsx`)**: Toma el arreglo de pedidos en memoria y, usando la librería `xlsx`, transforma los objetos JSON en hojas de cálculo estructuradas y descarga el Blob a la máquina local sin necesidad de interactuar con el backend.
-3. **Impresión de Tickets (`ReceiptPrinter.tsx`)**: Para mantener la UI de la tabla limpia, el ticket térmico de 80mm se renderiza en un componente oculto de React (`display: none`). La librería `react-to-print` clona ese componente en un iframe temporal e invoca el evento nativo `window.print()` del navegador web del SO cliente.
-4. **Optimización de Imágenes**: `MenuPanel.tsx` usa el componente `<Image />` de `next/image` asegurando carga asíncrona, prevención de Cumulative Layout Shift (CLS), y conversión automática a WebP.
+1. **Kitchen Display System (KDS):** Tablero estilo Kanban que calcula en vivo los tiempos de espera del pedido y cambia de color (Verde, Amarillo, Rojo).
+2. **Delivery Tracking System:** Interfaz Mobile-First. Permite a los repartidores lanzar links de *Google Maps* (Deeplinks) y actualizar el estado de los viajes para notificar a los clientes en tiempo real.
+3. **CRM de Fidelización (`CustomersPanel.tsx`):** Analiza la tabla `customers` mostrando rankings de clientes por ticket promedio y su preferencia de compra (Mesa, Delivery, Retiro).
+4. **Supabase Realtime (`useOrders.ts`):** Suscripción viva a `INSERT` y `UPDATE` en la tabla `orders`, disparando pop-ups (Toasts) e incluso notificaciones sonoras sin refrescar la página.
 
 ---
 
-## 5. Variables de Entorno Clave (.env.local)
-
-Para que el sistema completo opere correctamente, es indispensable la correcta configuración de:
+## 6. Variables de Entorno Clave (.env.local)
 
 - `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Para la conexión del cliente frontend.
-- `SUPABASE_SERVICE_ROLE_KEY`: Para operaciones críticas en el backend (crear órdenes mediante la API de WhatsApp sin pasar por RLS).
+- `SUPABASE_SERVICE_ROLE_KEY`: Para operaciones críticas en el backend (crear órdenes mediante la API de WhatsApp, actualizar perfiles CRM).
 - `DEEPSEEK_API_KEY`: Credencial crítica para la inferencia de la IA.
 - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `VERIFY_TOKEN`: Variables de Meta para enviar y recibir mensajes a través de los webhooks.
 
-## 6. Consideraciones para Mantenimiento a Futuro
+## 7. Consideraciones para Mantenimiento a Futuro
 
-- **Si se requiere cambiar el proveedor de IA (Ej. a Gemini de Google)**: Modifique la función `runAIAgent()` en `route.ts`. Debe cambiar la URL (`api.deepseek.com`), los encabezados (`Authorization: Bearer`), y la estructura del payload para adaptarse al formato del proveedor elegido. Asegúrese de que el proveedor soporte "JSON Schema / Structured Outputs" para mantener la precisión del `intent`.
-- **Nuevos campos en Pedidos**: Para agregar nuevos atributos a un pedido (ej. *Método de entrega urgente*), agregue la columna en la base de datos de Supabase, modifique la interfaz `Order` en `types/index.ts`, actualice el schema JSON dentro del `systemPrompt` en `route.ts` para que la IA sepa que debe extraer ese dato, y finalmente mapee el atributo visualmente en `OrderTable.tsx`.
+- **Si se requiere cambiar el proveedor de IA (Ej. a Gemini de Google)**: Modifique la función `runAIAgent()` en `route.ts`. Debe cambiar la URL, los encabezados (`Authorization: Bearer`), y la estructura del payload para adaptarse al formato del proveedor elegido. Asegúrese de que el proveedor soporte "JSON Schema / Structured Outputs" para mantener la precisión del `intent`.
+- **Nuevos campos en Pedidos**: Para agregar nuevos atributos a un pedido, agregue la columna en la base de datos de Supabase, modifique la interfaz `Order` en `types/index.ts`, actualice el schema JSON dentro del `systemPrompt` en `route.ts` para que la IA sepa que debe extraer ese dato, y finalmente mapee el atributo visualmente en el frontend.
