@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/lib/supabase';
 import { Order } from '@/types';
 import { 
   User, 
@@ -16,19 +17,21 @@ import {
   MapPin,
   Coffee
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface CustomersPanelProps {
-  orders: Order[];
+  orders: Order[]; // Keep this for history, but we fetch aggregate stats
   loading: boolean;
 }
 
 interface CustomerProfile {
+  id: string;
   name: string;
   phone: string;
   orderCount: number;
   totalSpent: number;
   lastOrderDate: string;
-  preference: 'dine_in' | 'delivery' | 'pickup';
+  preference: 'dine_in' | 'delivery' | 'pickup' | string;
   history: Order[];
 }
 
@@ -36,6 +39,23 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'spent' | 'count' | 'date'>('spent');
   const [expandedPhones, setExpandedPhones] = useState<Record<string, boolean>>({});
+  const [dbCustomers, setDbCustomers] = useState<any[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoadingCustomers(true);
+      const { data, error } = await supabase.from('customers').select('*');
+      if (error) {
+        console.error('Error fetching customers:', error);
+        toast.error('Error al cargar clientes');
+      } else {
+        setDbCustomers(data || []);
+      }
+      setLoadingCustomers(false);
+    };
+    fetchCustomers();
+  }, [orders]); // Refresh when orders change
 
   const toggleExpand = (phone: string) => {
     setExpandedPhones(prev => ({
@@ -44,15 +64,31 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
     }));
   };
 
-  // Process orders into customer profiles
+  // Combine DB stats with order history
   const customers = useMemo(() => {
     const profiles: Record<string, CustomerProfile> = {};
 
+    // Initialize with DB data if available
+    dbCustomers.forEach(c => {
+      profiles[c.phone] = {
+        id: c.id,
+        name: c.name || 'Cliente WhatsApp',
+        phone: c.phone,
+        orderCount: c.total_orders || 0,
+        totalSpent: Number(c.total_spent) || 0,
+        lastOrderDate: c.last_visit || c.created_at,
+        preference: c.preferences || 'pickup',
+        history: []
+      };
+    });
+
+    // Populate history and fallback stats from orders
     orders.forEach(order => {
       const phone = order.customer_phone;
       
       if (!profiles[phone]) {
         profiles[phone] = {
+          id: phone,
           name: order.customer_name,
           phone: phone,
           orderCount: 0,
@@ -64,41 +100,41 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
       }
 
       const prof = profiles[phone];
-      prof.orderCount += 1;
-      
-      // Only count revenue from non-cancelled orders for total spent
-      if (order.status !== 'cancelled') {
-        prof.totalSpent += Number(order.total_price);
-      }
-
-      // Track history
       prof.history.push(order);
-
-      // Latest order date
-      if (new Date(order.created_at) > new Date(prof.lastOrderDate)) {
-        prof.lastOrderDate = order.created_at;
-        prof.name = order.customer_name; // update to newest name if changed
+      
+      // If not in DB, fallback to calculate
+      if (!dbCustomers.find(c => c.phone === phone)) {
+        prof.orderCount += 1;
+        if (order.status !== 'cancelled') {
+          prof.totalSpent += Number(order.total_price);
+        }
+        if (new Date(order.created_at) > new Date(prof.lastOrderDate)) {
+          prof.lastOrderDate = order.created_at;
+          prof.name = order.customer_name;
+        }
       }
     });
 
-    // Determine preferences
+    // Determine preferences based on history if not set in DB
     Object.values(profiles).forEach(prof => {
-      const counts = { dine_in: 0, delivery: 0, pickup: 0 };
-      prof.history.forEach(o => {
-        counts[o.type] = (counts[o.type] || 0) + 1;
-      });
+      if (!dbCustomers.find(c => c.phone === prof.phone) || !prof.preference || prof.preference === 'pickup') {
+        const counts = { dine_in: 0, delivery: 0, pickup: 0 };
+        prof.history.forEach(o => {
+          counts[o.type as keyof typeof counts] = (counts[o.type as keyof typeof counts] || 0) + 1;
+        });
 
-      if (counts.delivery >= counts.dine_in && counts.delivery >= counts.pickup) {
-        prof.preference = 'delivery';
-      } else if (counts.dine_in >= counts.delivery && counts.dine_in >= counts.pickup) {
-        prof.preference = 'dine_in';
-      } else {
-        prof.preference = 'pickup';
+        if (counts.delivery >= counts.dine_in && counts.delivery >= counts.pickup) {
+          prof.preference = 'delivery';
+        } else if (counts.dine_in >= counts.delivery && counts.dine_in >= counts.pickup) {
+          prof.preference = 'dine_in';
+        } else {
+          prof.preference = 'pickup';
+        }
       }
     });
 
     return Object.values(profiles);
-  }, [orders]);
+  }, [orders, dbCustomers]);
 
   // Filter and Sort customers
   const filteredCustomers = useMemo(() => {
@@ -118,13 +154,13 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
       });
   }, [customers, searchQuery, sortBy]);
 
-  const getPreferenceBadge = (pref: 'dine_in' | 'delivery' | 'pickup') => {
-    const configs = {
+  const getPreferenceBadge = (pref: string) => {
+    const configs: Record<string, any> = {
       dine_in: { label: 'Mesa', icon: <Coffee className="h-3 w-3" />, style: 'bg-pink-500/10 text-pink-400 border border-pink-500/20' },
       delivery: { label: 'Delivery', icon: <MapPin className="h-3 w-3" />, style: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
       pickup: { label: 'Llevar', icon: <Smartphone className="h-3 w-3" />, style: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' }
     };
-    const c = configs[pref];
+    const c = configs[pref] || configs.pickup;
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider ${c.style}`}>
         {c.icon} {c.label}

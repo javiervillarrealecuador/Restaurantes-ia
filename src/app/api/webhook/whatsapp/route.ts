@@ -396,7 +396,20 @@ async function processMessageInBackground(
       category_name: row.menu_categories?.name || null,
     }));
 
-    // --- 4. RUN AI AGENT ---
+    // --- 4. CRM & RUN AI AGENT ---
+    // Fetch customer CRM data
+    const { data: customerData } = await supabaseAdmin
+      .from('customers')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('phone', customerPhone)
+      .maybeSingle();
+
+    let crmContext = 'Este es un cliente nuevo. Dale una cálida bienvenida.';
+    if (customerData) {
+      crmContext = `Este es un cliente recurrente llamado ${customerData.name || customerName}. Ha realizado ${customerData.total_orders} pedidos en el pasado y ha gastado un total de $${customerData.total_spent}. ${customerData.preferences ? 'Preferencias: ' + customerData.preferences : ''}. Salúdalo de nuevo calurosamente (ej: "¡Hola de nuevo Juan!").`;
+    }
+
     // Fetch conversation history and active cart
     const { data: logsData } = await supabaseAdmin
       .from('whatsapp_webhook_logs')
@@ -444,7 +457,7 @@ async function processMessageInBackground(
       agentResult = runFallbackAgent(customerMessage, customerName, menuItems);
     } else {
       try {
-        agentResult = await runAIAgent(customerMessage, customerName, menuItems, deepseekKey, historyContext, cartContext);
+        agentResult = await runAIAgent(customerMessage, customerName, menuItems, deepseekKey, historyContext, cartContext, crmContext);
       } catch (agentError: unknown) {
         const agentErr = agentError as Error;
         console.error('AI Agent failed, using fallback:', agentErr);
@@ -570,6 +583,7 @@ async function processMessageInBackground(
     const itemsWithOrderId = orderItemsToInsert.map((item) => ({
       ...item,
       order_id: order.id,
+      notes: (item as any).notes || null,
     }));
 
     const { error: itemsError } = await supabaseAdmin
@@ -577,6 +591,21 @@ async function processMessageInBackground(
       .insert(itemsWithOrderId);
 
     if (itemsError) throw itemsError;
+
+    // --- CRM Update ---
+    await supabaseAdmin.from('customers').upsert({
+      restaurant_id: restaurantId,
+      phone: customerPhone,
+      name: customerName,
+    }, { onConflict: 'restaurant_id, phone' }).select().single().then(async ({ data: existingCrm }) => {
+      if (existingCrm) {
+        await supabaseAdmin.from('customers').update({
+          total_orders: (existingCrm.total_orders || 0) + 1,
+          total_spent: Number((Number(existingCrm.total_spent || 0) + total).toFixed(2)),
+          last_visit: new Date().toISOString()
+        }).eq('id', existingCrm.id);
+      }
+    });
 
     // 8. Update Webhook Log Status
     if (webhookLogId) {
@@ -736,7 +765,8 @@ async function runAIAgent(
   menuItems: DBMenuItem[],
   apiKey: string,
   historyContext: string,
-  cartContext: string
+  cartContext: string,
+  crmContext: string
 ): Promise<AgentResult> {
   // Build menu context grouped by category
   const grouped: Record<string, DBMenuItem[]> = {};
@@ -771,6 +801,9 @@ ${menuContext}
 CATEGORÍAS DISPONIBLES: ${categoryNames.join(', ')}
 
 NOMBRE DEL CLIENTE: ${customerName}
+
+=== PERFIL DEL CLIENTE (CRM) ===
+${crmContext}
 
 === MEMORIA DE LA CONVERSACIÓN ===
 ${historyContext}

@@ -9,6 +9,7 @@ import CustomersPanel from './CustomersPanel';
 import ReportsPanel from './ReportsPanel';
 import MenuPanel from './MenuPanel';
 import SimulatorPanel from './SimulatorPanel';
+import KitchenDisplay from './KitchenDisplay';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -1030,7 +1031,12 @@ export default function Dashboard() {
 
         {/* Main Section Content Area */}
         <section className="flex-1 p-6 overflow-y-auto">
-          {activeTab === 'orders' && (
+          {activeTab === 'orders' && role === 'cocinero' ? (
+            <KitchenDisplay 
+              orders={filteredOrdersByRole} 
+              onUpdateStatus={handleUpdateOrderStatus} 
+            />
+          ) : activeTab === 'orders' ? (
             <OrderTable 
               orders={filteredOrdersByRole} 
               onUpdateStatus={handleUpdateOrderStatus} 
@@ -1039,7 +1045,7 @@ export default function Dashboard() {
               role={role}
               readOnly={activePermissions.orders === 'read'}
             />
-          )}
+          ) : null}
 
           {activeTab === 'customers' && (
             <CustomersPanel 
