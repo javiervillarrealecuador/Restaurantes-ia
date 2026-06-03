@@ -301,7 +301,8 @@ export default function Dashboard() {
           )
         `)
         .eq('restaurant_id', restaurant.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setAuditLogs(data || []);

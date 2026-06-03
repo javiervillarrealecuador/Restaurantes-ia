@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+credentials.md
+scratch/
+datos_pruebas_whatsapp_api.md
+token pruebas whattaspp 1 junio.txt

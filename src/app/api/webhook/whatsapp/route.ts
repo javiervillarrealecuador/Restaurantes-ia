@@ -151,10 +151,43 @@ async function processMessageInBackground(
       // Case A: Customer sent an image (Payment receipt upload)
       if (message.type === 'image') {
         if (activePendingOrder.payment_method === 'transfer' && !activePendingOrder.payment_receipt_url) {
-          const mockReceiptUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600';
+          let receiptUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600'; // fallback
+          
+          try {
+            const mediaId = message.image.id;
+            const waToken = process.env.WHATSAPP_ACCESS_TOKEN;
+            if (waToken && mediaId) {
+              // 1. Get media URL from Meta
+              const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
+                headers: { Authorization: `Bearer ${waToken}` }
+              });
+              const metaData = await metaRes.json();
+              if (metaData.url) {
+                // 2. Download actual media bytes
+                const mediaRes = await fetch(metaData.url, {
+                  headers: { Authorization: `Bearer ${waToken}` }
+                });
+                const blob = await mediaRes.blob();
+                
+                // 3. Upload to Supabase Storage
+                const fileName = `receipt_${activePendingOrder.id}_${Date.now()}.jpg`;
+                const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
+                  .from('receipts')
+                  .upload(fileName, blob, { contentType: blob.type });
+                  
+                if (!uploadErr && uploadData) {
+                  const { data: publicUrlData } = supabaseAdmin.storage.from('receipts').getPublicUrl(fileName);
+                  receiptUrl = publicUrlData.publicUrl;
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error processing WhatsApp image:', e);
+          }
+
           const { error: updateErr } = await supabaseAdmin
             .from('orders')
-            .update({ payment_receipt_url: mockReceiptUrl })
+            .update({ payment_receipt_url: receiptUrl })
             .eq('id', activePendingOrder.id);
 
           if (updateErr) throw updateErr;
@@ -396,7 +429,35 @@ async function processMessageInBackground(
     }));
 
     // --- 4. RUN AI AGENT ---
-    // Pass the message and menu items to DeepSeek to figure out the intent and the response
+    // Fetch conversation history and active cart
+    const { data: logsData } = await supabaseAdmin
+      .from('whatsapp_webhook_logs')
+      .select('message_body, ai_parsed_response, created_at')
+      .eq('sender_phone', customerPhone)
+      .order('created_at', { ascending: false })
+      .limit(6);
+      
+    let historyContext = 'No hay mensajes previos.';
+    let cartContext = 'El carrito está vacío.';
+    
+    if (logsData && logsData.length > 0) {
+      const msgs = logsData.reverse().map(l => `- Cliente: ${l.message_body}`);
+      historyContext = msgs.join('\n');
+      
+      // Find the latest active cart (add_to_order)
+      const lastCartLog = [...logsData].find(l => {
+        const parsed = l.ai_parsed_response as AgentResult | null;
+        return parsed && parsed.intent === 'add_to_order' && parsed.order && parsed.order.items.length > 0;
+      });
+      
+      if (lastCartLog) {
+        const cartOrder = (lastCartLog.ai_parsed_response as AgentResult).order;
+        if (cartOrder) {
+           cartContext = JSON.stringify(cartOrder.items);
+        }
+      }
+    }
+
     const deepseekKey = process.env.DEEPSEEK_API_KEY;
 
     let agentResult: AgentResult;
@@ -406,7 +467,7 @@ async function processMessageInBackground(
       agentResult = runFallbackAgent(customerMessage, customerName, menuItems);
     } else {
       try {
-        agentResult = await runAIAgent(customerMessage, customerName, menuItems, deepseekKey);
+        agentResult = await runAIAgent(customerMessage, customerName, menuItems, deepseekKey, historyContext, cartContext);
       } catch (agentError: unknown) {
         const agentErr = agentError as Error;
         console.error('AI Agent failed, using fallback:', agentErr);
@@ -416,8 +477,23 @@ async function processMessageInBackground(
       }
     }
 
+    // If it's just adding to order, save to logs and ask if they want more
+    if (agentResult.intent === 'add_to_order' && agentResult.order) {
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+      if (webhookLogId) {
+        await supabaseAdmin
+          .from('whatsapp_webhook_logs')
+          .update({ status: 'drafting_order', ai_parsed_response: agentResult })
+          .eq('id', webhookLogId);
+      }
+      return NextResponse.json({
+        status: 'drafting_order',
+        reply_message: agentResult.human_response,
+      });
+    }
+
     // If the agent decided this is NOT an order, just reply and exit
-    if (agentResult.intent !== 'order' || !agentResult.order || agentResult.order.items.length === 0) {
+    if (agentResult.intent !== 'order' && agentResult.intent !== 'confirm_order' || !agentResult.order || agentResult.order.items.length === 0) {
       await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
 
       if (webhookLogId) {
@@ -662,7 +738,7 @@ async function getOrCreateRestaurant() {
 // =======================================================================
 
 interface AgentResult {
-  intent: 'order' | 'menu_query' | 'full_menu' | 'greeting' | 'other';
+  intent: 'order' | 'add_to_order' | 'confirm_order' | 'menu_query' | 'full_menu' | 'greeting' | 'other';
   human_response: string;  // The natural language message to send the customer
   order: ParsedOrder | null;  // Structured order data, only when intent === 'order'
 }
@@ -671,7 +747,9 @@ async function runAIAgent(
   message: string,
   customerName: string,
   menuItems: DBMenuItem[],
-  apiKey: string
+  apiKey: string,
+  historyContext: string,
+  cartContext: string
 ): Promise<AgentResult> {
   // Build menu context grouped by category
   const grouped: Record<string, DBMenuItem[]> = {};
@@ -705,14 +783,20 @@ ${menuContext}
 
 CATEGORÍAS DISPONIBLES: ${categoryNames.join(', ')}
 
-NOMBRE DEL CLIENTE: ${customerName}`;
+NOMBRE DEL CLIENTE: ${customerName}
+
+=== MEMORIA DE LA CONVERSACIÓN ===
+${historyContext}
+
+=== ESTADO DEL CARRITO ACTUAL ===
+${cartContext}`;
 
   const userPrompt = `MENSAJE DEL CLIENTE: "${message}"
 
 Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta (sin bloques de código, sin texto extra):
 
 {
-  "intent": "order" | "menu_query" | "full_menu" | "greeting" | "other",
+  "intent": "add_to_order" | "confirm_order" | "menu_query" | "full_menu" | "greeting" | "other",
   "human_response": "Tu respuesta completa y natural para enviar al cliente por WhatsApp",
   "order": {
     "items": [
@@ -728,23 +812,30 @@ Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta
 REGLAS CRÍTICAS:
 
 1. INTENTS:
-   - "greeting": Solo saluda sin pedir nada → human_response amistoso de bienvenida, order=null
-   - "full_menu": Pide ver TODO el menú → human_response con el menú completo bien formateado con categorías, precios y códigos, order=null
-   - "menu_query": Pregunta por UNA categoría específica → human_response con solo esa categoría formateada, order=null
-   - "order": Quiere PEDIR algo → human_response de confirmación del pedido, order con los datos estructurados
-   - "other": Otra cosa (reclamo, horario, etc.) → human_response empático y útil, order=null
+   - "greeting": Solo saluda.
+   - "full_menu": Pide ver TODO el menú.
+   - "menu_query": Pregunta por UNA categoría específica.
+   - "add_to_order": El cliente está pidiendo comida, PERO AÚN NO HA TERMINADO o simplemente está agregando cosas.
+   - "confirm_order": El cliente explícitamente dice que ya no quiere nada más, que eso es todo, o que procedas a cobrar.
+   - "other": Otra cosa.
 
-2. Para "order":
-   - Solo incluye products cuyo ID exista exactamente en el menú
-   - El cliente puede pedir por nombre O por código numérico (ej: "dame un 24" = item con Código:"24")
-   - Si no especifica tipo, asume pickup
-   - El human_response debe CONFIRMAR el pedido con emojis, detalles y total estimado
+2. Para "add_to_order":
+   - Agrega los nuevos items solicitados. 
+   - El human_response debe listar lo que has agregado y preguntar explícitamente: "¿Deseas agregar algo más a tu pedido o confirmamos?"
 
-3. Para "full_menu" o "menu_query":
-   - Formatea el human_response con categorías en negrita, bullet points, nombre, código y precio
-   - Termina siempre invitando a hacer el pedido
+3. Para "confirm_order":
+   - Asegúrate de incluir todos los items que el cliente solicitó en la conversación.
+   - El human_response debe ser una confirmación final con el total.
 
-4. Sé conversacional y natural. Nunca respondas como un robot.`;
+4. Para "full_menu" o "menu_query":
+   - ES OBLIGATORIO usar listas verticales. Cada plato debe ir en una nueva línea.
+   - Formato exacto esperado:
+     *Categoría*
+     - Plato 1 ($X.XX)
+     - Plato 2 ($X.XX)
+   - NUNCA respondas con los platos separados por comas en un solo párrafo, es ilegible.
+
+5. Siempre usa los IDs exactos del menú y sé conversacional.`;
 
   const url = 'https://api.deepseek.com/chat/completions';
   const response = await fetch(url, {

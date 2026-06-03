@@ -78,6 +78,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       delivering: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20',
       delivered: 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20',
       cancelled: 'bg-rose-500/10 text-rose-500 border border-rose-500/20',
+      draft: 'bg-gray-500/10 text-gray-400 border border-gray-500/20',
     };
 
     const labels: Record<OrderStatus, string> = {
@@ -88,6 +89,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       delivering: 'En camino',
       delivered: 'Entregado',
       cancelled: 'Cancelado',
+      draft: 'Borrador',
     };
 
     return (
@@ -537,22 +539,32 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                               <div className="mt-2 space-y-2">
                                 {order.payment_receipt_url ? (
                                   <div className="space-y-1.5">
-                                    <span className="text-[10px] block text-emerald-450 font-bold uppercase tracking-wider">¡Comprobante Subido!</span>
-                                    <div className="flex gap-2">
+                                    <span className="text-[10px] block text-emerald-450 font-bold uppercase tracking-wider flex items-center gap-1">
+                                      ¡Comprobante Subido! 
+                                      <Check className="h-3 w-3" />
+                                    </span>
+                                    <div className="flex flex-col gap-2">
                                       <a
                                         href={order.payment_receipt_url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1.5 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-750 px-2 py-1 rounded-lg transition-all font-medium cursor-pointer"
+                                        className="group relative block w-full max-w-[200px] overflow-hidden rounded-lg border border-zinc-750"
                                       >
-                                        Ver Comprobante
+                                        <img 
+                                          src={order.payment_receipt_url} 
+                                          alt="Comprobante de pago" 
+                                          className="w-full h-32 object-cover transition-transform group-hover:scale-105"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <span className="text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded">Abrir Completo</span>
+                                        </div>
                                       </a>
                                       {!order.is_paid && role !== 'cocinero' && role !== 'repartidor' && (
                                         <button
                                           onClick={() => handlePaymentToggle(order.id, order.is_paid)}
-                                          className="inline-flex items-center gap-1 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-lg transition-all font-semibold cursor-pointer"
+                                          className="inline-flex items-center justify-center gap-1 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-all font-semibold cursor-pointer max-w-[200px]"
                                         >
-                                          Confirmar Pago
+                                          Validar y Confirmar Pago
                                         </button>
                                       )}
                                     </div>

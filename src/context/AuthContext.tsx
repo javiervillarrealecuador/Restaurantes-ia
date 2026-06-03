@@ -108,25 +108,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserData = async (currentUser: User) => {
     try {
-      // 1. Fetch profile
-      const { data: profileData, error: profileErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
+      // Fetch profile and staff info in parallel to speed up application load
+      const [profileResponse, staffResponse] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single(),
+        supabase
+          .from('restaurant_staff')
+          .select('role, restaurant_id, permissions')
+          .eq('profile_id', currentUser.id)
+          .limit(1)
+      ]);
+
+      const { data: profileData, error: profileErr } = profileResponse;
+      const { data: staffData, error: staffErr } = staffResponse;
 
       if (profileErr) {
         console.error('Error fetching profile:', profileErr);
       } else {
         setProfile(profileData);
       }
-
-      // 2. Fetch role, restaurant, and custom permissions
-      const { data: staffData, error: staffErr } = await supabase
-        .from('restaurant_staff')
-        .select('role, restaurant_id, permissions')
-        .eq('profile_id', currentUser.id)
-        .limit(1);
 
       if (staffErr) {
         console.error('Error fetching staff info:', staffErr);
@@ -213,7 +216,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Any other event (USER_UPDATED, PASSWORD_RECOVERY, etc.)
+      if (event === 'PASSWORD_RECOVERY') {
+        if (session?.user) {
+          setUser(session.user);
+        }
+        window.location.href = '/update-password';
+        return;
+      }
+
+      // Any other event (USER_UPDATED, etc.)
       // silently update the user without showing the loading screen
       if (session?.user) {
         setUser(session.user);
