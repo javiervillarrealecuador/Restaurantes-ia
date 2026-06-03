@@ -10,6 +10,7 @@ import ReportsPanel from './ReportsPanel';
 import MenuPanel from './MenuPanel';
 import SimulatorPanel from './SimulatorPanel';
 import KitchenDisplay from './KitchenDisplay';
+import DeliveryDisplay from './DeliveryDisplay';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -1035,6 +1036,11 @@ export default function Dashboard() {
             <KitchenDisplay 
               orders={filteredOrdersByRole} 
               onUpdateStatus={handleUpdateOrderStatus} 
+            />
+          ) : activeTab === 'orders' && role === 'repartidor' ? (
+            <DeliveryDisplay
+              orders={filteredOrdersByRole}
+              onUpdateStatus={handleUpdateOrderStatus}
             />
           ) : activeTab === 'orders' ? (
             <OrderTable 

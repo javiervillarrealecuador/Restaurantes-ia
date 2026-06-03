@@ -861,7 +861,11 @@ REGLAS CRÍTICAS:
      - Plato 2 ($X.XX)
    - NUNCA respondas con los platos separados por comas en un solo párrafo, es ilegible.
 
-5. Siempre usa los IDs exactos del menú y sé conversacional.`;
+6. GESTIÓN DE CALIFICACIONES (POST-ENTREGA):
+   - Si el cliente envía un número del 1 al 5, estrellas (⭐), o un comentario evaluativo corto (ej. "Todo rico", "Estuvo malo", "5") justo después de que se le entregó su pedido, el intent debe ser "other".
+   - Tu human_response debe ser un agradecimiento muy amable por la calificación. Si la nota es baja (1-3), pide disculpas sinceramente e indica que trabajarán para mejorar. No ofrezcas ni intentes tomar un nuevo pedido en este momento.
+
+7. Siempre usa los IDs exactos del menú y sé conversacional.`;
 
   const url = 'https://api.deepseek.com/chat/completions';
   const response = await fetch(url, {

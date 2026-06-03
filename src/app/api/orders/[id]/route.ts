@@ -86,7 +86,7 @@ export async function PATCH(
       } else if (status === 'delivering') {
         notificationText = `🛵 ¡Buenas noticias, ${clientName}! Tu pedido${orderCodeText} ya va en camino a tu dirección:\n📍 *${order.delivery_address || 'Dirección indicada'}*\n\n¡Nuestro repartidor llegará muy pronto!`;
       } else if (status === 'delivered') {
-        notificationText = `¡Hola, ${clientName}! ✨ Tu pedido${orderCodeText} ha sido entregado. Muchas gracias por tu compra. ¡Esperamos que lo disfrutes! ❤️🍽️`;
+        notificationText = `¡Hola, ${clientName}! ✨ Tu pedido${orderCodeText} ha sido entregado. Muchas gracias por tu compra. ¡Esperamos que lo disfrutes! ❤️🍽️\n\n¿Qué te pareció el servicio? Responde con una calificación del 1 al 5 ⭐`;
       } else if (status === 'cancelled') {
         notificationText = `¡Hola, ${clientName}! Lo sentimos, tu pedido${orderCodeText} ha sido cancelado por el restaurante. Si tienes alguna duda, por favor contáctanos por este medio.`;
       }
