@@ -72,10 +72,10 @@ export async function sendWhatsAppMessage(to: string, text: string, phoneId: str
 }
 
 // Helper to send "typing..." state to the WhatsApp customer
-export async function sendWhatsAppTypingIndicator(to: string, phoneId: string) {
+export async function sendWhatsAppTypingIndicator(phoneId: string, messageId: string) {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
 
-  console.log(`--- SIMULATED TYPING INDICATOR TO ${to} ---`);
+  console.log(`--- SENDING TYPING INDICATOR FOR MESSAGE ${messageId} ---`);
 
   if (!token || token.startsWith('EAAG_reemplazar')) {
     console.log('Meta WhatsApp credentials are not configured or are test tokens. Skipping typing indicator.');
@@ -93,9 +93,8 @@ export async function sendWhatsAppTypingIndicator(to: string, phoneId: string) {
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to,
-          type: 'typing_indicator',
+          status: 'read',
+          message_id: messageId,
           typing_indicator: {
             type: 'text',
           },

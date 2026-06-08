@@ -140,7 +140,9 @@ async function processMessageInBackground(
 
   try {
     // Send typing indicator to let the user know we are processing
-    await sendWhatsAppTypingIndicator(customerPhone, whatsappPhoneId);
+    if (whatsappMsgId) {
+      await sendWhatsAppTypingIndicator(whatsappPhoneId, whatsappMsgId);
+    }
 
     // 2. Fetch or create a restaurant in a multi-tenant fashion
     const { data: settingsData } = await supabaseAdmin
