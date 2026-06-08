@@ -70,3 +70,47 @@ export async function sendWhatsAppMessage(to: string, text: string, phoneId: str
     }
   }
 }
+
+// Helper to send "typing..." state to the WhatsApp customer
+export async function sendWhatsAppTypingIndicator(to: string, phoneId: string) {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  console.log(`--- SIMULATED TYPING INDICATOR TO ${to} ---`);
+
+  if (!token || token.startsWith('EAAG_reemplazar')) {
+    console.log('Meta WhatsApp credentials are not configured or are test tokens. Skipping typing indicator.');
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'typing_indicator',
+          typing_indicator: {
+            type: 'text',
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      console.error(`Error response from Meta WhatsApp API (typing indicator): ${response.status} - ${errBody}`);
+    } else {
+      console.log(`Successfully dispatched WhatsApp typing indicator.`);
+    }
+  } catch (error: any) {
+    console.error(`Failed to send WhatsApp typing indicator:`, error);
+  }
+}
+

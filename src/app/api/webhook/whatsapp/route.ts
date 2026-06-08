@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { sendWhatsAppMessage, sendWhatsAppTypingIndicator } from '@/lib/whatsapp';
 
 interface ParsedOrderItem {
   product_id: string;
@@ -139,6 +139,9 @@ async function processMessageInBackground(
   let restaurantId: string | null = null;
 
   try {
+    // Send typing indicator to let the user know we are processing
+    await sendWhatsAppTypingIndicator(customerPhone, whatsappPhoneId);
+
     // 2. Fetch or create a restaurant in a multi-tenant fashion
     const { data: settingsData } = await supabaseAdmin
       .from('settings')
