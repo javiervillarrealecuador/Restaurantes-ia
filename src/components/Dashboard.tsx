@@ -190,46 +190,46 @@ export default function Dashboard() {
     }
   }, [profile]);
 
-  // Fetch restaurant profile
+  // Fetch restaurant profile — MUST wait for auth to settle first.
+  // When the page refreshes, getSession() may initially return an expired token
+  // from localStorage. If fetchRestaurant runs immediately with that stale token,
+  // Supabase rejects the query even though the RLS policy allows public reads.
+  // By depending on authLoading, we ensure tokens are refreshed before querying.
   useEffect(() => {
-    let isMounted = true;
-    
-    // Safety fallback: force loading to false after 12 seconds
-    const safetyTimer = setTimeout(() => {
-      if (isMounted) setRestaurantLoading(false);
-    }, 12000);
+    // Don't fetch until auth is fully resolved
+    if (authLoading) return;
 
-    const fetchRestaurant = async () => {
+    let isMounted = true;
+
+    const fetchRestaurant = async (attempt = 1) => {
+      if (!isMounted) return;
       setRestaurantLoading(true);
-      let timeoutId: NodeJS.Timeout;
       try {
-        const fetchPromise = supabase
+        const { data, error } = await supabase
           .from('restaurants')
           .select('*')
           .limit(1);
 
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error('Timeout fetching restaurant')), 10000);
-        });
+        if (error) {
+          // If we get an auth-related error, retry once after a short delay
+          // to give the token refresh a chance to complete
+          if (attempt === 1 && (error.message?.includes('JWT') || error.message?.includes('token') || error.code === 'PGRST301' || error.code === '401')) {
+            console.warn('Restaurant fetch got auth error, retrying in 1s...', error.message);
+            setTimeout(() => fetchRestaurant(2), 1000);
+            return;
+          }
+          throw error;
+        }
 
-        const { data, error } = await Promise.race([
-          fetchPromise,
-          timeoutPromise
-        ]) as any;
-
-        if (error) throw error;
-        
         if (isMounted && data && data.length > 0) {
           setRestaurant(data[0]);
         }
       } catch (err) {
         console.error('Error fetching restaurant:', err);
       } finally {
-        clearTimeout(timeoutId!);
         if (isMounted) {
           setRestaurantLoading(false);
         }
-        clearTimeout(safetyTimer);
       }
     };
 
@@ -237,9 +237,8 @@ export default function Dashboard() {
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimer);
     };
-  }, []);
+  }, [authLoading]);
 
   // Hook into orders real-time stream
   const { 
