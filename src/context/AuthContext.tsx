@@ -105,9 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissions] = useState<StaffPermissions | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Ref to always have the current user ID inside async callbacks (avoids stale closures)
+  // Refs to always have current values inside async callbacks (avoids stale closures)
   const userRef = useRef<User | null>(null);
+  const roleRef = useRef<UserRole | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { roleRef.current = role; }, [role]);
 
   const fetchUserData = async (currentUser: User) => {
     let timeoutId: NodeJS.Timeout;
@@ -209,9 +211,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // splash screen every time the user switches back to this tab/window.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'TOKEN_REFRESHED') {
-        // Silent token refresh — just update the user object, no loading flash
+        // Silent token refresh — update user object.
+        // IMPORTANT: if role/permissions weren't loaded yet (because the initial
+        // getSession fetch used a stale token that Supabase then refreshed),
+        // re-fetch profile/role data now with the fresh token.
+        // Use roleRef (not role) to avoid stale closure bugs.
         if (session?.user) {
           setUser(session.user);
+          if (!roleRef.current) {
+            await fetchUserData(session.user);
+          }
         }
         return;
       }

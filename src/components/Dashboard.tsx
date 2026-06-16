@@ -191,13 +191,14 @@ export default function Dashboard() {
   }, [profile]);
 
   // Fetch restaurant profile — MUST wait for auth to settle first.
-  // When the page refreshes, getSession() may initially return an expired token
-  // from localStorage. If fetchRestaurant runs immediately with that stale token,
-  // Supabase rejects the query even though the RLS policy allows public reads.
-  // By depending on authLoading, we ensure tokens are refreshed before querying.
+  // Depends on [authLoading, user] so it re-runs when:
+  //   1. Auth finishes loading (authLoading goes false)
+  //   2. User changes (e.g. TOKEN_REFRESHED triggers fetchUserData which sets user again)
   useEffect(() => {
     // Don't fetch until auth is fully resolved
     if (authLoading) return;
+    // Don't re-fetch if already loaded
+    if (restaurant) return;
 
     let isMounted = true;
 
@@ -212,7 +213,6 @@ export default function Dashboard() {
 
         if (error) {
           // If we get an auth-related error, retry once after a short delay
-          // to give the token refresh a chance to complete
           if (attempt === 1 && (error.message?.includes('JWT') || error.message?.includes('token') || error.code === 'PGRST301' || error.code === '401')) {
             console.warn('Restaurant fetch got auth error, retrying in 1s...', error.message);
             setTimeout(() => fetchRestaurant(2), 1000);
@@ -238,7 +238,8 @@ export default function Dashboard() {
     return () => {
       isMounted = false;
     };
-  }, [authLoading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user]);
 
   // Hook into orders real-time stream
   const { 
