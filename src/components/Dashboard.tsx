@@ -702,11 +702,10 @@ export default function Dashboard() {
     return { totalRevenue, activeCount, readyCount, completedToday };
   }, [orders]);
 
-  // Only show the full blocking splash if we genuinely have NO data yet.
-  // If restaurant and user are already loaded, NEVER block the UI — show inline
-  // indicators instead. This prevents the black screen on tab/window refocus.
-  const hasData = !!restaurant && !!user;
-  if (!hasData && (authLoading || restaurantLoading)) {
+  // Only show loading splash while auth or restaurant data is still being fetched.
+  // IMPORTANT: only block if BOTH are still loading — if auth is done and user is null,
+  // fall through so the redirect-to-login effect can fire.
+  if (authLoading || restaurantLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#09090b] text-zinc-100">
         <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mb-4" />
@@ -715,7 +714,21 @@ export default function Dashboard() {
     );
   }
 
-  // Seeding view if no restaurant exists
+  // If loading is done and there is NO authenticated user, redirect to login.
+  // This handles the case where the session expired or was never set in production.
+  if (!user) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#09090b] text-zinc-100">
+        <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mb-4" />
+        <p className="text-zinc-400 text-sm">Redirigiendo al inicio de sesión...</p>
+      </div>
+    );
+  }
+
+  // Seeding view if no restaurant exists (user IS authenticated but no restaurant found)
   if (!restaurant) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#09090b] text-zinc-100 p-6">
