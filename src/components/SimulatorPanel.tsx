@@ -217,12 +217,12 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
       <div className="xl:col-span-1 space-y-5">
         
         {/* Presets and configuration */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-2xl space-y-4">
-          <div className="border-b border-zinc-900 pb-3">
-            <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-widest flex items-center gap-1.5">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+          <div className="border-b border-zinc-200 dark:border-zinc-800/60 pb-3">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-widest flex items-center gap-1.5">
               <Smartphone className="h-4 w-4 text-emerald-500" /> Remitente Simulado
             </h4>
-            <p className="text-[10px] text-zinc-550 mt-1">Configura quién envía el mensaje por WhatsApp.</p>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">Configura quién envía el mensaje por WhatsApp.</p>
           </div>
 
           <div className="space-y-3.5 text-xs">
@@ -232,8 +232,8 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
                 onClick={() => handleSelectPreset("María López", "593987654322")}
                 className={`py-2 px-3 rounded-lg border text-center transition-all cursor-pointer ${
                   senderPhone === '593987654322'
-                    ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/60 font-bold'
-                    : 'bg-zinc-900/50 text-zinc-400 border-zinc-850 hover:text-zinc-250'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-250/70 dark:border-emerald-900/60 font-bold'
+                    : 'bg-white dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-850 hover:text-zinc-800 dark:hover:text-zinc-250'
                 }`}
               >
                 María (Cliente)
@@ -242,8 +242,8 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
                 onClick={() => handleSelectPreset("Repartidor Juan", "593987654323")}
                 className={`py-2 px-3 rounded-lg border text-center transition-all cursor-pointer ${
                   senderPhone === '593987654323'
-                    ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/60 font-bold'
-                    : 'bg-zinc-900/50 text-zinc-400 border-zinc-850 hover:text-zinc-250'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-250/70 dark:border-emerald-900/60 font-bold'
+                    : 'bg-white dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-850 hover:text-zinc-800 dark:hover:text-zinc-250'
                 }`}
               >
                 Juan (Repartidor)
@@ -253,30 +253,30 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
             {/* Custom Inputs */}
             <div className="space-y-2">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Nombre del Perfil</label>
+                <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Nombre del Perfil</label>
                 <input
                   type="text"
                   value={senderName}
                   onChange={(e) => setSenderName(e.target.value)}
-                  className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-zinc-700 p-2 rounded-lg text-zinc-200 outline-none"
+                  className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-850 focus:border-emerald-500 dark:focus:border-emerald-500 p-2 rounded-lg text-zinc-800 dark:text-zinc-200 outline-none"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Teléfono de WhatsApp</label>
+                <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Teléfono de WhatsApp</label>
                 <input
                   type="text"
                   value={senderPhone}
                   onChange={(e) => setSenderPhone(e.target.value)}
-                  className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-zinc-700 p-2 rounded-lg text-zinc-200 font-mono outline-none"
+                  className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-850 focus:border-emerald-500 dark:focus:border-emerald-500 p-2 rounded-lg text-zinc-800 dark:text-zinc-200 font-mono outline-none"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Phone Number ID (Fijo)</label>
+                <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Phone Number ID (Fijo)</label>
                 <input
                   type="text"
                   value={phoneId}
                   onChange={(e) => setPhoneId(e.target.value)}
-                  className="w-full bg-zinc-900/30 border border-zinc-850 p-2 rounded-lg text-zinc-500 font-mono outline-none cursor-not-allowed"
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-850 p-2 rounded-lg text-zinc-400 dark:text-zinc-500 font-mono outline-none cursor-not-allowed"
                   readOnly
                 />
               </div>
@@ -285,12 +285,12 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
         </div>
 
         {/* Templates Panel */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-2xl space-y-4">
-          <div className="border-b border-zinc-900 pb-3">
-            <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-widest flex items-center gap-1.5">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+          <div className="border-b border-zinc-200 dark:border-zinc-800/60 pb-3">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-widest flex items-center gap-1.5">
               <Info className="h-4 w-4 text-emerald-500" /> Plantillas de Prueba
             </h4>
-            <p className="text-[10px] text-zinc-550 mt-1">Haz clic para rellenar la entrada y enviar rápidamente.</p>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">Haz clic para rellenar la entrada y enviar rápidamente.</p>
           </div>
 
           <div className="space-y-2 text-xs">
@@ -307,10 +307,10 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
                     sendMessage(tpl.text, 'text');
                   }
                 }}
-                className="w-full text-left bg-zinc-900/40 hover:bg-zinc-900/80 border border-zinc-900 hover:border-zinc-800 p-2.5 rounded-xl transition-all cursor-pointer space-y-1"
+                className="w-full text-left bg-white dark:bg-zinc-900/40 hover:bg-zinc-50 dark:hover:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-350 dark:hover:border-zinc-800 p-2.5 rounded-xl transition-all cursor-pointer space-y-1"
               >
-                <div className="font-bold text-zinc-300 text-[11px]">{tpl.title}</div>
-                <div className="text-[10px] text-zinc-550 italic line-clamp-2 leading-relaxed">
+                <div className="font-bold text-zinc-700 dark:text-zinc-300 text-[11px]">{tpl.title}</div>
+                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 italic line-clamp-2 leading-relaxed">
                   &quot;{tpl.text}&quot;
                 </div>
               </button>
@@ -322,7 +322,7 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
                 const mockUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600';
                 sendMessage('[Imagen de Comprobante]', 'image', mockUrl);
               }}
-              className="w-full flex items-center justify-center gap-2 bg-emerald-950/20 text-emerald-400 border border-emerald-900/30 hover:border-emerald-800/80 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/30 hover:border-emerald-350 dark:hover:border-emerald-800/80 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
             >
               <ImageIcon className="h-4 w-4 shrink-0" />
               <span>Simular Subir Comprobante</span>

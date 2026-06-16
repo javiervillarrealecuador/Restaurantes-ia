@@ -554,9 +554,9 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
   // Show loading spinner while fetching orders
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 bg-[#09090b] border border-zinc-900 rounded-3xl">
+      <div className="flex flex-col items-center justify-center py-24 bg-transparent border border-zinc-200 dark:border-zinc-800/50 rounded-xl">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-        <p className="text-zinc-400 text-xs mt-3 font-medium">Cargando reporte ejecutivo...</p>
+        <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-3 font-medium">Cargando reporte ejecutivo...</p>
       </div>
     );
   }
@@ -565,15 +565,15 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
     <div className="w-full flex flex-col space-y-6 print-container">
       
       {/* 1. FILTER CONTROLLER - Hidden when printing */}
-      <div className="bg-zinc-950/45 border border-zinc-900 rounded-3xl p-5 backdrop-blur-md space-y-4 no-print shadow-xl">
-        <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+      <div className="bg-zinc-50/50 dark:bg-zinc-950/20 border border-zinc-200 dark:border-zinc-850/60 rounded-xl p-5 space-y-4 no-print">
+        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-3">
           <div className="flex items-center gap-2">
-            <Filter className="h-4.5 w-4.5 text-emerald-400" />
-            <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-widest">Generador de Reportes Cruzados</h3>
+            <Filter className="h-4.5 w-4.5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-150 uppercase tracking-widest">Generador de Reportes Cruzados</h3>
           </div>
           <button 
             onClick={clearAllFilters}
-            className="text-[11px] font-bold text-zinc-500 hover:text-rose-450 transition-colors uppercase tracking-wider flex items-center gap-1 bg-zinc-900/50 hover:bg-rose-950/15 border border-zinc-850 px-2.5 py-1 rounded-xl cursor-pointer"
+            className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors uppercase tracking-wider flex items-center gap-1 bg-white dark:bg-zinc-900 hover:bg-rose-50 dark:hover:bg-rose-950/15 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1 rounded-lg cursor-pointer"
           >
             Limpiar Filtros
           </button>
@@ -584,7 +584,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           
           {/* Date range selection */}
           <div className="space-y-1.5">
-            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Rango de Fecha</label>
+            <label className="font-bold text-zinc-550 dark:text-zinc-400 uppercase tracking-wider text-[10px]">Rango de Fecha</label>
             <div className="grid grid-cols-5 gap-1">
               {(['today', 'yesterday', 'week', 'month', 'custom'] as const).map(id => {
                 const labelMap = { today: 'Hoy', yesterday: 'Ayer', week: '7D', month: '30D', custom: 'Esp' };
@@ -594,8 +594,8 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                     onClick={() => setDatePreset(id)}
                     className={`py-1.5 text-center font-semibold rounded-lg transition-colors border ${
                       datePreset === id 
-                        ? 'bg-emerald-600/10 text-emerald-400 border-emerald-500/35' 
-                        : 'bg-zinc-900 border-zinc-850 text-zinc-450 hover:bg-zinc-850'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-355/35' 
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
                     }`}
                   >
                     {labelMap[id]}
@@ -609,13 +609,13 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                   type="date" 
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-850 rounded-lg p-2 text-zinc-200 outline-none focus:border-emerald-500 text-[11px]"
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-zinc-800 dark:text-zinc-200 outline-none focus:border-emerald-500 text-[11px]"
                 />
                 <input 
                   type="date" 
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-850 rounded-lg p-2 text-zinc-200 outline-none focus:border-emerald-500 text-[11px]"
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-zinc-800 dark:text-zinc-200 outline-none focus:border-emerald-500 text-[11px]"
                 />
               </div>
             )}
@@ -623,9 +623,9 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
 
           {/* Hour range selection */}
           <div className="space-y-1.5">
-            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] flex justify-between">
+            <label className="font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-wider text-[10px] flex justify-between">
               <span>Rango Horario</span>
-              <span className="text-emerald-400 font-semibold">{String(startHour).padStart(2, '0')}:00 a {String(endHour).padStart(2, '0')}:59</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{String(startHour).padStart(2, '0')}:00 a {String(endHour).padStart(2, '0')}:59</span>
             </label>
             <div className="flex items-center gap-2 mt-2 px-1">
               <input 
@@ -634,45 +634,45 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 max="23" 
                 value={startHour}
                 onChange={(e) => setStartHour(Math.min(Number(e.target.value), endHour))}
-                className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
               />
-              <span className="text-zinc-600 font-bold">a</span>
+              <span className="text-zinc-400 dark:text-zinc-650 font-bold">a</span>
               <input 
                 type="range" 
                 min="0" 
                 max="23" 
                 value={endHour}
                 onChange={(e) => setEndHour(Math.max(Number(e.target.value), startHour))}
-                className="w-full h-1 bg-zinc-850 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
               />
             </div>
-            <p className="text-[10px] text-zinc-500">Aísla ventas de almuerzo, cena u horas pico.</p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Aísla ventas de almuerzo, cena u horas pico.</p>
           </div>
 
           {/* Customer filter query */}
           <div className="space-y-1.5">
-            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Filtrar Cliente</label>
+            <label className="font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-wider text-[10px]">Filtrar Cliente</label>
             <div className="relative">
               <input
                 type="text"
                 placeholder="Nombre o teléfono..."
                 value={customerQuery}
                 onChange={(e) => setCustomerQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-zinc-900 border border-zinc-850 focus:border-emerald-500 text-zinc-200 rounded-xl outline-none placeholder-zinc-650"
+                className="w-full pl-8 pr-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-emerald-500 text-zinc-800 dark:text-zinc-200 rounded-lg outline-none placeholder-zinc-400 dark:placeholder-zinc-600"
               />
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-650" />
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400 dark:text-zinc-600" />
             </div>
-            <p className="text-[10px] text-zinc-500">Cruza compras de un cliente específico.</p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Cruza compras de un cliente específico.</p>
           </div>
 
           {/* Payment & Paid Status filters */}
           <div className="space-y-1.5">
-            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Pago & Liquidez</label>
+            <label className="font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-wider text-[10px]">Pago & Liquidez</label>
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
-                className="bg-zinc-900 border border-zinc-850 rounded-xl p-2 text-zinc-350 outline-none focus:border-emerald-500"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-zinc-650 dark:text-zinc-350 outline-none focus:border-emerald-500"
               >
                 <option value="all">Cualquier Pago</option>
                 <option value="cash">Efectivo (Cash)</option>
@@ -682,7 +682,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
               <select
                 value={paidStatus}
                 onChange={(e) => setPaidStatus(e.target.value)}
-                className="bg-zinc-900 border border-zinc-850 rounded-xl p-2 text-zinc-350 outline-none focus:border-emerald-500"
+                className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 text-zinc-650 dark:text-zinc-350 outline-none focus:border-emerald-500"
               >
                 <option value="all">Todos (Cobro)</option>
                 <option value="paid">Pagados</option>
@@ -690,38 +690,36 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
               </select>
             </div>
           </div>
-        </div>
-
-        {/* Collapsible Accordion Filters (Order Types, Statuses, Catalog Categories/Products) */}
-        <div className="border-t border-zinc-900 pt-3 flex flex-wrap gap-2 text-xs">
+            {/* Collapsible Accordion Filters (Order Types, Statuses, Catalog Categories/Products) */}
+        <div className="border-t border-zinc-200 dark:border-zinc-800/60 pt-3 flex flex-wrap gap-2 text-xs">
           
           {/* Order types toggle dropdown */}
           <div className="relative">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'types' ? null : 'types')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
                 selectedTypes.length < 3 
-                  ? 'bg-blue-600/10 text-blue-400 border-blue-500/35' 
-                  : 'bg-zinc-900 border-zinc-850 text-zinc-350 hover:bg-zinc-850'
+                  ? 'bg-blue-50 dark:bg-blue-955/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30' 
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
               <span>Canal: {selectedTypes.length === 3 ? 'Todos' : `${selectedTypes.length} sel.`}</span>
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
             </button>
             {openFilterSec === 'types' && (
-              <div className="absolute left-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-2xl z-20 space-y-2 animate-fadeIn">
-                <p className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest border-b border-zinc-800 pb-1">Tipos de Entrega</p>
+              <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg z-20 space-y-2 animate-fadeIn">
+                <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">Tipos de Entrega</p>
                 {[
                   { id: 'dine_in', label: 'Consumo en Mesa' },
                   { id: 'delivery', label: 'Domicilio / Delivery' },
                   { id: 'pickup', label: 'Retiro en Local' }
                 ].map(t => (
-                  <label key={t.id} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer">
+                  <label key={t.id} className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer">
                     <input 
                       type="checkbox" 
                       checked={selectedTypes.includes(t.id)}
                       onChange={() => toggleTypeFilter(t.id)}
-                      className="rounded border-zinc-700 text-emerald-600 focus:ring-0 cursor-pointer"
+                      className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-0 cursor-pointer"
                     />
                     <span>{t.label}</span>
                   </label>
@@ -734,18 +732,18 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           <div className="relative">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'statuses' ? null : 'statuses')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
                 selectedStatuses.length < 7 
-                  ? 'bg-amber-600/10 text-amber-400 border-amber-500/35' 
-                  : 'bg-zinc-900 border-zinc-850 text-zinc-350 hover:bg-zinc-850'
+                  ? 'bg-amber-50 dark:bg-amber-600/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30' 
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
               <span>Estados: {selectedStatuses.length === 7 ? 'Todos' : `${selectedStatuses.length} sel.`}</span>
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
             </button>
             {openFilterSec === 'statuses' && (
-              <div className="absolute left-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-2xl z-20 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
-                <p className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest border-b border-zinc-800 pb-1">Estado de Pedidos</p>
+              <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg z-20 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
+                <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">Estado de Pedidos</p>
                 {[
                   { id: 'pending', label: 'Pendiente' },
                   { id: 'confirmed', label: 'Confirmado' },
@@ -755,12 +753,12 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                   { id: 'delivered', label: 'Entregado' },
                   { id: 'cancelled', label: 'Cancelado' }
                 ].map(s => (
-                  <label key={s.id} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer">
+                  <label key={s.id} className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer">
                     <input 
                       type="checkbox" 
                       checked={selectedStatuses.includes(s.id)}
                       onChange={() => toggleStatusFilter(s.id)}
-                      className="rounded border-zinc-700 text-emerald-600 focus:ring-0 cursor-pointer"
+                      className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-0 cursor-pointer"
                     />
                     <span>{s.label}</span>
                   </label>
@@ -773,30 +771,30 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           <div className="relative">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'cats' ? null : 'cats')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
                 selectedCats.length > 0 
-                  ? 'bg-purple-600/10 text-purple-400 border-purple-500/35' 
-                  : 'bg-zinc-900 border-zinc-850 text-zinc-350 hover:bg-zinc-850'
+                  ? 'bg-purple-50 dark:bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/35' 
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
               <span>Categorías: {selectedCats.length === 0 ? 'Todas' : `${selectedCats.length} sel.`}</span>
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
             </button>
             {openFilterSec === 'cats' && (
-              <div className="absolute left-0 mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-2xl z-20 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
-                <p className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest border-b border-zinc-800 pb-1">Filtrar por Categoría</p>
+              <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg z-20 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
+                <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">Filtrar por Categoría</p>
                 {catalogLoading ? (
-                  <p className="text-[10px] text-zinc-650">Cargando...</p>
+                  <p className="text-[10px] text-zinc-450">Cargando...</p>
                 ) : categories.length === 0 ? (
-                  <p className="text-[10px] text-zinc-650">No hay categorías</p>
+                  <p className="text-[10px] text-zinc-450">No hay categorías</p>
                 ) : (
                   categories.map(c => (
-                    <label key={c.id} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer">
+                    <label key={c.id} className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer">
                       <input 
                         type="checkbox" 
                         checked={selectedCats.includes(c.id)}
                         onChange={() => toggleCategoryFilter(c.id)}
-                        className="rounded border-zinc-700 text-emerald-600 focus:ring-0 cursor-pointer"
+                        className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-0 cursor-pointer"
                       />
                       <span className="line-clamp-1">{c.name}</span>
                     </label>
@@ -810,36 +808,36 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           <div className="relative">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'prods' ? null : 'prods')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
                 selectedProds.length > 0 
-                  ? 'bg-pink-600/10 text-pink-400 border-pink-500/35' 
-                  : 'bg-zinc-900 border-zinc-850 text-zinc-350 hover:bg-zinc-850'
+                  ? 'bg-pink-50 dark:bg-pink-600/10 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-500/35' 
+                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800'
               }`}
             >
               <span>Platos: {selectedProds.length === 0 ? 'Todos' : `${selectedProds.length} sel.`}</span>
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
             </button>
             {openFilterSec === 'prods' && (
-              <div className="absolute left-0 mt-2 w-64 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 shadow-2xl z-20 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
-                <p className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest border-b border-zinc-800 pb-1">Filtrar por Platillo</p>
+              <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-lg z-20 space-y-2 max-h-60 overflow-y-auto animate-fadeIn">
+                <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">Filtrar por Platillo</p>
                 {catalogLoading ? (
-                  <p className="text-[10px] text-zinc-650">Cargando...</p>
+                  <p className="text-[10px] text-zinc-450">Cargando...</p>
                 ) : menuItems.length === 0 ? (
-                  <p className="text-[10px] text-zinc-650">No hay platos del menú</p>
+                  <p className="text-[10px] text-zinc-450">No hay platos del menú</p>
                 ) : (
                   menuItems.map(p => {
                     const cat = categories.find(c => c.id === p.category_id);
                     return (
-                      <label key={p.id} className="flex items-start gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer py-0.5">
+                      <label key={p.id} className="flex items-start gap-2 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer py-0.5">
                         <input 
                           type="checkbox" 
                           checked={selectedProds.includes(p.id)}
                           onChange={() => toggleProductFilter(p.id)}
-                          className="rounded border-zinc-700 text-emerald-600 focus:ring-0 mt-0.5 cursor-pointer"
+                          className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-0 mt-0.5 cursor-pointer"
                         />
                         <div>
                           <p className="text-xs leading-tight font-medium line-clamp-1">{p.name}</p>
-                          <span className="text-[8px] text-zinc-550 uppercase font-semibold">{cat?.name || 'S/C'}</span>
+                          <span className="text-[8px] text-zinc-500 dark:text-zinc-555 uppercase font-semibold">{cat?.name || 'S/C'}</span>
                         </div>
                       </label>
                     );
@@ -851,8 +849,8 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
 
           {/* Active filter count badges */}
           {(selectedCats.length > 0 || selectedProds.length > 0 || datePreset !== 'month' || customerQuery.trim()) && (
-            <div className="ml-auto flex items-center gap-1.5 text-[10px] bg-emerald-950/20 text-emerald-450 px-3 py-1 rounded-xl border border-emerald-900/30 font-bold uppercase tracking-wider">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-450 animate-pulse"></span>
+            <div className="ml-auto flex items-center gap-1.5 text-[10px] bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-lg border border-emerald-200 dark:border-emerald-900/30 font-bold uppercase tracking-wider">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-555 dark:bg-emerald-450 animate-pulse"></span>
               Filtro Activo
             </div>
           )}
@@ -866,16 +864,17 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           )}
         </div>
       </div>
+      </div>
 
       {/* 2. REPORT HEADER & ACTION BUTTONS */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800/60 pb-4">
         <div>
-          <h2 className="text-xl font-black text-zinc-100 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight flex items-center gap-2">
             <BarChart3 className="h-6 w-6 text-emerald-500" />
             Reporte Ejecutivo de Ventas
           </h2>
-          <p className="text-xs text-zinc-500 mt-1">
-            Periodo analizado: <span className="font-bold text-zinc-350">{new Date(customStartDate + 'T00:00:00').toLocaleDateString('es-ES')}</span> al <span className="font-bold text-zinc-350">{new Date(customEndDate + 'T23:59:59').toLocaleDateString('es-ES')}</span> ({filteredData.orders.length} pedidos procesados)
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+            Periodo analizado: <span className="font-bold text-zinc-700 dark:text-zinc-300">{new Date(customStartDate + 'T00:00:00').toLocaleDateString('es-ES')}</span> al <span className="font-bold text-zinc-700 dark:text-zinc-300">{new Date(customEndDate + 'T23:59:59').toLocaleDateString('es-ES')}</span> ({filteredData.orders.length} pedidos procesados)
           </p>
         </div>
 
@@ -884,27 +883,27 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           {/* Download summary excel */}
           <button
             onClick={exportSummaryExcel}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-850 hover:border-zinc-800 text-xs font-semibold shadow-md transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-250 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold shadow-sm transition-all cursor-pointer"
             title="Exporta cada pedido en una fila"
           >
-            <Download className="h-4 w-4 text-zinc-400" />
+            <Download className="h-4 w-4 text-zinc-550 dark:text-zinc-400" />
             <span>Excel Pedidos</span>
           </button>
 
           {/* Download detailed excel */}
           <button
             onClick={exportDetailedExcel}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-850 hover:border-zinc-800 text-xs font-semibold shadow-md transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-250 border border-zinc-200 dark:border-zinc-800 text-xs font-semibold shadow-sm transition-all cursor-pointer"
             title="Exporta cada producto vendido en una fila para análisis de recetas/inventario"
           >
-            <Download className="h-4 w-4 text-emerald-400" />
+            <Download className="h-4 w-4 text-emerald-555 dark:text-emerald-450" />
             <span>Excel Productos</span>
           </button>
 
           {/* Print PDF */}
           <button
             onClick={handlePrintPDF}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-950/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
           >
             <Printer className="h-4 w-4" />
             <span>Guardar PDF / Imprimir</span>
@@ -915,65 +914,65 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       {/* 3. BUSINESS KPIS CARDS */}
       <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Total revenue */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl backdrop-blur-sm">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-4.5 rounded-xl">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Facturación Neta</span>
-            <div className="p-1.5 rounded-lg bg-emerald-600/10 text-emerald-400 border border-emerald-550/15">
+            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Facturación Neta</span>
+            <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-250/50 dark:border-emerald-900/30">
               <DollarSign className="h-3.5 w-3.5" />
             </div>
           </div>
-          <h3 className="text-xl font-black text-zinc-100 mt-2">${reportStats.totalRevenue.toFixed(2)}</h3>
-          <p className="text-[9px] text-zinc-500 mt-1">Excluye pedidos cancelados</p>
+          <h3 className="text-xl font-black text-zinc-850 dark:text-zinc-100 mt-2">${reportStats.totalRevenue.toFixed(2)}</h3>
+          <p className="text-[9px] text-zinc-500 dark:text-zinc-500 mt-1">Excluye pedidos cancelados</p>
         </div>
 
         {/* Order count */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl backdrop-blur-sm">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-4.5 rounded-xl">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Pedidos Totales</span>
-            <div className="p-1.5 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-550/15">
+            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Pedidos Totales</span>
+            <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-250/50 dark:border-blue-900/30">
               <ShoppingBag className="h-3.5 w-3.5" />
             </div>
           </div>
-          <h3 className="text-xl font-black text-zinc-100 mt-2">{reportStats.ordersCount}</h3>
-          <p className="text-[9px] text-zinc-500 mt-1">
+          <h3 className="text-xl font-black text-zinc-850 dark:text-zinc-100 mt-2">{reportStats.ordersCount}</h3>
+          <p className="text-[9px] text-zinc-500 dark:text-zinc-500 mt-1">
             {reportStats.cancelledCount} cancelados ({((reportStats.cancelledCount / (reportStats.ordersCount || 1)) * 100).toFixed(0)}%)
           </p>
         </div>
 
         {/* Average Ticket */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl backdrop-blur-sm">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-4.5 rounded-xl">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Ticket Promedio</span>
-            <div className="p-1.5 rounded-lg bg-purple-600/10 text-purple-400 border border-purple-550/15">
+            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Ticket Promedio</span>
+            <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 border border-purple-250/50 dark:border-purple-900/30">
               <Percent className="h-3.5 w-3.5" />
             </div>
           </div>
-          <h3 className="text-xl font-black text-zinc-100 mt-2">${reportStats.averageTicket.toFixed(2)}</h3>
-          <p className="text-[9px] text-zinc-500 mt-1">Por cliente recurrente</p>
+          <h3 className="text-xl font-black text-zinc-850 dark:text-zinc-100 mt-2">${reportStats.averageTicket.toFixed(2)}</h3>
+          <p className="text-[9px] text-zinc-500 dark:text-zinc-500 mt-1">Por cliente recurrente</p>
         </div>
 
         {/* Total Delivery Fees */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl backdrop-blur-sm">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-4.5 rounded-xl">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Costos de Envío</span>
-            <div className="p-1.5 rounded-lg bg-amber-600/10 text-amber-400 border border-amber-550/15">
+            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Costos de Envío</span>
+            <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-250/50 dark:border-amber-900/30">
               <Truck className="h-3.5 w-3.5" />
             </div>
           </div>
-          <h3 className="text-xl font-black text-zinc-100 mt-2">${reportStats.totalDeliveryFees.toFixed(2)}</h3>
-          <p className="text-[9px] text-zinc-500 mt-1">Recaudado por delivery</p>
+          <h3 className="text-xl font-black text-zinc-850 dark:text-zinc-100 mt-2">${reportStats.totalDeliveryFees.toFixed(2)}</h3>
+          <p className="text-[9px] text-zinc-500 dark:text-zinc-500 mt-1">Recaudado por delivery</p>
         </div>
 
         {/* Average Prep Time */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl backdrop-blur-sm col-span-2 lg:col-span-1">
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-4.5 rounded-xl col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Prep. Promedio</span>
-            <div className="p-1.5 rounded-lg bg-indigo-600/10 text-indigo-400 border border-indigo-550/15">
+            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Prep. Promedio</span>
+            <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-250/50 dark:border-indigo-900/30">
               <Clock className="h-3.5 w-3.5" />
             </div>
           </div>
-          <h3 className="text-xl font-black text-zinc-100 mt-2">{reportStats.averagePrepTime.toFixed(0)} min</h3>
-          <p className="text-[9px] text-zinc-500 mt-1">Estimación operativa</p>
+          <h3 className="text-xl font-black text-zinc-850 dark:text-zinc-100 mt-2">{reportStats.averagePrepTime.toFixed(0)} min</h3>
+          <p className="text-[9px] text-zinc-500 dark:text-zinc-500 mt-1">Estimación operativa</p>
         </div>
       </section>
 
@@ -981,17 +980,17 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Sales trend Area chart */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-3xl backdrop-blur-sm lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-            <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
-              <TrendingUp className="h-4 w-4 text-emerald-400" />
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
               Tendencia de Ventas (Facturación Diaria)
             </h4>
-            <span className="text-[10px] text-zinc-500">Montos acumulados</span>
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Montos acumulados</span>
           </div>
 
           {reportStats.trendData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-xs text-zinc-650">
+            <div className="h-48 flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
               No hay datos suficientes para graficar la tendencia.
             </div>
           ) : (
@@ -1005,10 +1004,10 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 </defs>
 
                 {/* Grid horizontal helper lines */}
-                <line x1="25" y1="25" x2="575" y2="25" stroke="#18181b" strokeWidth="1" strokeDasharray="3" />
-                <line x1="25" y1="80" x2="575" y2="80" stroke="#18181b" strokeWidth="1" strokeDasharray="3" />
-                <line x1="25" y1="135" x2="575" y2="135" stroke="#18181b" strokeWidth="1" strokeDasharray="3" />
-                <line x1="25" y1="155" x2="575" y2="155" stroke="#27272a" strokeWidth="1" />
+                <line x1="25" y1="25" x2="575" y2="25" stroke="currentColor" className="text-zinc-150 dark:text-zinc-900" strokeWidth="1" strokeDasharray="3" />
+                <line x1="25" y1="80" x2="575" y2="80" stroke="currentColor" className="text-zinc-150 dark:text-zinc-900" strokeWidth="1" strokeDasharray="3" />
+                <line x1="25" y1="135" x2="575" y2="135" stroke="currentColor" className="text-zinc-150 dark:text-zinc-900" strokeWidth="1" strokeDasharray="3" />
+                <line x1="25" y1="155" x2="575" y2="155" stroke="currentColor" className="text-zinc-200 dark:text-zinc-800" strokeWidth="1" />
 
                 {/* Fill Area under the line */}
                 {trendSvgInfo.area && (
@@ -1034,10 +1033,8 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                       cx={p.x} 
                       cy={p.y} 
                       r="4" 
-                      fill="#09090b" 
-                      stroke="#10b981" 
+                      className="fill-white dark:fill-zinc-950 stroke-emerald-500 transition-all duration-300 hover:r-6 hover:fill-emerald-450"
                       strokeWidth="2.5" 
-                      className="transition-all duration-300 hover:r-6 hover:fill-emerald-450"
                     />
                     {/* Tooltip on hover */}
                     <rect 
@@ -1046,18 +1043,16 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                       width="80" 
                       height="20" 
                       rx="4" 
-                      fill="#18181b" 
-                      stroke="#27272a" 
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                      className="fill-zinc-900 dark:fill-zinc-950 stroke-zinc-700 dark:stroke-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                     />
                     <text 
                       x={p.x} 
                       y={p.y - 17} 
                       textAnchor="middle" 
-                      fill="#e4e4e7" 
+                      fill="currentColor"
                       fontSize="9" 
                       fontWeight="bold" 
-                      className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none font-sans"
+                      className="text-zinc-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none font-sans"
                     >
                       ${p.sales.toFixed(2)}
                     </text>
@@ -1068,10 +1063,10 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                         x={p.x} 
                         y="175" 
                         textAnchor="middle" 
-                        fill="#71717a" 
+                        fill="currentColor"
                         fontSize="9"
                         fontWeight="semibold"
-                        className="font-sans"
+                        className="font-sans text-zinc-500 dark:text-zinc-400"
                       >
                         {p.date}
                       </text>
@@ -1084,18 +1079,18 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
         </div>
 
         {/* Order Type Distribution Donut chart */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-3xl backdrop-blur-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-            <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
-              <Coffee className="h-4 w-4 text-emerald-400" />
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Coffee className="h-4 w-4 text-emerald-500" />
               Canales de Distribución (Ventas)
             </h4>
-            <span className="text-[10px] text-zinc-500">Porcentaje total</span>
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Porcentaje total</span>
           </div>
 
           <div className="flex flex-col items-center justify-center py-2">
             {reportStats.totalRevenue === 0 ? (
-              <div className="h-40 flex items-center justify-center text-xs text-zinc-650">
+              <div className="h-40 flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
                 No hay ventas para calcular canales.
               </div>
             ) : (
@@ -1103,7 +1098,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 {/* SVG Donut */}
                 <div className="relative h-32 w-32 shrink-0">
                   <svg viewBox="0 0 36 36" className="h-full w-full">
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#18181b" strokeWidth="3" />
+                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="currentColor" className="text-zinc-150 dark:text-zinc-900" strokeWidth="3" />
                     
                     {getDonutSegments().map((seg) => {
                       if (seg.pct === 0) return null;
@@ -1125,8 +1120,8 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                     })}
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest leading-none">Ventas</span>
-                    <span className="text-sm font-black text-zinc-150 mt-1">${reportStats.totalRevenue.toFixed(0)}</span>
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest leading-none">Ventas</span>
+                    <span className="text-sm font-black text-zinc-800 dark:text-zinc-150 mt-1">${reportStats.totalRevenue.toFixed(0)}</span>
                   </div>
                 </div>
 
@@ -1136,8 +1131,8 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                     <div key={seg.id} className="flex items-start gap-2">
                       <span className="h-3 w-3 rounded-md shrink-0 mt-0.5" style={{ backgroundColor: seg.color }} />
                       <div>
-                        <p className="font-bold text-zinc-200 leading-tight">{seg.label}</p>
-                        <p className="text-[10px] text-zinc-500">
+                        <p className="font-bold text-zinc-700 dark:text-zinc-200 leading-tight">{seg.label}</p>
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
                           ${seg.sales.toFixed(2)} ({Math.round(seg.pct * 100)}%)
                         </p>
                       </div>
@@ -1154,17 +1149,17 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Top 5 selling products bar charts */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-3xl backdrop-blur-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-            <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
-              <ListFilter className="h-4 w-4 text-emerald-400" />
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+              <ListFilter className="h-4 w-4 text-emerald-500" />
               Top 5 Platillos Más Vendidos
             </h4>
-            <span className="text-[10px] text-zinc-500">Por unidades vendidas</span>
+            <span className="text-[10px] text-zinc-550 dark:text-zinc-400">Por unidades vendidas</span>
           </div>
 
           {reportStats.topProducts.length === 0 ? (
-            <div className="py-12 text-center text-xs text-zinc-650">No hay ventas registradas.</div>
+            <div className="py-12 text-center text-xs text-zinc-500 dark:text-zinc-400">No hay ventas registradas.</div>
           ) : (
             <div className="space-y-4">
               {reportStats.topProducts.map((prod, index) => {
@@ -1175,12 +1170,12 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 return (
                   <div key={index} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-zinc-200 line-clamp-1">{index + 1}. {prod.name}</span>
-                      <span className="text-zinc-400 shrink-0 ml-2">
-                        {prod.qty} u. <span className="text-zinc-650">(${prod.sales.toFixed(2)})</span>
+                      <span className="text-zinc-700 dark:text-zinc-200 line-clamp-1">{index + 1}. {prod.name}</span>
+                      <span className="text-zinc-500 dark:text-zinc-400 shrink-0 ml-2">
+                        {prod.qty} u. <span className="text-zinc-400 dark:text-zinc-600">(${prod.sales.toFixed(2)})</span>
                       </span>
                     </div>
-                    <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-900 rounded-full overflow-hidden">
                       <div 
                         className={`h-full ${colors[index] || 'bg-zinc-600'} rounded-full transition-all duration-1000`} 
                         style={{ width: `${pct}%` }}
@@ -1194,17 +1189,17 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
         </div>
 
         {/* Category Share break down */}
-        <div className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-3xl backdrop-blur-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-            <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
-              <TrendingUp className="h-4 w-4 text-emerald-400" />
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
               Facturación por Categoría de Menú
             </h4>
-            <span className="text-[10px] text-zinc-500">Monto total</span>
+            <span className="text-[10px] text-zinc-550 dark:text-zinc-400">Monto total</span>
           </div>
 
           {reportStats.categoryStats.length === 0 ? (
-            <div className="py-12 text-center text-xs text-zinc-650">No hay ventas registradas.</div>
+            <div className="py-12 text-center text-xs text-zinc-500 dark:text-zinc-400">No hay ventas registradas.</div>
           ) : (
             <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
               {reportStats.categoryStats.map((cat, index) => {
@@ -1215,12 +1210,12 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 return (
                   <div key={index} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-zinc-200 line-clamp-1">{cat.name}</span>
-                      <span className="text-emerald-400 shrink-0 ml-2">
-                        ${cat.sales.toFixed(2)} <span className="text-zinc-550">({cat.qty} u.)</span>
+                      <span className="text-zinc-700 dark:text-zinc-200 line-clamp-1">{cat.name}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 shrink-0 ml-2">
+                        ${cat.sales.toFixed(2)} <span className="text-zinc-400 dark:text-zinc-600">({cat.qty} u.)</span>
                       </span>
                     </div>
-                    <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                    <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-900 rounded-full overflow-hidden">
                       <div 
                         className={`h-full ${colors[index % colors.length]} rounded-full transition-all duration-1000`} 
                         style={{ width: `${pct}%` }}
@@ -1235,24 +1230,24 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       </section>
 
       {/* 6. HOURLY SALES BAR GRAPH (PEAK HOURS) */}
-      <section className="bg-zinc-950/40 border border-zinc-900 p-5 rounded-3xl backdrop-blur-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-          <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-wider flex items-center gap-1.5">
-            <Clock className="h-4 w-4 text-emerald-400" />
+      <section className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
+          <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Clock className="h-4 w-4 text-emerald-500" />
             Distribución de Pedidos por Hora (Detección de Horas Pico)
           </h4>
-          <span className="text-[10px] text-zinc-500">Frecuencia de pedidos recibidos por hora</span>
+          <span className="text-[10px] text-zinc-550 dark:text-zinc-400 font-medium">Frecuencia de pedidos recibidos por hora</span>
         </div>
 
         {reportStats.totalRevenue === 0 ? (
-          <div className="py-12 text-center text-xs text-zinc-650">No hay ventas registradas en el rango.</div>
+          <div className="py-12 text-center text-xs text-zinc-500 dark:text-zinc-400">No hay ventas registradas en el rango.</div>
         ) : (
           <div className="space-y-2">
             {/* SVG Histogram */}
             <div className="w-full pt-4">
               <svg viewBox="0 0 720 120" className="w-full h-32 overflow-visible">
                 {/* Horizontal ground line */}
-                <line x1="20" y1="100" x2="700" y2="100" stroke="#27272a" strokeWidth="1" />
+                <line x1="20" y1="100" x2="700" y2="100" stroke="currentColor" className="text-zinc-200 dark:text-zinc-800" strokeWidth="1" />
 
                 {/* 24 Bar segments */}
                 {reportStats.ordersByHour.map((count, hr) => {
@@ -1269,8 +1264,8 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                         width="18" 
                         height={barHeight || 1} 
                         rx="3"
-                        fill={count > 0 ? 'url(#barGrad)' : '#18181b'} 
-                        className="transition-all duration-300 hover:fill-emerald-400"
+                        fill={count > 0 ? 'url(#barGrad)' : 'currentColor'} 
+                        className={count > 0 ? 'transition-all duration-300 hover:fill-emerald-400' : 'text-zinc-100 dark:text-zinc-900'}
                       />
                       
                       {/* Tooltip on hover */}
@@ -1282,18 +1277,16 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                             width="58" 
                             height="18" 
                             rx="4" 
-                            fill="#18181b" 
-                            stroke="#27272a" 
-                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+                            className="fill-zinc-900 dark:fill-zinc-950 stroke-zinc-700 dark:stroke-zinc-800 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
                           />
                           <text 
                             x={x + 9} 
                             y={y - 10} 
                             textAnchor="middle" 
-                            fill="#10b981" 
+                            fill="currentColor"
                             fontSize="8.5" 
                             fontWeight="bold" 
-                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none font-sans"
+                            className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none font-sans"
                           >
                             {count} ped.
                           </text>
@@ -1306,10 +1299,10 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                           x={x + 9} 
                           y="114" 
                           textAnchor="middle" 
-                          fill="#52525b" 
+                          fill="currentColor"
                           fontSize="8.5"
                           fontWeight="bold"
-                          className="font-mono"
+                          className="font-mono text-zinc-400 dark:text-zinc-500"
                         >
                           {String(hr).padStart(2, '0')}
                         </text>
@@ -1326,7 +1319,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 </defs>
               </svg>
             </div>
-            <div className="flex justify-between text-[10px] text-zinc-550 font-bold px-2 uppercase tracking-wider">
+            <div className="flex justify-between text-[10px] text-zinc-500 dark:text-zinc-500 font-bold px-2 uppercase tracking-wider">
               <span>Mañana (00:00 - 11:59)</span>
               <span>Tarde / Almuerzo (12:00 - 17:59)</span>
               <span>Noche / Cena (18:00 - 23:59)</span>
@@ -1336,25 +1329,25 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       </section>
 
       {/* 7. DRILLED DOWN ORDERS TABLE */}
-      <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl overflow-hidden shadow-xl">
-        <div className="p-5 border-b border-zinc-900 flex justify-between items-center bg-zinc-950/20">
-          <h4 className="text-xs font-bold text-zinc-350 uppercase tracking-widest">
+      <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 rounded-xl overflow-hidden">
+        <div className="p-5 border-b border-zinc-200 dark:border-zinc-800/60 flex justify-between items-center bg-zinc-100/30 dark:bg-zinc-950/20">
+          <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-widest">
             Detalle de Pedidos Filtrados ({filteredData.orders.length})
           </h4>
-          <span className="text-[10px] text-zinc-550 bg-zinc-900 border border-zinc-850 px-2 py-0.5 rounded-lg">
+          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded-md">
             Ordenado por Fecha (Reciente Primero)
           </span>
         </div>
 
         {filteredData.orders.length === 0 ? (
-          <div className="p-12 text-center text-xs text-zinc-600 bg-zinc-900/10">
+          <div className="p-12 text-center text-xs text-zinc-500 dark:text-zinc-400">
             No hay registros que coincidan con la selección de filtros actual.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-zinc-900 text-zinc-500 uppercase tracking-wider text-[9px] font-black bg-zinc-950/30">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800/60 text-zinc-550 dark:text-zinc-400 uppercase tracking-wider text-[9px] font-black bg-zinc-100/10 dark:bg-zinc-950/30">
                   <th className="p-4.5">Nº</th>
                   <th className="p-4.5">Cliente</th>
                   <th className="p-4.5">Canal</th>
@@ -1365,7 +1358,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                   <th className="p-4.5">Fecha</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-900/60">
+              <tbody className="divide-y divide-zinc-200/65 dark:divide-zinc-850/60">
                 {filteredData.orders.map(o => {
                   const isCancelled = o.status === 'cancelled';
                   const orderDate = new Date(o.created_at).toLocaleDateString('es-ES', {
@@ -1378,38 +1371,38 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                   return (
                     <tr 
                       key={o.id} 
-                      className={`hover:bg-zinc-900/35 transition-colors ${
-                        isCancelled ? 'opacity-50 line-through text-zinc-600' : 'text-zinc-300'
+                      className={`hover:bg-zinc-100/40 dark:hover:bg-zinc-900/35 transition-colors ${
+                        isCancelled ? 'opacity-50 line-through text-zinc-400 dark:text-zinc-600' : 'text-zinc-700 dark:text-zinc-300 font-medium'
                       }`}
                     >
-                      <td className="p-4.5 font-mono font-bold text-zinc-400">
+                      <td className="p-4.5 font-mono font-bold text-zinc-500 dark:text-zinc-400">
                         #{o.order_number}
                       </td>
                       <td className="p-4.5">
-                        <p className="font-semibold text-zinc-150">{o.customer_name}</p>
+                        <p className="font-semibold text-zinc-800 dark:text-zinc-150">{o.customer_name}</p>
                         <p className="text-[10px] text-zinc-500 mt-0.5">{o.customer_phone}</p>
                       </td>
                       <td className="p-4.5">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
                           o.type === 'dine_in' 
-                            ? 'bg-pink-950/20 text-pink-400 border-pink-950/50' 
+                            ? 'bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-950/50' 
                             : o.type === 'delivery' 
-                            ? 'bg-emerald-950/20 text-emerald-400 border-emerald-950/50' 
-                            : 'bg-blue-950/20 text-blue-400 border-blue-950/50'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-955/50' 
+                            : 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-955/50'
                         }`}>
                           {o.type === 'dine_in' ? 'Mesa' : o.type === 'delivery' ? 'Domicilio' : 'Llevar'}
                         </span>
                       </td>
-                      <td className="p-4.5 text-zinc-400 max-w-xs">
+                      <td className="p-4.5 text-zinc-550 dark:text-zinc-400 max-w-xs">
                         <p className="line-clamp-2 text-[11px] leading-relaxed">
                           {o.order_items?.map(it => `${it.quantity}x ${it.menu_items?.name}`).join(', ') || 'Sin Platillos'}
                         </p>
                       </td>
-                      <td className="p-4.5 text-right font-bold text-zinc-100">
+                      <td className="p-4.5 text-right font-bold text-zinc-800 dark:text-zinc-100">
                         ${Number(o.total_price).toFixed(2)}
                       </td>
                       <td className="p-4.5">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${o.is_paid ? 'text-emerald-450' : 'text-rose-450'}`}>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${o.is_paid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${o.is_paid ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
                           {o.is_paid ? 'Cobrado' : 'Por Cobrar'}
                         </span>
@@ -1418,15 +1411,15 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                       <td className="p-4.5 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
                           o.status === 'delivered' 
-                            ? 'bg-emerald-950/20 text-emerald-400 border-emerald-950/60' 
+                            ? 'bg-emerald-50 dark:bg-emerald-955/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-955/60' 
                             : o.status === 'cancelled'
-                            ? 'bg-rose-950/20 text-rose-450 border-rose-950/60'
-                            : 'bg-zinc-850 text-zinc-400 border-zinc-800'
+                            ? 'bg-rose-50 dark:bg-rose-955/20 text-rose-600 dark:text-rose-455 border-rose-200 dark:border-rose-955/60'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
                         }`}>
                           {o.status}
                         </span>
                       </td>
-                      <td className="p-4.5 text-zinc-500 font-medium">
+                      <td className="p-4.5 text-zinc-400 dark:text-zinc-500 font-medium">
                         {orderDate}
                       </td>
                     </tr>

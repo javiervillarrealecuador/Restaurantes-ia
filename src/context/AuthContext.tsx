@@ -9,6 +9,7 @@ interface Profile {
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
+  is_super_admin?: boolean;
 }
 
 export type UserRole = 'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor';
@@ -85,6 +86,7 @@ interface AuthContextType {
   profile: Profile | null;
   role: UserRole | null;
   restaurantId: string | null;
+  isSuperAdmin: boolean;
   permissions: StaffPermissions | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ error: any }>;
@@ -99,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const [permissions, setPermissions] = useState<StaffPermissions | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -107,9 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { userRef.current = user; }, [user]);
 
   const fetchUserData = async (currentUser: User) => {
+    let timeoutId: NodeJS.Timeout;
     try {
-      // Fetch profile and staff info in parallel to speed up application load
-      const [profileResponse, staffResponse] = await Promise.all([
+      const fetchPromise = Promise.all([
         supabase
           .from('profiles')
           .select('*')
@@ -122,6 +125,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .limit(1)
       ]);
 
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Timeout fetching user data')), 10000);
+      });
+
+      const [profileResponse, staffResponse] = await Promise.race([
+        fetchPromise,
+        timeoutPromise
+      ]) as any;
+
       const { data: profileData, error: profileErr } = profileResponse;
       const { data: staffData, error: staffErr } = staffResponse;
 
@@ -129,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error fetching profile:', profileErr);
       } else {
         setProfile(profileData);
+        setIsSuperAdmin(profileData?.is_super_admin || false);
       }
 
       if (staffErr) {
@@ -158,10 +171,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Safety fallback: force loading to false after 10 seconds no matter what
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 10000);
+
     // Check active session on mount
     const checkSession = async () => {
+      let timeoutId: NodeJS.Timeout;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const fetchSessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Session timeout')), 8000);
+        });
+        
+        const { data: { session } } = await Promise.race([fetchSessionPromise, timeoutPromise]) as any;
+        
         if (session?.user) {
           setUser(session.user);
           await fetchUserData(session.user);
@@ -169,7 +194,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error('Session retrieval error:', e);
       } finally {
+        clearTimeout(timeoutId!);
         setLoading(false);
+        clearTimeout(safetyTimer);
       }
     };
 
@@ -211,6 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setRole(null);
         setRestaurantId(null);
+        setIsSuperAdmin(false);
         setPermissions(null);
         // No loading state needed — redirect to /login will handle UI
         return;
@@ -303,11 +331,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Supabase signOut failed:', err);
+    } finally {
+      // Force clear state locally to ensure user gets logged out even if the API call fails
+      setUser(null);
+      setProfile(null);
+      setRole(null);
+      setRestaurantId(null);
+      setIsSuperAdmin(false);
+      setPermissions(null);
+      
+      // Redirect to login page
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, restaurantId, permissions, loading, login, signUp, logout }}>
+    <AuthContext.Provider value={{ user, profile, role, restaurantId, isSuperAdmin, permissions, loading, login, signUp, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -339,7 +339,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     <div className="w-full flex flex-col space-y-4">
       <ReceiptPrinter ref={componentRef} order={printingOrder} />
       {/* Search & Tabs Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-950/40 border border-zinc-800/80 p-3.5 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-50 dark:bg-zinc-900/10 border border-zinc-150 dark:border-zinc-850/50 p-4.5 rounded-xl">
         
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
@@ -348,7 +348,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
             placeholder="Buscar por cliente o teléfono..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-3.5 pr-10 py-2 bg-zinc-900/60 border border-zinc-850 hover:border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm text-zinc-100 placeholder-zinc-500 rounded-xl outline-none transition-all"
+            className="w-full pl-3.5 pr-10 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-750 focus:border-emerald-500 text-sm text-zinc-800 dark:text-zinc-100 placeholder-zinc-550 rounded-xl outline-none transition-all"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-200">
@@ -377,8 +377,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                 onClick={() => setFilterStatus(tab)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
                   active 
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/20' 
-                    : 'bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-850 text-zinc-400 hover:text-zinc-200'
+                    ? 'bg-emerald-600 text-white shadow-sm' 
+                    : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-650 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
                 }`}
               >
                 {labels[tab]}
@@ -390,24 +390,23 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
       {loading ? (
         <div className="space-y-3">
-          {/* Skeleton loader defined in Skeletons could be used, but since we are replacing Loader2 */}
-          <div className="flex flex-col items-center justify-center py-20 bg-zinc-950/20 border border-zinc-900 rounded-2xl">
+          <div className="flex flex-col items-center justify-center py-20 bg-zinc-50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/60 rounded-xl">
             <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-3" />
             <p className="text-zinc-500 text-sm">Cargando pedidos en tiempo real...</p>
           </div>
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-zinc-950/20 border border-zinc-850 rounded-2xl text-center px-4">
-          <UtensilsCrossed className="h-10 w-10 text-zinc-600 mb-3" />
-          <p className="text-zinc-400 font-medium">No se encontraron pedidos</p>
-          <p className="text-zinc-650 text-xs mt-1 max-w-sm">
+        <div className="flex flex-col items-center justify-center py-20 bg-zinc-50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/60 rounded-xl text-center px-4">
+          <UtensilsCrossed className="h-10 w-10 text-zinc-400 dark:text-zinc-600 mb-3" />
+          <p className="text-zinc-800 dark:text-zinc-300 font-bold">No se encontraron pedidos</p>
+          <p className="text-zinc-550 dark:text-zinc-450 text-xs mt-1 max-w-sm">
             {searchQuery || filterStatus !== 'all' 
               ? 'Prueba modificando tus filtros o término de búsqueda.' 
               : 'Los pedidos creados por WhatsApp se verán reflejados aquí automáticamente.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-3.5">
+        <div className="flex flex-col">
           {filteredOrders.map((order) => {
             const isExpanded = expandedOrders[order.id];
             const orderTime = formatTime(order.created_at);
@@ -416,10 +415,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
             return (
               <div 
                 key={order.id} 
-                className={`overflow-hidden rounded-2xl border transition-all duration-300 ${
+                className={`overflow-hidden border-b border-zinc-150 dark:border-zinc-850 transition-all duration-300 ${
                   isExpanded 
-                    ? 'bg-zinc-900/70 border-zinc-700/60 shadow-xl' 
-                    : 'bg-zinc-950/40 hover:bg-zinc-900/40 border-zinc-850 hover:border-zinc-800'
+                    ? 'bg-zinc-50/50 dark:bg-zinc-900/10' 
+                    : 'hover:bg-zinc-50/30 dark:hover:bg-zinc-900/5'
                 }`}
               >
                 {/* Header Row */}
@@ -429,14 +428,14 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                 >
                   {/* Left Block: Client & Time */}
                   <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shrink-0">
                       {getTypeIcon(order.type)}
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-zinc-100 flex items-center flex-wrap gap-1.5">
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center flex-wrap gap-1.5">
                         <span>{order.customer_name}</span>
                         {order.order_code && (
-                          <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-2 py-0.5 rounded-lg select-all">
+                          <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/30 px-2 py-0.5 rounded-lg select-all">
                             {formatOrderCode(order.order_code)}
                           </span>
                         )}
@@ -448,16 +447,16 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
                             title="Abrir Ruta en Google Maps"
                           >
                             <MapPin className="h-3 w-3" /> Domicilio
                           </a>
                         ) : (
                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                            order.type === 'dine_in' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/20' :
-                            order.type === 'delivery' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                            order.type === 'dine_in' ? 'bg-pink-50 dark:bg-pink-950/20 text-pink-600 dark:text-pink-400 border border-pink-200 dark:border-pink-850/40' :
+                            order.type === 'delivery' ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-850/40' :
+                            'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40'
                           }`}>
                             {order.type === 'dine_in' ? <Coffee className="h-3 w-3" /> : 
                              order.type === 'delivery' ? <MapPin className="h-3 w-3" /> : 
@@ -474,16 +473,16 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
                             title="Ver Comprobante de Transferencia"
                           >
                             <Landmark className="h-3 w-3" /> Transferencia
                           </a>
                         ) : (
                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                            order.payment_method === 'transfer' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-                            order.payment_method === 'cash' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                            'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
+                            order.payment_method === 'transfer' ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-850/40' :
+                            order.payment_method === 'cash' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-250 dark:border-amber-850/40' :
+                            'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-450 border border-zinc-200 dark:border-zinc-800'
                           }`}>
                             {order.payment_method === 'transfer' ? <Landmark className="h-3 w-3" /> : 
                              order.payment_method === 'cash' ? <Banknote className="h-3 w-3" /> : 
@@ -493,10 +492,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                           </span>
                         )}
                       </h4>
-                      <p className="text-xs text-zinc-500 mt-0.5 flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5 text-zinc-600" />
+                      <p className="text-xs text-zinc-550 dark:text-zinc-450 mt-0.5 flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-650" />
                         <span>{orderDate}, {orderTime}</span>
-                        <span className="text-zinc-700">•</span>
+                        <span className="text-zinc-350 dark:text-zinc-700">•</span>
                         <span>{order.customer_phone}</span>
                       </p>
                     </div>
@@ -504,11 +503,11 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
                   {/* Middle Block: Items brief & Total */}
                   <div className="hidden lg:block flex-1 max-w-md mx-6">
-                    <p className="text-xs text-zinc-400 line-clamp-1">
+                    <p className="text-xs text-zinc-650 dark:text-zinc-400 line-clamp-1">
                       {order.order_items?.map(item => `${item.quantity}x ${item.menu_items?.name || 'Item'}`).join(', ')}
                     </p>
                     {order.notes && (
-                      <p className="text-[11px] text-amber-500/80 italic mt-0.5 flex items-center gap-1">
+                      <p className="text-[11px] text-amber-600 dark:text-amber-450 italic mt-0.5 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3 shrink-0" />
                         <span className="line-clamp-1">{order.notes}</span>
                       </p>
@@ -519,7 +518,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                   <div className="flex items-center gap-4 ml-auto">
                     {/* Price and Payment Status */}
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-bold text-zinc-100">${Number(order.total_price).toFixed(2)}</div>
+                      <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">${Number(order.total_price).toFixed(2)}</div>
                       <button
                         disabled={readOnly || role === 'cocinero' || role === 'repartidor'}
                         onClick={(e) => {
@@ -528,8 +527,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                         }}
                         className={`text-[10px] font-semibold mt-0.5 uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                           order.is_paid 
-                            ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/50 hover:bg-emerald-900/30' 
-                            : 'bg-rose-950/40 text-rose-400 border-rose-900/50 hover:bg-rose-900/30'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' 
+                            : 'bg-rose-50 dark:bg-rose-955/40 text-rose-600 dark:text-rose-455 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/30'
                         } ${ (readOnly || role === 'cocinero' || role === 'repartidor') ? 'opacity-50 cursor-not-allowed' : '' }`}
                       >
                         {order.is_paid ? 'Pagado' : 'Por Pagar'}
@@ -546,7 +545,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                       {getActionButton(order)}
                       <button 
                         onClick={(e) => { e.stopPropagation(); handlePrint(order); }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-all shadow-md"
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-805 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 transition-all shadow-sm"
                         title="Imprimir Ticket"
                       >
                         <Printer className="h-3.5 w-3.5" />
@@ -554,7 +553,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                     </div>
 
                     {/* Expand icon */}
-                    <div className="text-zinc-650 shrink-0">
+                    <div className="text-zinc-400 dark:text-zinc-655 shrink-0">
                       {isExpanded ? <ChevronUp className="h-4.5 w-4.5" /> : <ChevronDown className="h-4.5 w-4.5" />}
                     </div>
                   </div>
@@ -562,32 +561,32 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
                 {/* Expanded Details Panel */}
                 {isExpanded && (
-                  <div className="border-t border-zinc-800 bg-zinc-900/30 px-6 py-5 space-y-4">
+                  <div className="border-t border-zinc-200 dark:border-zinc-850 bg-zinc-50/30 dark:bg-zinc-955/20 px-6 py-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       
                       {/* Items details */}
                       <div className="md:col-span-2 space-y-3">
-                        <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-850 pb-2">
+                        <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-850 pb-2">
                           Detalle del Pedido
                         </h5>
-                        <div className="divide-y divide-zinc-850/60">
+                        <div className="divide-y divide-zinc-200 dark:divide-zinc-850/60">
                           {order.order_items?.map((item) => (
                             <div key={item.id} className="py-2.5 flex justify-between items-start text-sm">
                               <div>
-                                <div className="font-medium text-zinc-100">
+                                <div className="font-medium text-zinc-800 dark:text-zinc-100">
                                   {item.quantity}x {item.menu_items?.name || 'Plato del Menú'}
-                                  <span className="text-zinc-650 ml-2 font-normal">
+                                  <span className="text-zinc-500 dark:text-zinc-550 ml-2 font-normal">
                                     (${Number(item.unit_price).toFixed(2)} c/u)
                                   </span>
                                 </div>
                                 {item.notes && (
-                                  <p className="text-xs text-amber-500/80 italic mt-1 flex items-start gap-1">
+                                  <p className="text-xs text-amber-600 dark:text-amber-500/80 italic mt-1 flex items-start gap-1">
                                     <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                                     <span>Nota: {item.notes}</span>
                                   </p>
                                 )}
                               </div>
-                              <span className="font-semibold text-zinc-200">
+                              <span className="font-semibold text-zinc-800 dark:text-zinc-200">
                                 ${(item.quantity * Number(item.unit_price)).toFixed(2)}
                               </span>
                             </div>
@@ -596,16 +595,16 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                       </div>
 
                       {/* Customer / Order Metadata */}
-                      <div className="space-y-4 bg-zinc-900/60 border border-zinc-850 p-4 rounded-xl">
+                      <div className="space-y-4 bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-850 p-4 rounded-xl shadow-sm">
                         <div>
-                          <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">
+                          <h5 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
                             Detalles de Entrega
                           </h5>
-                          <p className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
                             {getTypeIcon(order.type)}
                             <span>{order.type === 'dine_in' ? 'Comer en Mesa' : order.type === 'delivery' ? 'Domicilio' : 'Retiro local'}</span>
                           </p>
-                          <p className="text-xs text-zinc-400 mt-1 pl-6">
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 pl-6">
                             {getTypeLabel(order)}
                           </p>
                           {order.type === 'delivery' && order.delivery_address && (
@@ -613,26 +612,26 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                               href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('Avenida Bolívar 396 y las gradas, Tulcán')}&destination=${encodeURIComponent(order.delivery_address)}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 mt-2 ml-6 text-[10px] bg-emerald-650/15 hover:bg-emerald-600/25 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
+                              className="inline-flex items-center gap-1.5 mt-2 ml-6 text-[10px] bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-450 border border-emerald-200 dark:border-emerald-800/30 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"
                             >
                               <MapPin className="h-3 w-3 shrink-0" /> Ver Ruta en Google Maps
                             </a>
                           )}
                         </div>
 
-                        <div className="border-t border-zinc-850 pt-3">
-                          <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">
+                        <div className="border-t border-zinc-200 dark:border-zinc-850 pt-3">
+                          <h5 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
                             Detalles de Pago
                           </h5>
                           <div className="space-y-1.5">
-                            <p className="text-xs text-zinc-300">
-                              Método: <span className="font-semibold text-zinc-150">
+                            <p className="text-xs text-zinc-600 dark:text-zinc-350">
+                              Método: <span className="font-semibold text-zinc-800 dark:text-zinc-200">
                                 {order.payment_method === 'undecided' ? 'Por decidir (Delivery)' : 
                                  order.payment_method === 'transfer' ? 'Transferencia bancaria' : 'Efectivo'}
                               </span>
                             </p>
-                            <p className="text-xs text-zinc-300">
-                              Estado: <span className={`font-bold ${order.is_paid ? 'text-emerald-400' : 'text-rose-450'}`}>
+                            <p className="text-xs text-zinc-650 dark:text-zinc-350">
+                              Estado: <span className={`font-bold ${order.is_paid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-455'}`}>
                                 {order.is_paid ? 'Pagado ✅' : 'Por Pagar ❌'}
                               </span>
                             </p>
@@ -641,7 +640,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                               <div className="mt-2 space-y-2">
                                 {order.payment_receipt_url ? (
                                   <div className="space-y-1.5">
-                                    <span className="text-[10px] block text-emerald-450 font-bold uppercase tracking-wider flex items-center gap-1">
+                                    <span className="text-[10px] block text-emerald-600 dark:text-emerald-450 font-bold uppercase tracking-wider flex items-center gap-1">
                                       ¡Comprobante Subido! 
                                       <Check className="h-3 w-3" />
                                     </span>
@@ -650,7 +649,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                         href={order.payment_receipt_url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="group relative block w-full max-w-[200px] overflow-hidden rounded-lg border border-zinc-750"
+                                        className="group relative block w-full max-w-[200px] overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-750"
                                       >
                                         <img 
                                           src={order.payment_receipt_url} 
@@ -686,7 +685,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="bg-amber-550/5 border border-amber-500/10 p-2 rounded-lg text-amber-500 text-[10px] flex items-start gap-1">
+                                  <div className="bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900/30 p-2 rounded-lg text-amber-600 dark:text-amber-505 text-[10px] flex items-start gap-1">
                                     <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                                     <span>Esperando captura de transferencia por WhatsApp...</span>
                                   </div>
@@ -697,34 +696,34 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                         </div>
 
                         {order.notes && (
-                          <div className="border-t border-zinc-850 pt-3">
-                            <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
+                          <div className="border-t border-zinc-200 dark:border-zinc-850 pt-3">
+                            <h5 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1.5">
                               Nota General
                             </h5>
-                            <p className="text-xs text-amber-500 bg-amber-500/5 border border-amber-500/10 p-2 rounded-lg italic">
+                            <p className="text-xs text-amber-600 dark:text-amber-505 bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900/30 p-2 rounded-lg italic">
                               &quot;{order.notes}&quot;
                             </p>
                           </div>
                         )}
 
-                        <div className="border-t border-zinc-850 pt-3 space-y-1.5 text-xs text-zinc-400">
+                        <div className="border-t border-zinc-200 dark:border-zinc-850 pt-3 space-y-1.5 text-xs text-zinc-550 dark:text-zinc-450">
                           <div className="flex justify-between">
                             <span>Subtotal:</span>
-                            <span className="font-medium text-zinc-250">${Number(order.subtotal).toFixed(2)}</span>
+                            <span className="font-medium text-zinc-800 dark:text-zinc-200">${Number(order.subtotal).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>IVA (10%):</span>
-                            <span className="font-medium text-zinc-250">${Number(order.tax).toFixed(2)}</span>
+                            <span className="font-medium text-zinc-800 dark:text-zinc-200">${Number(order.tax).toFixed(2)}</span>
                           </div>
                           {Number(order.delivery_fee) > 0 && (
                             <div className="flex justify-between">
                               <span>Envío:</span>
-                              <span className="font-medium text-zinc-250">${Number(order.delivery_fee).toFixed(2)}</span>
+                              <span className="font-medium text-zinc-800 dark:text-zinc-200">${Number(order.delivery_fee).toFixed(2)}</span>
                             </div>
                           )}
-                          <div className="flex justify-between text-sm font-bold text-zinc-100 border-t border-zinc-850 pt-2">
+                          <div className="flex justify-between text-sm font-bold text-zinc-900 dark:text-zinc-100 border-t border-zinc-200 dark:border-zinc-850 pt-2">
                             <span>Total del Pedido:</span>
-                            <span className="text-emerald-400">${Number(order.total_price).toFixed(2)}</span>
+                            <span className="text-emerald-600 dark:text-emerald-450">${Number(order.total_price).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>

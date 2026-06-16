@@ -48,6 +48,12 @@ export function useOrders(restaurantId: string | null) {
     if (!restaurantId) return;
     setLoading(true);
     setError(null);
+    
+    // Safety fallback to prevent infinite loading
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 12000);
+
     try {
       const { data, error: fetchErr } = await supabase
         .from('orders')
@@ -76,10 +82,10 @@ export function useOrders(restaurantId: string | null) {
       if (fetchErr) throw fetchErr;
       setOrders((data as unknown as Order[]) || []);
     } catch (err: unknown) {
-      const errorObj = err as Error;
-      setError(errorObj.message || 'Error loading orders');
       console.error('Error fetching orders:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error fetching orders');
     } finally {
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
   }, [restaurantId]);
@@ -87,10 +93,14 @@ export function useOrders(restaurantId: string | null) {
   // Update order status
   const updateOrderStatus = useCallback(async (orderId: string, status: OrderStatus): Promise<boolean> => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const res = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ status }),
       });
@@ -117,9 +127,15 @@ export function useOrders(restaurantId: string | null) {
   // Update order payment status
   const updateOrderPaymentStatus = useCallback(async (orderId: string, isPaid: boolean): Promise<boolean> => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ is_paid: isPaid })
       });
       if (!response.ok) {

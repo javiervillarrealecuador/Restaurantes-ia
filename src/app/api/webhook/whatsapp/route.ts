@@ -158,6 +158,31 @@ async function processMessageInBackground(
       restaurantId = restaurant.id;
     }
 
+    // 2b. Check if the restaurant account is suspended
+    const { data: restaurantObj } = await supabaseAdmin
+      .from('restaurants')
+      .select('status')
+      .eq('id', restaurantId)
+      .single();
+
+    if (restaurantObj && restaurantObj.status === 'suspended') {
+      const suspensionMsg = `Estimado cliente, los servicios de este asistente virtual se encuentran temporalmente suspendidos. Por favor, comuníquese directamente con el local para realizar su pedido o consulta. ¡Lamentamos los inconvenientes!`;
+      await sendWhatsAppMessage(customerPhone, suspensionMsg, whatsappPhoneId);
+      
+      // Log this message as suspended
+      if (whatsappMsgId) {
+        await supabaseAdmin.from('whatsapp_webhook_logs').insert({
+          whatsapp_message_id: whatsappMsgId,
+          restaurant_id: restaurantId,
+          sender_phone: customerPhone,
+          message_body: message.type === 'text' ? message.text.body : `[Mensaje tipo: ${message.type}]`,
+          raw_payload: payload,
+          status: 'suspended_blocking_msg'
+        });
+      }
+      return;
+    }
+
     // 3. Conversational Logic: Check if customer has a pending order waiting for details
     const { data: pendingOrders } = await supabaseAdmin
       .from('orders')
@@ -238,8 +263,39 @@ async function processMessageInBackground(
       }
       // Case C: Customer sent text but order is already waiting for receipt image
       if (message.type === 'text' && activePendingOrder.payment_method === 'transfer' && !activePendingOrder.payment_receipt_url) {
+        const textBody = (message.text.body || '').trim().toLowerCase();
+        
+        // Check if customer wants to cancel/discard the order (avoiding 'cancelar' since it means 'to pay' locally)
+        const cancellationKeywords = ['eliminar', 'descartar', 'borrar', 'delete', 'anular', 'descartar el pedido actual'];
+        const wantsToCancel = cancellationKeywords.some(keyword => textBody.includes(keyword));
+        
+        if (wantsToCancel) {
+          const { error: cancelErr } = await supabaseAdmin
+            .from('orders')
+            .update({ status: 'cancelled' })
+            .eq('id', activePendingOrder.id);
+            
+          if (cancelErr) throw cancelErr;
+          
+          if (whatsappMsgId) {
+            await supabaseAdmin.from('whatsapp_webhook_logs').insert({
+              whatsapp_message_id: whatsappMsgId,
+              restaurant_id: restaurantId,
+              sender_phone: customerPhone,
+              message_body: message.text.body,
+              raw_payload: payload,
+              status: 'order_cancelled_by_customer',
+            });
+          }
+          
+          const orderCodeText = activePendingOrder.order_code ? ` *${formatOrderCode(activePendingOrder.order_code)}*` : '';
+          const replyMsg = `¡Entendido! Hemos descartado tu pedido pendiente${orderCodeText}. Si deseas iniciar un nuevo pedido, escríbeme lo que te gustaría ordenar y con gusto te ayudaré. 🍽️✨`;
+          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
+          return NextResponse.json({ status: 'order_cancelled', reply_message: replyMsg });
+        }
+
         const orderCodeText = activePendingOrder.order_code ? ` del pedido *${formatOrderCode(activePendingOrder.order_code)}*` : '';
-        const replyMsg = `Aún estamos esperando que nos envíes la captura o foto del comprobante de transferencia bancaria${orderCodeText} por un total de *$${Number(activePendingOrder.total_price).toFixed(2)}* para poder confirmar el pedido y enviarlo a cocina. Por favor, envíanos la imagen.`;
+        const replyMsg = `Aún estamos esperando que nos envíes la captura o foto del comprobante de transferencia bancaria${orderCodeText} por un total de *$${Number(activePendingOrder.total_price).toFixed(2)}* para poder confirmar el pedido y enviarlo a cocina. Por favor, envíanos la imagen. PERO SI NO LO NECESITAS ESCRIBE EXACTAMENTE: DESCARTAR EL PEDIDO ACTUAL`;
         await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
         return NextResponse.json({ status: 'awaiting_receipt_image', reply_message: replyMsg });
       }

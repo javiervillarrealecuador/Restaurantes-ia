@@ -12,6 +12,7 @@ import SimulatorPanel from './SimulatorPanel';
 import KitchenDisplay from './KitchenDisplay';
 import DeliveryDisplay from './DeliveryDisplay';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
+import SaaSAdminPanel from './SaaSAdminPanel';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -63,10 +64,10 @@ const formatOrderCode = (code: string | null): string => {
 };
 
 export default function Dashboard() {
-  const { user, profile, role, permissions, logout, loading: authLoading } = useAuth();
+  const { user, profile, role, isSuperAdmin, permissions, logout, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator' | 'saas'>('orders');
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -192,24 +193,43 @@ export default function Dashboard() {
   // Fetch restaurant profile
   useEffect(() => {
     let isMounted = true;
+    
+    // Safety fallback: force loading to false after 12 seconds
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setRestaurantLoading(false);
+    }, 12000);
+
     const fetchRestaurant = async () => {
       setRestaurantLoading(true);
+      let timeoutId: NodeJS.Timeout;
       try {
-        const { data, error } = await supabase
+        const fetchPromise = supabase
           .from('restaurants')
           .select('*')
           .limit(1);
 
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Timeout fetching restaurant')), 10000);
+        });
+
+        const { data, error } = await Promise.race([
+          fetchPromise,
+          timeoutPromise
+        ]) as any;
+
         if (error) throw error;
-        if (data && data.length > 0 && isMounted) {
+        
+        if (isMounted && data && data.length > 0) {
           setRestaurant(data[0]);
         }
       } catch (err) {
         console.error('Error fetching restaurant:', err);
       } finally {
+        clearTimeout(timeoutId!);
         if (isMounted) {
           setRestaurantLoading(false);
         }
+        clearTimeout(safetyTimer);
       }
     };
 
@@ -217,6 +237,7 @@ export default function Dashboard() {
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
     };
   }, []);
 
@@ -230,6 +251,30 @@ export default function Dashboard() {
   } = useOrders(restaurant?.id || null);
 
   // Wrappers to log activity
+  const logActivity = async (action: string, details: string) => {
+    if (!restaurant?.id || !user?.id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      await fetch('/api/activity', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          restaurant_id: restaurant.id,
+          profile_id: user.id,
+          action,
+          details
+        })
+      });
+    } catch (err) {
+      console.error('Error logging activity:', err);
+    }
+  };
+
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus): Promise<boolean> => {
     const success = await updateOrderStatus(orderId, status);
     if (success && restaurant?.id && profile?.id) {
@@ -237,16 +282,10 @@ export default function Dashboard() {
       const code = formatOrderCode(order?.order_code || orderId.substring(0, 8));
       const customer = order?.customer_name || 'Cliente';
       
-      await fetch('/api/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          restaurant_id: restaurant.id,
-          profile_id: profile.id,
-          action: 'order_status_update',
-          details: `Cambió el estado del pedido #${code} (${customer}) a: ${status}`
-        })
-      });
+      await logActivity(
+        'order_status_update',
+        `Cambió el estado del pedido #${code} (${customer}) a: ${status}`
+      );
     }
     return success;
   };
@@ -258,18 +297,12 @@ export default function Dashboard() {
       const code = formatOrderCode(order?.order_code || orderId.substring(0, 8));
       const customer = order?.customer_name || 'Cliente';
       
-      await fetch('/api/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          restaurant_id: restaurant.id,
-          profile_id: profile.id,
-          action: isPaid ? 'payment_confirmed' : 'payment_revoked',
-          details: isPaid 
-            ? `Confirmó el pago del pedido #${code} (${customer})`
-            : `Revocó el pago del pedido #${code} (${customer})`
-        })
-      });
+      await logActivity(
+        isPaid ? 'payment_confirmed' : 'payment_revoked',
+        isPaid 
+          ? `Confirmó el pago del pedido #${code} (${customer})`
+          : `Revocó el pago del pedido #${code} (${customer})`
+      );
     }
     return success;
   };
@@ -360,16 +393,10 @@ export default function Dashboard() {
       if (error) throw error;
 
       if (restaurant?.id) {
-        await fetch('/api/activity', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            restaurant_id: restaurant.id,
-            profile_id: user.id,
-            action: 'profile_updated',
-            details: `Usuario actualizó sus datos de perfil a: ${profileFirstName} ${profileLastName}`
-          })
-        });
+        await logActivity(
+          'profile_updated',
+          `Usuario actualizó sus datos de perfil a: ${profileFirstName} ${profileLastName}`
+        );
       }
 
       setProfileMessage({ type: 'success', text: 'Perfil actualizado con éxito.' });
@@ -402,16 +429,10 @@ export default function Dashboard() {
       if (error) throw error;
 
       if (restaurant?.id) {
-        await fetch('/api/activity', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            restaurant_id: restaurant.id,
-            profile_id: user.id,
-            action: 'password_changed',
-            details: 'Usuario cambió su contraseña de acceso'
-          })
-        });
+        await logActivity(
+          'password_changed',
+          'Usuario cambió su contraseña de acceso'
+        );
       }
 
       setPasswordMessage({ type: 'success', text: 'Contraseña actualizada con éxito.' });
@@ -751,6 +772,19 @@ export default function Dashboard() {
 
         {/* Links Navigation */}
         <nav className="flex-1 p-4 space-y-1.5">
+          {isSuperAdmin && (
+            <button
+              onClick={() => setActiveTab('saas')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'saas'
+                  ? 'bg-zinc-900 text-violet-400 border border-zinc-800'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+              }`}
+            >
+              <ShieldCheck className="h-4.5 w-4.5" />
+              <span>Administración SaaS</span>
+            </button>
+          )}
           {activePermissions.orders !== 'none' && (
             <button
               onClick={() => setActiveTab('orders')}
@@ -908,8 +942,9 @@ export default function Dashboard() {
       <main className="flex-1 flex flex-col min-w-0">
         
         {/* Top Header Navbar */}
-        <header className="h-16 border-b border-zinc-900 px-6 flex items-center justify-between shrink-0">
-          <h2 className="text-sm font-semibold text-zinc-150 uppercase tracking-widest">
+        <header className="h-16 border-b border-zinc-200 dark:border-zinc-900 px-6 flex items-center justify-between shrink-0">
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-150 uppercase tracking-widest">
+            {activeTab === 'saas' && 'Administración Global de la Plataforma'}
             {activeTab === 'orders' && 'Panel de Pedidos WhatsApp'}
             {activeTab === 'customers' && 'Base de Clientes'}
             {activeTab === 'reports' && 'Reportes & Analítica de Ventas'}
@@ -953,51 +988,51 @@ export default function Dashboard() {
         {activeTab === 'orders' && (role === 'admin_general' || role === 'vendedor_cajero') && (
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-6 pt-6">
             {/* Revenue card */}
-            <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl">
+            <div className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider">Ingresos Acumulados</span>
-                <div className="p-1.5 rounded-lg bg-emerald-600/10 text-emerald-400 border border-emerald-550/15">
+                <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Ingresos Acumulados</span>
+                <div className="p-1.5 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border border-emerald-550/15">
                   <DollarSign className="h-4 w-4" />
                 </div>
               </div>
-              <h3 className="text-lg font-black text-zinc-100 mt-2">${stats.totalRevenue.toFixed(2)}</h3>
-              <p className="text-[10px] text-zinc-500 mt-1">Excluye pedidos cancelados</p>
+              <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100 mt-2">${stats.totalRevenue.toFixed(2)}</h3>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">Excluye pedidos cancelados</p>
             </div>
 
             {/* Active Orders */}
-            <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl">
+            <div className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider">Pedidos en Cocina</span>
-                <div className="p-1.5 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-550/15">
+                <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Pedidos en Cocina</span>
+                <div className="p-1.5 rounded-lg bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-550/15">
                   <ShoppingBag className="h-4 w-4" />
                 </div>
               </div>
-              <h3 className="text-lg font-black text-zinc-100 mt-2">{stats.activeCount}</h3>
-              <p className="text-[10px] text-zinc-500 mt-1">Pendientes/Preparando</p>
+              <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100 mt-2">{stats.activeCount}</h3>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">Pendientes/Preparando</p>
             </div>
 
             {/* Ready for Dispatch */}
-            <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl">
+            <div className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider">Listos para Entrega</span>
-                <div className="p-1.5 rounded-lg bg-amber-600/10 text-amber-400 border border-amber-550/15">
+                <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Listos para Entrega</span>
+                <div className="p-1.5 rounded-lg bg-amber-600/10 text-amber-600 dark:text-amber-400 border border-amber-550/15">
                   <Truck className="h-4 w-4" />
                 </div>
               </div>
-              <h3 className="text-lg font-black text-zinc-100 mt-2">{stats.readyCount}</h3>
-              <p className="text-[10px] text-zinc-500 mt-1">Espera despacho/cliente</p>
+              <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100 mt-2">{stats.readyCount}</h3>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">Espera despacho/cliente</p>
             </div>
 
             {/* Completed today */}
-            <div className="bg-zinc-950/40 border border-zinc-900 p-4.5 rounded-2xl">
+            <div className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-zinc-550 uppercase tracking-wider">Entregados</span>
-                <div className="p-1.5 rounded-lg bg-purple-600/10 text-purple-400 border border-purple-550/15">
+                <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Entregados</span>
+                <div className="p-1.5 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 border border-purple-550/15">
                   <CheckCircle className="h-4 w-4" />
                 </div>
               </div>
-              <h3 className="text-lg font-black text-zinc-100 mt-2">{stats.completedToday}</h3>
-              <p className="text-[10px] text-zinc-500 mt-1">Pedidos despachados</p>
+              <h3 className="text-xl font-black text-zinc-900 dark:text-zinc-100 mt-2">{stats.completedToday}</h3>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">Pedidos despachados</p>
             </div>
           </section>
         )}
@@ -1053,17 +1088,21 @@ export default function Dashboard() {
             />
           )}
 
+          {activeTab === 'saas' && (
+            <SaaSAdminPanel />
+          )}
+
           {activeTab === 'logs' && (
             <div className="space-y-4">
-              <div className="bg-zinc-950/40 border border-zinc-800/80 p-4 rounded-2xl flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-900/60 mb-6 gap-3">
                 <div>
-                  <h4 className="text-sm font-semibold text-zinc-200">Historial de Webhooks Recibidos</h4>
-                  <p className="text-xs text-zinc-500">Muestra las últimas transacciones de Meta y las interpretaciones de Gemini AI.</p>
+                  <h4 className="text-base font-bold text-zinc-800 dark:text-zinc-200">Historial de Webhooks Recibidos</h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Muestra las últimas transacciones de Meta y las interpretaciones de Gemini AI.</p>
                 </div>
                 <button
                   onClick={fetchWebhookLogs}
                   disabled={logsLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs border border-zinc-800"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 transition-all cursor-pointer shadow-sm"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${logsLoading ? 'animate-spin' : ''}`} /> Refrescar
                 </button>
@@ -1072,25 +1111,25 @@ export default function Dashboard() {
               {logsLoading ? (
                 <div className="text-center py-20 text-zinc-500 text-xs">Cargando webhook logs...</div>
               ) : webhookLogs.length === 0 ? (
-                <div className="text-center py-20 bg-zinc-950/20 border border-zinc-850 rounded-2xl px-4 text-xs text-zinc-550">
+                <div className="text-center py-20 bg-zinc-100 dark:bg-zinc-950/20 border border-zinc-200 dark:border-zinc-850 rounded-2xl px-4 text-xs text-zinc-550">
                   No se han registrado mensajes de webhook de WhatsApp. Envía un mensaje de prueba al webhook para registrar logs.
                 </div>
               ) : (
                 <div className="space-y-3">
                   {webhookLogs.map((log) => (
-                    <div key={log.id} className="bg-zinc-950/60 border border-zinc-900 rounded-xl p-4 space-y-3 hover:border-zinc-800 transition-colors">
+                    <div key={log.id} className="bg-white dark:bg-zinc-900/20 border border-zinc-200 dark:border-zinc-900/80 rounded-2xl p-5 space-y-4 shadow-sm hover:shadow-md transition-all">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-zinc-200">{log.sender_phone}</span>
-                          <span className="text-zinc-750 text-xs">•</span>
-                          <span className="text-xs text-zinc-500">{new Date(log.created_at).toLocaleString()}</span>
+                          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{log.sender_phone}</span>
+                          <span className="text-zinc-300 dark:text-zinc-700 text-xs">•</span>
+                          <span className="text-xs text-zinc-550 dark:text-zinc-400">{new Date(log.created_at).toLocaleString()}</span>
                         </div>
                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
                           log.status === 'order_created' 
-                            ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/40' 
+                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40' 
                             : log.status === 'failed'
-                            ? 'bg-rose-950/20 text-rose-450 border-rose-900/40'
-                            : 'bg-zinc-850 text-zinc-400 border-zinc-800'
+                            ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 border-rose-200 dark:border-rose-900/40'
+                            : 'bg-zinc-100 dark:bg-zinc-850 text-zinc-650 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800'
                         }`}>
                           {log.status}
                         </span>
@@ -1098,8 +1137,8 @@ export default function Dashboard() {
 
                       {/* Raw text */}
                       <div>
-                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1 text-[10px]">Mensaje de WhatsApp:</p>
-                        <p className="text-xs text-zinc-300 italic bg-zinc-900/40 border border-zinc-850/60 p-2 rounded-lg">
+                        <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1">Mensaje de WhatsApp:</p>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-300 italic bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-850/60 p-3 rounded-xl">
                           &quot;{log.message_body}&quot;
                         </p>
                       </div>
@@ -1107,15 +1146,15 @@ export default function Dashboard() {
                       {/* AI parsed block / error details */}
                       {!!log.ai_parsed_response && (
                         <div>
-                          <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1 text-[10px]">Extracción Inteligente (Gemini):</p>
-                          <pre className="text-[11px] text-emerald-350 bg-zinc-900/90 border border-zinc-850 p-2.5 rounded-lg overflow-x-auto font-mono">
+                          <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1">Extracción Inteligente (Gemini):</p>
+                          <pre className="text-[11px] text-emerald-600 dark:text-emerald-350 bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-850 p-3 rounded-xl overflow-x-auto font-mono">
                             {JSON.stringify(log.ai_parsed_response, null, 2)}
                           </pre>
                         </div>
                       )}
 
                       {log.error_message && (
-                        <div className="flex items-start gap-2 bg-rose-950/10 border border-rose-950/45 p-2 rounded-lg text-rose-450">
+                        <div className="flex items-start gap-2 bg-rose-50 dark:bg-rose-950/10 border border-rose-200 dark:border-rose-950/45 p-3 rounded-xl text-rose-650 dark:text-rose-450">
                           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                           <div className="text-xs">
                             <span className="font-semibold">Error del sistema:</span> {log.error_message}
@@ -1128,20 +1167,20 @@ export default function Dashboard() {
               )}
             </div>
           )}
-
+          
           {activeTab === 'staff' && role === 'admin_general' && (
             <div className="space-y-6">
-              <div className="bg-zinc-950/40 border border-zinc-800/80 p-4.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-zinc-200 dark:border-zinc-900/60 mb-6 gap-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-zinc-200">Administración de Personal</h4>
-                  <p className="text-xs text-zinc-500">Agrega, modifica perfiles, restablece contraseñas o elimina miembros de tu equipo.</p>
+                  <h4 className="text-base font-bold text-zinc-800 dark:text-zinc-200">Administración de Personal</h4>
+                  <p className="text-xs text-zinc-550 dark:text-zinc-400 mt-0.5">Agrega, modifica perfiles, restablece contraseñas o elimina miembros de tu equipo.</p>
                 </div>
                 <button
                   onClick={() => {
                     setAddStaffError(null);
                     setShowAddStaffModal(true);
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-950/20 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-900/10 hover:shadow-lg transition-all cursor-pointer"
                 >
                   <UserPlus className="h-4 w-4" /> Agregar Personal
                 </button>
@@ -1152,11 +1191,11 @@ export default function Dashboard() {
                   <Loader2 className="h-4 w-4 animate-spin text-emerald-500" /> Cargando lista de personal...
                 </div>
               ) : staffError ? (
-                <div className="bg-rose-950/10 border border-rose-950/45 p-4 rounded-xl text-rose-400 text-xs">
+                <div className="bg-rose-50 dark:bg-rose-950/10 border border-rose-200 dark:border-rose-950/45 p-4 rounded-xl text-rose-600 dark:text-rose-450 text-xs">
                   {staffError}
                 </div>
               ) : staffList.length === 0 ? (
-                <div className="text-center py-20 bg-zinc-950/20 border border-zinc-850 rounded-2xl text-xs text-zinc-500">
+                <div className="text-center py-20 bg-zinc-100 dark:bg-zinc-950/20 border border-zinc-850 rounded-2xl text-xs text-zinc-500">
                   No se encontraron miembros del personal registrados.
                 </div>
               ) : (
@@ -1164,29 +1203,29 @@ export default function Dashboard() {
                   {staffList.map((member) => (
                     <div 
                       key={member.id} 
-                      className="bg-zinc-950/40 border border-zinc-900 hover:border-zinc-850 p-5 rounded-2xl space-y-4 transition-all"
+                      className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-850 p-5 rounded-2xl space-y-4 shadow-sm hover:shadow-md transition-all"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-emerald-400 font-bold">
+                          <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
                             {member.profiles?.first_name?.[0]?.toUpperCase() || 'P'}
                           </div>
                           <div>
-                            <h5 className="text-xs font-bold text-zinc-200">
+                            <h5 className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
                               {`${member.profiles?.first_name || ''} ${member.profiles?.last_name || ''}`.trim() || 'Miembro Sin Nombre'}
                             </h5>
-                            <p className="text-[10px] text-zinc-500 truncate max-w-[150px]">{member.email}</p>
+                            <p className="text-[10px] text-zinc-550 dark:text-zinc-400 truncate max-w-[150px]">{member.email}</p>
                           </div>
                         </div>
                         
                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                           member.role === 'admin_general' 
-                            ? 'bg-rose-950/20 text-rose-400 border-rose-900/40' 
+                            ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-455 border-rose-200 dark:border-rose-900/40' 
                             : member.role === 'vendedor_cajero'
-                            ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/40'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40'
                             : member.role === 'cocinero'
-                            ? 'bg-blue-950/20 text-blue-400 border-blue-900/40'
-                            : 'bg-indigo-950/20 text-indigo-400 border-indigo-900/40'
+                            ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/40'
+                            : 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-650 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/40'
                         }`}>
                           {member.role === 'admin_general' && 'Admin General'}
                           {member.role === 'vendedor_cajero' && 'Vendedor / Cajero'}
@@ -1195,10 +1234,10 @@ export default function Dashboard() {
                         </span>
                       </div>
 
-                      <div className="border-t border-zinc-900 pt-3 flex justify-between items-center text-[10px] text-zinc-500">
+                      <div className="border-t border-zinc-100 dark:border-zinc-900 pt-3 flex justify-between items-center text-[10px] text-zinc-500">
                         <div>
                           <span>Último acceso: </span>
-                          <span className="text-zinc-400">
+                          <span className="text-zinc-650 dark:text-zinc-400 font-medium">
                             {member.last_sign_in ? new Date(member.last_sign_in).toLocaleDateString() : 'Nunca'}
                           </span>
                         </div>
@@ -1206,7 +1245,7 @@ export default function Dashboard() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => openEditModal(member)}
-                            className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-250 border border-zinc-850 hover:border-zinc-800 transition-colors cursor-pointer"
+                            className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-850 dark:hover:text-zinc-250 border border-zinc-200 dark:border-zinc-850 transition-colors cursor-pointer"
                             title="Editar usuario o clave"
                           >
                             <Edit className="h-3.5 w-3.5" />
@@ -1215,7 +1254,7 @@ export default function Dashboard() {
                           {member.profiles?.id !== user?.id && (
                             <button
                               onClick={() => handleDeleteStaff(member.profiles?.id, `${member.profiles?.first_name || ''} ${member.profiles?.last_name || ''}`.trim())}
-                              className="p-2 rounded-lg bg-rose-950/5 hover:bg-rose-950/15 text-rose-455 hover:text-rose-400 border border-rose-950/10 hover:border-rose-900/20 transition-colors cursor-pointer"
+                              className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/5 hover:bg-rose-100 dark:hover:bg-rose-950/15 text-rose-600 dark:text-rose-455 hover:text-rose-700 dark:hover:text-rose-400 border border-rose-200 dark:border-rose-955/10 hover:border-rose-900/20 transition-colors cursor-pointer"
                               title="Eliminar usuario"
                             >
                               <Trash2 className="h-3.5 w-3.5" />

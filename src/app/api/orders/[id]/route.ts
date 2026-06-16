@@ -15,6 +15,24 @@ const formatOrderCode = (code: string | null): string => {
   return code.replace(numCode, `${year}-${month}-${day}-${seq}`);
 };
 
+async function verifyStaff(req: NextRequest, restaurantId: string): Promise<boolean> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return false;
+  const token = authHeader.replace('Bearer ', '');
+
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return false;
+
+  const { data: staff } = await supabaseAdmin
+    .from('restaurant_staff')
+    .select('role')
+    .eq('profile_id', user.id)
+    .eq('restaurant_id', restaurantId)
+    .limit(1);
+
+  return !!staff && staff.length > 0;
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -37,6 +55,12 @@ export async function PATCH(
 
     if (fetchErr || !order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    // 2. Validate that the requesting user is a staff member of this restaurant
+    const isAuthorized = await verifyStaff(req, order.restaurant_id);
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized. Staff membership required.' }, { status: 401 });
     }
 
     const previousStatus = order.status;

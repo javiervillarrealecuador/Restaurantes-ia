@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
+async function verifyStaff(req: NextRequest, restaurantId: string): Promise<boolean> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return false;
+  const token = authHeader.replace('Bearer ', '');
+
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return false;
+
+  const { data: staff } = await supabaseAdmin
+    .from('restaurant_staff')
+    .select('role')
+    .eq('profile_id', user.id)
+    .eq('restaurant_id', restaurantId)
+    .limit(1);
+
+  return !!staff && staff.length > 0;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -8,6 +26,12 @@ export async function POST(req: NextRequest) {
 
     if (!restaurant_id || !action) {
       return NextResponse.json({ error: 'Restaurant ID and Action are required' }, { status: 400 });
+    }
+
+    // Validate authorization
+    const isAuthorized = await verifyStaff(req, restaurant_id);
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized. Staff membership required.' }, { status: 401 });
     }
 
     const { data, error } = await supabaseAdmin

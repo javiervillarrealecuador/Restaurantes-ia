@@ -281,7 +281,6 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     
     const query = searchQuery.toLowerCase().trim();
     if (!query) return matchesCategory;
-
     const matchesName = item.name.toLowerCase().includes(query);
     const matchesCode = item.code && item.code.toLowerCase().includes(query);
     const matchesDesc = item.description && item.description.toLowerCase().includes(query);
@@ -293,10 +292,10 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     <div className="space-y-6">
       
       {/* Upper header section */}
-      <div className="bg-zinc-950/40 border border-zinc-800/80 p-4.5 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="pb-6 border-b border-zinc-200 dark:border-zinc-800/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h4 className="text-sm font-semibold text-zinc-200">Carta / Menú del Restaurante</h4>
-          <p className="text-xs text-zinc-500">Administra los platillos y bebidas que los clientes pueden ordenar.</p>
+          <h4 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Carta / Menú del Restaurante</h4>
+          <p className="text-xs text-zinc-550 dark:text-zinc-400">Administra los platillos y bebidas que los clientes pueden ordenar.</p>
         </div>
         {!readOnly && (
           <div className="flex items-center gap-2">
@@ -305,27 +304,27 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                 setCategoryError(null);
                 setShowCategoryModal(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 text-zinc-350 hover:text-zinc-200 text-xs font-semibold cursor-pointer transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 text-xs font-semibold cursor-pointer transition-all"
             >
               <FolderPlus className="h-4 w-4" /> Categoría
             </button>
             <button
               onClick={openCreateItemModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-950/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
             >
               <Plus className="h-4 w-4" /> Agregar Platillo
             </button>
           </div>
         )}
         {readOnly && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
             <Eye className="h-3.5 w-3.5" /> Solo lectura
           </span>
         )}
       </div>
 
       {error && (
-        <div className="bg-rose-950/15 border border-rose-900/30 p-4 rounded-xl text-rose-400 text-xs flex items-start gap-2.5">
+        <div className="bg-rose-950/10 border border-rose-900/20 p-4 rounded-xl text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2.5">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -337,8 +336,8 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
           <span>Cargando la carta del menú...</span>
         </div>
       ) : categories.length === 0 ? (
-        <div className="text-center py-20 bg-zinc-950/20 border border-zinc-850 rounded-2xl text-xs text-zinc-500 space-y-3">
-          <UtensilsCrossed className="h-8 w-8 text-zinc-650 mx-auto" />
+        <div className="text-center py-20 bg-zinc-50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/60 rounded-xl text-xs text-zinc-550 space-y-3">
+          <UtensilsCrossed className="h-8 w-8 text-zinc-400 dark:text-zinc-650 mx-auto" />
           <p>Aún no has registrado ninguna categoría en tu menú.</p>
           {!readOnly && (
             <button
@@ -361,14 +360,14 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                 placeholder="Buscar por nombre, descripción o código de plato..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950/50 border border-zinc-900 focus:border-zinc-700/80 p-2 pl-9 rounded-xl text-xs text-zinc-200 outline-none transition-all placeholder:text-zinc-600"
+                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-700/80 p-2 pl-9 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 outline-none transition-all placeholder:text-zinc-555"
               />
             </div>
 
             <select
               value={activeCategoryId}
               onChange={(e) => setActiveCategoryId(e.target.value)}
-              className="bg-zinc-950/50 border border-zinc-900 focus:border-zinc-700 text-zinc-350 text-xs px-3.5 py-2.5 rounded-xl outline-none"
+              className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus:border-zinc-400 dark:focus:border-zinc-700 text-zinc-600 dark:text-zinc-350 text-xs px-3.5 py-2.5 rounded-xl outline-none"
             >
               <option value="all">Todas las Categorías</option>
               {categories.map((cat) => (
@@ -385,8 +384,8 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
               onClick={() => setActiveCategoryId('all')}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 transition-all cursor-pointer ${
                 activeCategoryId === 'all'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'bg-zinc-900/50 text-zinc-400 border border-zinc-900 hover:text-zinc-200'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-zinc-50 dark:bg-zinc-900/40 text-zinc-550 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200'
               }`}
             >
               Todos ({menuItems.length})
@@ -399,8 +398,8 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                   onClick={() => setActiveCategoryId(cat.id)}
                   className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 transition-all cursor-pointer ${
                     activeCategoryId === cat.id
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'bg-zinc-900/50 text-zinc-400 border border-zinc-900 hover:text-zinc-200'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-zinc-50 dark:bg-zinc-900/40 text-zinc-550 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200'
                   }`}
                 >
                   {cat.name} ({count})
@@ -411,15 +410,15 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
 
           {/* Menu Items Table list */}
           {filteredItems.length === 0 ? (
-            <div className="text-center py-20 bg-zinc-950/20 border border-zinc-850 rounded-2xl text-xs text-zinc-550">
+            <div className="text-center py-20 bg-zinc-50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/60 rounded-xl text-xs text-zinc-550">
               No se encontraron platos que coincidan con la búsqueda o categoría seleccionada.
             </div>
           ) : (
-            <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl overflow-hidden shadow-xl">
+            <div className="bg-white dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/60 rounded-xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-zinc-900 bg-zinc-950/80 text-[10px] font-bold text-zinc-550 uppercase tracking-wider">
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                       <th className="py-3.5 px-4 w-16">Código</th>
                       <th className="py-3.5 px-4">Platillo</th>
                       <th className="py-3.5 px-4 w-28">Categoría</th>
@@ -429,19 +428,19 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                       <th className="py-3.5 px-4 w-24 text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-900/60 text-xs">
+                  <tbody className="divide-y divide-zinc-150 dark:divide-zinc-850/60 text-xs">
                     {filteredItems.map((item) => {
                       const category = categories.find(c => c.id === item.category_id);
                       return (
                         <tr 
                           key={item.id} 
-                          className={`hover:bg-zinc-900/30 transition-colors ${!item.is_available ? 'opacity-60 bg-zinc-950/20' : ''}`}
+                          className={`hover:bg-zinc-50 dark:hover:bg-zinc-900/25 transition-colors ${!item.is_available ? 'opacity-60 bg-zinc-100/40 dark:bg-zinc-950/20' : ''}`}
                         >
-                          <td className="py-3.5 px-4 font-mono font-bold text-emerald-450">
+                          <td className="py-3.5 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
                             {item.code ? `#${item.code}` : '-'}
                           </td>
                           <td className="py-3.5 px-4 flex items-center gap-3">
-                            <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800">
+                            <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
                               {item.image_url ? (
                                 <Image 
                                   src={item.image_url} 
@@ -451,29 +450,29 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                                   sizes="40px"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                                <div className="w-full h-full flex items-center justify-center text-zinc-400 dark:text-zinc-600">
                                   <UtensilsCrossed className="h-4 w-4" />
                                 </div>
                               )}
                             </div>
                             <div>
-                              <div className="font-bold text-zinc-205">{item.name}</div>
+                              <div className="font-bold text-zinc-850 dark:text-zinc-200">{item.name}</div>
                               {item.description && (
-                                <div className="text-[10px] text-zinc-500 font-normal line-clamp-1 mt-0.5 max-w-sm">
+                                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-normal line-clamp-1 mt-0.5 max-w-sm">
                                   {item.description}
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-zinc-400 font-medium text-[11px]">
+                          <td className="py-3.5 px-4 text-zinc-500 dark:text-zinc-400 font-medium text-[11px]">
                             {category?.name || 'Sin Categoría'}
                           </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-zinc-150">
+                          <td className="py-3.5 px-4 text-right font-bold text-zinc-850 dark:text-zinc-200">
                             ${Number(item.price).toFixed(2)}
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 font-medium">
-                              <Clock className="h-3 w-3 text-emerald-500/80" /> {item.estimated_prep_time} min
+                            <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-450 font-medium">
+                              <Clock className="h-3 w-3 text-emerald-500/85" /> {item.estimated_prep_time} min
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-center">
@@ -483,8 +482,8 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                               title={item.is_available ? 'Desactivar platillo' : 'Activar platillo'}
                               className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
                                 item.is_available 
-                                  ? 'bg-emerald-950/25 text-emerald-400 border-emerald-900/40 hover:bg-emerald-900/20' 
-                                  : 'bg-zinc-900 text-zinc-500 border-zinc-850 hover:bg-zinc-800'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/25 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/20' 
+                                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-250 dark:border-zinc-850 hover:bg-zinc-200 dark:hover:bg-zinc-800'
                               } ${readOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                             >
                               {item.is_available ? (
@@ -505,21 +504,21 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   onClick={() => openEditItemModal(item)}
-                                  className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-250 border border-zinc-850 hover:border-zinc-800 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-550 dark:text-zinc-450 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800 transition-colors cursor-pointer"
                                   title="Editar plato"
                                 >
                                   <Edit className="h-3.5 w-3.5" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteItem(item.id, item.name)}
-                                  className="p-1.5 rounded bg-rose-950/5 hover:bg-rose-950/15 text-rose-455 hover:text-rose-400 border border-rose-950/10 hover:border-rose-900/20 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded bg-rose-50 dark:bg-rose-950/15 hover:bg-rose-100 dark:hover:bg-rose-955/25 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30 transition-colors cursor-pointer"
                                   title="Eliminar plato"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-zinc-600 italic">Ver</span>
+                              <span className="text-[10px] text-zinc-550 dark:text-zinc-650 italic">Ver</span>
                             )}
                           </td>
                         </tr>
