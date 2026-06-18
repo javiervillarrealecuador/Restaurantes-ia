@@ -112,7 +112,19 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         .eq('branch_id', selectedBranchId)
         .order('table_number', { ascending: true });
       if (error) throw error;
+      
       setTables(data || []);
+
+      // If the currently selected table has changed status to free, reset the active order selection
+      if (tableNumber) {
+        const currentTable = data?.find(t => t.table_number === tableNumber);
+        if (currentTable && currentTable.status === 'free' && activeOrder) {
+          setActiveOrder(null);
+          setTableNumber('');
+          setCart([]);
+          toast.info(`La Mesa ${tableNumber} ha sido liberada por caja.`);
+        }
+      }
     } catch (err) {
       console.error('Error fetching tables:', err);
     }
@@ -214,13 +226,18 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         (payload) => {
           const newOrder = payload.new as any;
           const oldOrder = payload.old as any;
+          
+          // Refresh table grid if order status changes (e.g. delivered or cancelled)
+          if (newOrder.status !== oldOrder.status) {
+            fetchTables();
+          }
+
           if (newOrder.status === 'ready' && oldOrder.status !== 'ready') {
             playReadyChime();
             toast.success(`🛎️ ¡Mesa ${newOrder.table_number || 'S/M'}: Pedido #${newOrder.order_number} está listo!`, {
               duration: 10000,
               description: 'Retirar de cocina y servir al cliente.',
             });
-            fetchTables();
           }
         }
       )
