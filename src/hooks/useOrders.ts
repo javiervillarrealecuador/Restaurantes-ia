@@ -124,6 +124,33 @@ export function useOrders(restaurantId: string | null) {
     }
   }, []);
 
+  // Libera la mesa asociada a un pedido cuando se entrega o cancela
+  const freeTableForOrder = useCallback(async (orderId: string): Promise<boolean> => {
+    try {
+      // Obtener datos del pedido para identificar la mesa
+      const { data: orderData, error: orderErr } = await supabase
+        .from('orders')
+        .select('table_number, restaurant_id, branch_id')
+        .eq('id', orderId)
+        .single();
+      if (orderErr) throw orderErr;
+      if (!orderData?.table_number) return true; // No hay mesa asignada
+
+      const { error: updateErr } = await supabase
+        .from('restaurant_tables')
+        .update({ status: 'free', current_order_id: null })
+        .eq('restaurant_id', orderData.restaurant_id)
+        .eq('branch_id', orderData.branch_id)
+        .eq('table_number', orderData.table_number);
+      if (updateErr) throw updateErr;
+      return true;
+    } catch (err) {
+      console.error(`Error freeing table for order ${orderId}:`, err);
+      return false;
+    }
+  }, []);
+
+
   // Update order payment status
   const updateOrderPaymentStatus = useCallback(async (orderId: string, isPaid: boolean): Promise<boolean> => {
     try {

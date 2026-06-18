@@ -227,9 +227,20 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           const newOrder = payload.new as any;
           const oldOrder = payload.old as any;
           
-          // Refresh table grid if order status changes (e.g. delivered or cancelled)
+          // Refresh table grid if order status changes (e.g. delivered, cancelled, or paid)
           if (newOrder.status !== oldOrder.status) {
             fetchTables();
+            // Auto‑clear when the order associated with the current UI is completed or cancelled
+            if (['delivered', 'cancelled', 'paid'].includes(newOrder.status)) {
+              // Ensure we are clearing the order that is currently active in the panel
+              if (activeOrder && activeOrder.id === newOrder.id) {
+                // Use functional updates to avoid stale closures
+                setActiveOrder(() => null);
+                setTableNumber(() => '');
+                setCart(() => []);
+                toast.info(`Mesa ${newOrder.table_number || ''} liberada (${newOrder.status}).`);
+              }
+            }
           }
 
           if (newOrder.status === 'ready' && oldOrder.status !== 'ready') {

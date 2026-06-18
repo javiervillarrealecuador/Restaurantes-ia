@@ -49,14 +49,14 @@ import {
   Smartphone,
   Plus,
   MapPin,
-  Phone
+  Phone,
+  LayoutDashboard
 } from 'lucide-react';
 
 const formatOrderCode = (code: string | null): string => {
   if (!code) return '';
   const match = code.match(/(\d{13})/);
   if (!match) return code;
-  
   const numCode = match[1];
   const year = numCode.slice(0, 4);
   const month = numCode.slice(4, 6);
@@ -480,14 +480,33 @@ export default function Dashboard() {
       const order = orders.find(o => o.id === orderId);
       const code = formatOrderCode(order?.order_code || orderId.substring(0, 8));
       const customer = order?.customer_name || 'Cliente';
-      
       await logActivity(
         'order_status_update',
         `Cambió el estado del pedido #${code} (${customer}) a: ${status}`
       );
     }
+    // Liberar mesa si el pedido se marca como entregado o cancelado
+    if (status === 'delivered' || status === 'cancelled') {
+      try {
+        const { data: orderData, error: orderErr } = await supabase
+          .from('orders')
+          .select('table_number, restaurant_id, branch_id')
+          .eq('id', orderId)
+          .single();
+        if (!orderErr && orderData?.table_number) {
+          await supabase
+            .from('restaurant_tables')
+            .update({ status: 'free', current_order_id: null })
+            .eq('restaurant_id', orderData.restaurant_id)
+            .eq('branch_id', orderData.branch_id)
+            .eq('table_number', orderData.table_number);
+        }
+      } catch (e) {
+        console.error(`Error liberando mesa para el pedido ${orderId}:`, e);
+      }
+    }
     return success;
-  };
+  }
 
   const handleUpdatePaymentStatus = async (orderId: string, isPaid: boolean): Promise<boolean> => {
     const success = await updateOrderPaymentStatus(orderId, isPaid);
@@ -1301,41 +1320,6 @@ export default function Dashboard() {
     );
   }
 
-  // Seeding view if no restaurant exists (user IS authenticated but no restaurant found)
-  if (!restaurant && !isSuperAdmin) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#09090b] text-zinc-100 p-6">
-        <div className="max-w-md w-full bg-zinc-900/60 border border-zinc-800 p-8 rounded-3xl text-center space-y-6 backdrop-blur-md shadow-2xl">
-          <div className="h-16 w-16 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto text-3xl">
-            <Utensils className="h-8 w-8" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold tracking-tight">Inicializar Aplicación</h2>
-            <p className="text-sm text-zinc-400">
-              Parece que la base de datos está vacía. Necesitamos crear la estructura inicial del restaurante y sus platos de muestra para comenzar a operar.
-            </p>
-          </div>
-          <button
-            onClick={handleBootstrap}
-            disabled={bootstrapping}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-emerald-950/20 transition-all cursor-pointer"
-          >
-            {bootstrapping ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Inicializando Base de Datos...
-              </>
-            ) : (
-              <>
-                <Database className="h-5 w-5" />
-                Crear Restaurante Demo
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 flex flex-col md:flex-row antialiased transition-colors duration-300">
