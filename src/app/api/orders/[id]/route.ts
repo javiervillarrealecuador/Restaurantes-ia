@@ -18,7 +18,7 @@ const formatOrderCode = (code: string | null): string => {
 async function verifyStaff(req: NextRequest, restaurantId: string): Promise<boolean> {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return false;
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.replace(/^Bearer\s+/i, '');
 
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return false;
@@ -46,6 +46,17 @@ export async function PATCH(
       return NextResponse.json({ error: 'Status or is_paid is required' }, { status: 400 });
     }
 
+    // Validate status is a known enum value
+    const VALID_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'];
+    if (status !== undefined && !VALID_STATUSES.includes(status)) {
+      return NextResponse.json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` }, { status: 400 });
+    }
+
+    // Validate is_paid is a boolean
+    if (is_paid !== undefined && typeof is_paid !== 'boolean') {
+      return NextResponse.json({ error: 'is_paid must be a boolean' }, { status: 400 });
+    }
+
     // 1. Fetch current order details
     const { data: order, error: fetchErr } = await supabaseAdmin
       .from('orders')
@@ -65,7 +76,7 @@ export async function PATCH(
 
     const previousStatus = order.status;
 
-    const updatePayload: any = { updated_at: new Date().toISOString() };
+    const updatePayload: { updated_at: string; status?: string; is_paid?: boolean } = { updated_at: new Date().toISOString() };
     if (status !== undefined) updatePayload.status = status;
     if (is_paid !== undefined) updatePayload.is_paid = is_paid;
 
@@ -88,7 +99,12 @@ export async function PATCH(
         .eq('restaurant_id', order.restaurant_id)
         .single();
 
-      const phoneId = settings?.whatsapp_phone_number_id || '123456789012345'; // fallback test phone ID
+      const phoneId = settings?.whatsapp_phone_number_id;
+
+      // If no phone ID configured, skip WhatsApp notification (don't use fake fallback)
+      if (!phoneId) {
+        console.warn(`No WhatsApp phone_number_id configured for restaurant ${order.restaurant_id}. Skipping notification.`);
+      }
 
       let notificationText = '';
       const clientName = order.customer_name || 'Cliente';
@@ -115,8 +131,14 @@ export async function PATCH(
         notificationText = `¡Hola, ${clientName}! Lo sentimos, tu pedido${orderCodeText} ha sido cancelado por el restaurante. Si tienes alguna duda, por favor contáctanos por este medio.`;
       }
 
-      if (notificationText && clientPhone) {
-        await sendWhatsAppMessage(clientPhone, notificationText, phoneId);
+      // 3. Send WhatsApp notification — in a separate try/catch so a
+      // WhatsApp failure does NOT roll back the already-successful DB update.
+      if (notificationText && clientPhone && phoneId) {
+        try {
+          await sendWhatsAppMessage(clientPhone, notificationText, phoneId);
+        } catch (waErr) {
+          console.error('WhatsApp notification failed (order was updated successfully):', waErr);
+        }
       }
     }
 

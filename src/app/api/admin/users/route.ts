@@ -1,29 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-async function verifyAdmin(req: NextRequest) {
+async function verifyAdmin(req: NextRequest, targetRestaurantId: string) {
+  if (!targetRestaurantId) return null;
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return null;
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.replace(/^Bearer\s+/i, '');
 
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return null;
 
+  // Check if super admin
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.is_super_admin) {
+    return { user, restaurantId: targetRestaurantId };
+  }
+
+  // Check if admin_general for this specific restaurant
   const { data: staff } = await supabaseAdmin
     .from('restaurant_staff')
     .select('role, restaurant_id')
     .eq('profile_id', user.id)
+    .eq('restaurant_id', targetRestaurantId)
     .eq('role', 'admin_general')
     .limit(1);
 
   if (!staff || staff.length === 0) return null;
-  return { user, restaurantId: staff[0].restaurant_id };
+  return { user, restaurantId: targetRestaurantId };
 }
 
 // GET: List all staff members for the restaurant
 export async function GET(req: NextRequest) {
   try {
-    const adminSession = await verifyAdmin(req);
+    const { searchParams } = new URL(req.url);
+    const targetRestaurantId = searchParams.get('restaurantId');
+    if (!targetRestaurantId) {
+      return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    const adminSession = await verifyAdmin(req, targetRestaurantId);
     if (!adminSession) {
       return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 401 });
     }
@@ -73,17 +93,28 @@ export async function GET(req: NextRequest) {
 // POST: Create a new user (admin-only)
 export async function POST(req: NextRequest) {
   try {
-    const adminSession = await verifyAdmin(req);
+    const body = await req.json();
+    const { email, password, fullName, role, permissions, restaurantId: targetRestaurantId } = body;
+
+    if (!targetRestaurantId) {
+      return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    const adminSession = await verifyAdmin(req, targetRestaurantId);
     if (!adminSession) {
       return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 401 });
     }
 
     const { user: adminUser, restaurantId } = adminSession;
-    const body = await req.json();
-    const { email, password, fullName, role, permissions } = body;
 
     if (!email || !password || !fullName || !role) {
       return NextResponse.json({ error: 'All fields (email, password, fullName, role) are required' }, { status: 400 });
+    }
+
+    // Validate role is a known enum value
+    const VALID_ROLES = ['admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero'];
+    if (!VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` }, { status: 400 });
     }
 
     // 1. Create auth user
@@ -112,8 +143,12 @@ export async function POST(req: NextRequest) {
       });
 
     if (staffErr) {
-      // Cleanup auth user if staff link failed
-      await supabaseAdmin.auth.admin.deleteUser(userId);
+      // Try to clean up the orphaned auth user. If cleanup also fails, log both errors.
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+      } catch (cleanupErr) {
+        console.error('Failed to cleanup orphaned auth user after staff link error:', cleanupErr);
+      }
       throw staffErr;
     }
 
@@ -136,8 +171,9 @@ export async function POST(req: NextRequest) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error('Error creating staff user:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

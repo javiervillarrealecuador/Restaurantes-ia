@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MenuItem, MenuCategory } from '@/types';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import { 
   Plus, 
   Search, 
@@ -12,11 +13,11 @@ import {
   Loader2, 
   AlertCircle, 
   FolderPlus, 
-  Check, 
   Clock, 
   Eye, 
   EyeOff, 
-  UtensilsCrossed 
+  UtensilsCrossed,
+  ImagePlus
 } from 'lucide-react';
 
 interface MenuPanelProps {
@@ -57,6 +58,9 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
   const [itemImageUrl, setItemImageUrl] = useState('');
   const [itemLoading, setItemLoading] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Menu Data
   const fetchMenuData = React.useCallback(async () => {
@@ -155,6 +159,38 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
       setCategoryError(dbErr.message || 'Error al guardar la categoría.');
     } finally {
       setCategoryLoading(false);
+    }
+  };
+
+  // Handle Image Upload
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !restaurantId) return;
+    
+    setUploadingImage(true);
+    setItemError(null);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${restaurantId}/${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      
+      const { error } = await supabase.storage
+        .from('menu-images')
+        .upload(fileName, file);
+        
+      if (error) throw error;
+      
+      const { data: publicUrlData } = supabase.storage
+        .from('menu-images')
+        .getPublicUrl(fileName);
+        
+      setItemImageUrl(publicUrlData.publicUrl);
+      toast.success('Imagen subida correctamente');
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      setItemError('Error al subir la imagen. Por favor intenta con un archivo más pequeño.');
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -708,13 +744,31 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
                 <div className="space-y-1 text-xs sm:col-span-2">
                   <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">URL Imagen (Opcional)</label>
-                  <input
-                    type="text"
-                    value={itemImageUrl}
-                    onChange={(e) => setItemImageUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-[10px] text-zinc-400 outline-none transition-all font-mono"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={itemImageUrl}
+                      onChange={(e) => setItemImageUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-[10px] text-zinc-400 outline-none transition-all font-mono"
+                    />
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleImageUpload} 
+                      accept="image/*" 
+                      className="hidden" 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="shrink-0 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-xl px-3 flex items-center justify-center transition-colors disabled:opacity-50"
+                      title="Subir Imagen"
+                    >
+                      {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin text-emerald-500" /> : <ImagePlus className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 mt-4 select-none">

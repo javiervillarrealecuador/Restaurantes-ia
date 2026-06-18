@@ -137,6 +137,7 @@ async function processMessageInBackground(
 ) {
   let webhookLogId: string | null = null;
   let restaurantId: string | null = null;
+  let customAiPrompt: string | null = null;
 
   try {
     // Send typing indicator to let the user know we are processing
@@ -147,12 +148,13 @@ async function processMessageInBackground(
     // 2. Fetch or create a restaurant in a multi-tenant fashion
     const { data: settingsData } = await supabaseAdmin
       .from('settings')
-      .select('restaurant_id')
+      .select('restaurant_id, ai_system_instruction')
       .eq('whatsapp_phone_number_id', whatsappPhoneId)
       .limit(1);
 
     if (settingsData && settingsData.length > 0) {
       restaurantId = settingsData[0].restaurant_id;
+      customAiPrompt = settingsData[0].ai_system_instruction;
     } else {
       const restaurant = await getOrCreateRestaurant();
       restaurantId = restaurant.id;
@@ -199,7 +201,7 @@ async function processMessageInBackground(
       // Case A: Customer sent an image (Payment receipt upload)
       if (message.type === 'image') {
         if (activePendingOrder.payment_method === 'transfer' && !activePendingOrder.payment_receipt_url) {
-          let receiptUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600'; // fallback
+          let receiptUrl: string | null = null;
           
           try {
             const mediaId = message.image.id;
@@ -222,16 +224,25 @@ async function processMessageInBackground(
                 const fileName = `TR-${formattedCode}.jpg`;
                 const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
                   .from('receipts')
-                  .upload(fileName, blob, { contentType: blob.type });
+                  .upload(fileName, blob, { contentType: blob.type, upsert: true });
                   
                 if (!uploadErr && uploadData) {
                   const { data: publicUrlData } = supabaseAdmin.storage.from('receipts').getPublicUrl(fileName);
                   receiptUrl = publicUrlData.publicUrl;
+                } else {
+                  console.error('Receipt upload error:', uploadErr);
                 }
               }
             }
           } catch (e) {
             console.error('Error processing WhatsApp image:', e);
+          }
+
+          if (!receiptUrl) {
+            // Upload failed — ask customer to resend instead of storing fake data
+            const retryMsg = `Lo sentimos, hubo un error al procesar tu comprobante. Por favor, envía la imagen nuevamente.`;
+            await sendWhatsAppMessage(customerPhone, retryMsg, whatsappPhoneId);
+            return;
           }
 
           const { error: updateErr } = await supabaseAdmin
@@ -466,6 +477,18 @@ async function processMessageInBackground(
       .eq('phone', customerPhone)
       .maybeSingle();
 
+    // Check if human handoff is active (bot paused)
+    if (customerData && customerData.bot_active === false) {
+      console.log(`Bot is paused for customer ${customerPhone}. Logging message and ignoring AI.`);
+      if (webhookLogId) {
+        await supabaseAdmin
+          .from('whatsapp_webhook_logs')
+          .update({ status: 'handoff_active_logged' })
+          .eq('id', webhookLogId);
+      }
+      return NextResponse.json({ success: true, status: 'bot_paused_for_human_handoff' });
+    }
+
     let crmContext = 'Este es un cliente nuevo. Dale una cálida bienvenida.';
     if (customerData) {
       crmContext = `Este es un cliente recurrente llamado ${customerData.name || customerName}. Ha realizado ${customerData.total_orders} pedidos en el pasado y ha gastado un total de $${customerData.total_spent}. ${customerData.preferences ? 'Preferencias: ' + customerData.preferences : ''}. Salúdalo de nuevo calurosamente (ej: "¡Hola de nuevo Juan!").`;
@@ -476,6 +499,7 @@ async function processMessageInBackground(
       .from('whatsapp_webhook_logs')
       .select('message_body, ai_parsed_response, created_at, status')
       .eq('sender_phone', customerPhone)
+      .eq('restaurant_id', restaurantId) // Critical: isolate history by restaurant
       .order('created_at', { ascending: false })
       .limit(6);
       
@@ -518,7 +542,16 @@ async function processMessageInBackground(
       agentResult = runFallbackAgent(customerMessage, customerName, menuItems);
     } else {
       try {
-        agentResult = await runAIAgent(customerMessage, customerName, menuItems, deepseekKey, historyContext, cartContext, crmContext);
+        agentResult = await runAIAgent(
+          customerMessage, 
+          customerName, 
+          menuItems, 
+          deepseekKey, 
+          historyContext, 
+          cartContext, 
+          crmContext,
+          customAiPrompt
+        );
       } catch (agentError: unknown) {
         const agentErr = agentError as Error;
         console.error('AI Agent failed, using fallback:', agentErr);
@@ -554,6 +587,86 @@ async function processMessageInBackground(
       }
       return NextResponse.json({
         status: 'drafting_order',
+        reply_message: agentResult.human_response,
+      });
+    }
+
+    // Handle transfer_to_human intent (human handoff request)
+    if (agentResult.intent === 'transfer_to_human') {
+      await supabaseAdmin
+        .from('customers')
+        .update({ bot_active: false })
+        .eq('restaurant_id', restaurantId)
+        .eq('phone', customerPhone);
+
+      await supabaseAdmin
+        .from('admin_alerts')
+        .insert({
+          restaurant_id: restaurantId,
+          type: 'human_request',
+          title: 'Solicitud de Atención Humana',
+          message: `El cliente ${customerName} (+${customerPhone}) ha solicitado hablar con un agente humano.`,
+          customer_phone: customerPhone,
+          customer_name: customerName,
+          status: 'pending'
+        });
+
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+
+      if (webhookLogId) {
+        await supabaseAdmin
+          .from('whatsapp_webhook_logs')
+          .update({ status: 'human_handoff_triggered', ai_parsed_response: agentResult })
+          .eq('id', webhookLogId);
+      }
+
+      return NextResponse.json({
+        status: 'human_handoff_triggered',
+        reply_message: agentResult.human_response,
+      });
+    }
+
+    // Handle special_event intent (buffet or event catering inquiry)
+    if (agentResult.intent === 'special_event') {
+      await supabaseAdmin
+        .from('admin_alerts')
+        .insert({
+          restaurant_id: restaurantId,
+          type: 'buffet_inquiry',
+          title: 'Consulta de Buffet / Evento Especial',
+          message: `El cliente ${customerName} (+${customerPhone}) consultó sobre: "${customerMessage.substring(0, 150)}"`,
+          customer_phone: customerPhone,
+          customer_name: customerName,
+          status: 'pending'
+        });
+
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+
+      // Notify admin if phone is configured
+      const { data: restData } = await supabaseAdmin
+        .from('restaurants')
+        .select('phone')
+        .eq('id', restaurantId)
+        .single();
+
+      if (restData && restData.phone) {
+        const adminMsg = `🚨 *Alerta de Evento Especial/Buffet* 🚨\n\nEl cliente *${customerName}* (+${customerPhone}) está solicitando cotización o información sobre comidas especiales o catering.\n\nMensaje del cliente: "${customerMessage}"`;
+        try {
+          await sendWhatsAppMessage(restData.phone, adminMsg, whatsappPhoneId);
+        } catch (waErr) {
+          console.error('Failed to notify admin via WhatsApp:', waErr);
+        }
+      }
+
+      if (webhookLogId) {
+        await supabaseAdmin
+          .from('whatsapp_webhook_logs')
+          .update({ status: 'special_event_alert_triggered', ai_parsed_response: agentResult })
+          .eq('id', webhookLogId);
+      }
+
+      return NextResponse.json({
+        status: 'special_event_alert_triggered',
         reply_message: agentResult.human_response,
       });
     }
@@ -815,7 +928,7 @@ async function getOrCreateRestaurant() {
 // =======================================================================
 
 interface AgentResult {
-  intent: 'order' | 'add_to_order' | 'confirm_order' | 'menu_query' | 'full_menu' | 'greeting' | 'other';
+  intent: 'order' | 'add_to_order' | 'confirm_order' | 'menu_query' | 'full_menu' | 'greeting' | 'other' | 'transfer_to_human' | 'special_event';
   human_response: string;  // The natural language message to send the customer
   order: ParsedOrder | null;  // Structured order data, only when intent === 'order'
 }
@@ -827,7 +940,8 @@ async function runAIAgent(
   apiKey: string,
   historyContext: string,
   cartContext: string,
-  crmContext: string
+  crmContext: string,
+  customPrompt: string | null = null
 ): Promise<AgentResult> {
   // Build menu context grouped by category
   const grouped: Record<string, DBMenuItem[]> = {};
@@ -849,11 +963,15 @@ async function runAIAgent(
   // Categoría names for menu display formatting
   const categoryNames = Object.keys(grouped);
 
-  const systemPrompt = `Eres *Appy*, el asistente virtual inteligente de un restaurante latinoamericano. 
+  const basePrompt = `Eres *Appy*, el asistente virtual inteligente de un restaurante latinoamericano. 
 Eres amable, cálido, eficiente y conoces el menú a la perfección.
 Atiendes clientes por WhatsApp en español latinoamericano.
 Usas emojis con moderación y formato de WhatsApp (*negrita*, _cursiva_).
-Nunca inventas platos que no estén en el menú.
+Nunca inventas platos que no estén en el menú.`;
+
+  const systemPrompt = customPrompt ? customPrompt : basePrompt;
+
+  const fullSystemPrompt = `${systemPrompt}
 
 === MENÚ DEL RESTAURANTE ===
 ${menuContext}
@@ -877,7 +995,7 @@ ${cartContext}`;
 Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta (sin bloques de código, sin texto extra):
 
 {
-  "intent": "add_to_order" | "confirm_order" | "menu_query" | "full_menu" | "greeting" | "other",
+  "intent": "add_to_order" | "confirm_order" | "menu_query" | "full_menu" | "greeting" | "transfer_to_human" | "special_event" | "other",
   "human_response": "Tu respuesta completa y natural para enviar al cliente por WhatsApp",
   "order": {
     "items": [
@@ -899,6 +1017,8 @@ REGLAS CRÍTICAS:
    - "menu_query": Pregunta por UNA categoría específica.
    - "add_to_order": El cliente está pidiendo comida, PERO AÚN NO HA TERMINADO o simplemente está agregando cosas.
    - "confirm_order": El cliente explícitamente dice que ya no quiere nada más, que eso es todo, o que procedas a cobrar.
+   - "transfer_to_human": El cliente explícitamente solicita hablar con un humano, persona real, administrador, soporte técnico o agente de servicio.
+   - "special_event": El cliente pregunta sobre buffets, catering, preparación de banquetes, comidas especiales para eventos, contratos grandes, etc.
    - "other": Otra cosa.
 
 2. Para "add_to_order" y "confirm_order":
@@ -938,7 +1058,7 @@ REGLAS CRÍTICAS:
     body: JSON.stringify({
       model: 'deepseek-chat',
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: fullSystemPrompt },
         { role: 'assistant', content: 'Entendido. Soy Appy y estoy listo para atender al cliente respondiendo estrictamente en formato JSON.' },
         { role: 'user', content: userPrompt },
       ],

@@ -13,17 +13,16 @@ import KitchenDisplay from './KitchenDisplay';
 import DeliveryDisplay from './DeliveryDisplay';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import SaaSAdminPanel from './SaaSAdminPanel';
+import TakeOrderPanel from './TakeOrderPanel';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { TableSkeleton, MetricSkeleton, CardSkeleton } from '@/components/Skeletons';
 import { 
   Utensils, 
   ClipboardList, 
   Users, 
-  Terminal, 
   Settings2, 
   DollarSign, 
   ShoppingBag, 
@@ -46,8 +45,8 @@ import {
   EyeOff,
   X,
   BookOpen,
-  MessageSquare,
-  ShieldCheck
+  ShieldCheck,
+  Smartphone
 } from 'lucide-react';
 
 const formatOrderCode = (code: string | null): string => {
@@ -64,13 +63,12 @@ const formatOrderCode = (code: string | null): string => {
 };
 
 export default function Dashboard() {
-  const { user, profile, role, isSuperAdmin, permissions, logout, loading: authLoading } = useAuth();
+  const { user, profile, role, isSuperAdmin, permissions, logout, loading: authLoading, restaurantAccess, activeRestaurantId, setActiveRestaurantId, branchId } = useAuth();
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator' | 'saas'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator' | 'saas' | 'take_order'>('orders');
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [bootstrapping, setBootstrapping] = useState<boolean>(false);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
   const [logsLoading, setLogsLoading] = useState<boolean>(false);
@@ -91,6 +89,16 @@ export default function Dashboard() {
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  // Restaurant settings states
+  const [aiSystemInstruction, setAiSystemInstruction] = useState<string>('');
+  const [aiSystemInstructionLoading, setAiSystemInstructionLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // Admin alerts (high priority)
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [activeAlert, setActiveAlert] = useState<any | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   // Staff management states
   const [staffList, setStaffList] = useState<any[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
@@ -101,7 +109,7 @@ export default function Dashboard() {
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [staffFullName, setStaffFullName] = useState('');
-  const [staffRole, setStaffRole] = useState<'vendedor_cajero' | 'cocinero' | 'repartidor'>('vendedor_cajero');
+  const [staffRole, setStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero'>('vendedor_cajero');
   const [staffPermissions, setStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
   const [addStaffLoading, setAddStaffLoading] = useState(false);
   const [addStaffError, setAddStaffError] = useState<string | null>(null);
@@ -110,7 +118,7 @@ export default function Dashboard() {
   const [editingStaffMember, setEditingStaffMember] = useState<any | null>(null);
   const [showEditStaffModal, setShowEditStaffModal] = useState(false);
   const [editStaffFullName, setEditStaffFullName] = useState('');
-  const [editStaffRole, setEditStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor'>('vendedor_cajero');
+  const [editStaffRole, setEditStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero'>('vendedor_cajero');
   const [editStaffPassword, setEditStaffPassword] = useState('');
   const [editStaffPermissions, setEditStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
   const [editStaffLoading, setEditStaffLoading] = useState(false);
@@ -120,6 +128,26 @@ export default function Dashboard() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+
+  // Map of restaurantId -> name for the restaurant switcher
+  const [restaurantNames, setRestaurantNames] = useState<Record<string, string>>({});
+
+  // Load names for all accessible restaurants (for the switcher dropdown)
+  useEffect(() => {
+    if (restaurantAccess.length <= 1) return;
+    const ids = restaurantAccess.map(a => a.restaurantId);
+    supabase
+      .from('restaurants')
+      .select('id, name')
+      .in('id', ids)
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((r: any) => { map[r.id] = r.name; });
+          setRestaurantNames(map);
+        }
+      });
+  }, [restaurantAccess]);
 
   const activePermissions = permissions || getDefaultPermissions(role);
 
@@ -148,6 +176,7 @@ export default function Dashboard() {
     if (!activePerms) return;
 
     const tabToPermissionKey: Record<string, keyof StaffPermissions> = {
+      take_order: 'orders',
       orders: 'orders',
       customers: 'customers',
       menu: 'menu',
@@ -162,6 +191,7 @@ export default function Dashboard() {
     const permKey = tabToPermissionKey[activeTab];
     if (permKey && activePerms[permKey] === 'none') {
       const tabPreferenceOrder: typeof activeTab[] = [
+        'take_order',
         'orders',
         'menu',
         'simulator',
@@ -190,44 +220,49 @@ export default function Dashboard() {
     }
   }, [profile]);
 
-  // Fetch restaurant profile — MUST wait for auth to settle first.
-  // Depends on [authLoading, user] so it re-runs when:
-  //   1. Auth finishes loading (authLoading goes false)
-  //   2. User changes (e.g. TOKEN_REFRESHED triggers fetchUserData which sets user again)
+  // Fetch restaurant profile for the ACTIVE restaurant.
+  // Resets and reloads whenever the active restaurant changes (multi-tenant support).
   useEffect(() => {
-    // Don't fetch until auth is fully resolved
     if (authLoading) return;
-    // Don't re-fetch if already loaded
-    if (restaurant) return;
+    if (!activeRestaurantId) {
+      // If user has no restaurants, don't hang the dashboard
+      setRestaurantLoading(false);
+      setRestaurant(null);
+      return;
+    }
 
+    // Reset restaurant data when switching restaurants
+    setRestaurant(null);
     let isMounted = true;
 
     const fetchRestaurant = async (attempt = 1) => {
       if (!isMounted) return;
       setRestaurantLoading(true);
+      let isRetrying = false;
       try {
         const { data, error } = await supabase
           .from('restaurants')
           .select('*')
-          .limit(1);
+          .eq('id', activeRestaurantId)
+          .single();
 
         if (error) {
-          // If we get an auth-related error, retry once after a short delay
           if (attempt === 1 && (error.message?.includes('JWT') || error.message?.includes('token') || error.code === 'PGRST301' || error.code === '401')) {
             console.warn('Restaurant fetch got auth error, retrying in 1s...', error.message);
+            isRetrying = true;
             setTimeout(() => fetchRestaurant(2), 1000);
             return;
           }
           throw error;
         }
 
-        if (isMounted && data && data.length > 0) {
-          setRestaurant(data[0]);
+        if (isMounted && data) {
+          setRestaurant(data);
         }
       } catch (err) {
         console.error('Error fetching restaurant:', err);
       } finally {
-        if (isMounted) {
+        if (isMounted && !isRetrying) {
           setRestaurantLoading(false);
         }
       }
@@ -239,7 +274,89 @@ export default function Dashboard() {
       isMounted = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user]);
+  }, [authLoading, activeRestaurantId]);
+
+  // Admin alerts audio trigger helper
+  const triggerAlarmSound = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav');
+      audioRef.current.loop = true;
+    }
+    audioRef.current.play().catch(e => console.warn('Audio play blocked:', e));
+  };
+
+  const stopAlarmSound = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
+
+  const handleResolveAlert = async (alertId: string) => {
+    stopAlarmSound();
+    try {
+      const { error } = await supabase
+        .from('admin_alerts')
+        .update({ status: 'resolved' })
+        .eq('id', alertId);
+
+      if (error) throw error;
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+      setActiveAlert(null);
+      toast.success('Alerta marcada como resuelta.');
+    } catch (err) {
+      console.error('Error resolving alert:', err);
+      toast.error('No se pudo resolver la alerta.');
+    }
+  };
+
+  // Subscribe to high-priority admin alerts
+  useEffect(() => {
+    if (!activeRestaurantId) return;
+
+    // Fetch initial pending alerts
+    supabase
+      .from('admin_alerts')
+      .select('*')
+      .eq('restaurant_id', activeRestaurantId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setAlerts(data);
+          setActiveAlert(data[0]);
+          triggerAlarmSound();
+        }
+      });
+
+    // Subscribe to new inserts
+    const channel = supabase
+      .channel(`admin-alerts-${activeRestaurantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'admin_alerts',
+          filter: `restaurant_id=eq.${activeRestaurantId}`,
+        },
+        (payload) => {
+          const newAlert = payload.new as any;
+          if (newAlert.status === 'pending') {
+            setAlerts(prev => [newAlert, ...prev]);
+            setActiveAlert(newAlert);
+            triggerAlarmSound();
+            toast.warning(`🚨 ¡ALERTA! Nueva solicitud: ${newAlert.title}`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      stopAlarmSound();
+    };
+  }, [activeRestaurantId]);
 
   // Hook into orders real-time stream
   const { 
@@ -264,7 +381,7 @@ export default function Dashboard() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          restaurant_id: restaurant.id,
+          restaurant_id: restaurant?.id || activeRestaurantId || '',
           profile_id: user.id,
           action,
           details
@@ -316,7 +433,7 @@ export default function Dashboard() {
       const token = session?.access_token;
       if (!token) throw new Error('No session token available');
 
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch(`/api/admin/users?restaurantId=${activeRestaurantId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -330,7 +447,7 @@ export default function Dashboard() {
     } finally {
       setStaffLoading(false);
     }
-  }, []);
+  }, [activeRestaurantId]);
 
   // Fetch audit logs
   const fetchAuditLogs = React.useCallback(async () => {
@@ -351,7 +468,7 @@ export default function Dashboard() {
             last_name
           )
         `)
-        .eq('restaurant_id', restaurant.id)
+        .eq('restaurant_id', restaurant?.id || activeRestaurantId)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -462,6 +579,7 @@ export default function Dashboard() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          restaurantId: activeRestaurantId,
           email: staffEmail.trim(),
           password: staffPassword,
           fullName: staffFullName.trim(),
@@ -498,6 +616,7 @@ export default function Dashboard() {
       if (!token) throw new Error('No session token available');
 
       const payload: any = {
+        restaurantId: activeRestaurantId,
         fullName: editStaffFullName.trim(),
         role: editStaffRole,
         permissions: editStaffPermissions
@@ -571,7 +690,7 @@ export default function Dashboard() {
       const token = session?.access_token;
       if (!token) throw new Error('No session token available');
 
-      const res = await fetch(`/api/admin/users/${memberId}`, {
+      const res = await fetch(`/api/admin/users/${memberId}?restaurantId=${activeRestaurantId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -627,13 +746,21 @@ export default function Dashboard() {
   const handleBootstrap = async () => {
     setBootstrapping(true);
     try {
-      const res = await fetch('/api/bootstrap', { method: 'POST' });
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/bootstrap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
       const data = await res.json();
       if (data.success) {
         setRestaurant(data.restaurant);
         toast.success('Base de datos inicializada correctamente');
       } else {
-        toast.error('Error: ' + data.error);
+        toast.error('Error: ' + (data.error || 'Error desconocido'));
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -651,7 +778,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('whatsapp_webhook_logs')
         .select('*')
-        .eq('restaurant_id', restaurant.id)
+        .eq('restaurant_id', restaurant?.id || activeRestaurantId)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -669,6 +796,56 @@ export default function Dashboard() {
       fetchWebhookLogs();
     }
   }, [activeTab, restaurant?.id, fetchWebhookLogs]);
+
+  // Fetch settings for active restaurant
+  const fetchSettings = React.useCallback(async () => {
+    if (!restaurant?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('ai_system_instruction')
+        .eq('restaurant_id', restaurant?.id || activeRestaurantId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching settings:', error);
+      } else if (data) {
+        setAiSystemInstruction(data.ai_system_instruction || '');
+      }
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+    }
+  }, [restaurant?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'settings' && restaurant?.id) {
+      fetchSettings();
+    }
+  }, [activeTab, restaurant?.id, fetchSettings]);
+
+  const handleUpdateAiInstruction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant?.id) return;
+    
+    setAiSystemInstructionLoading(true);
+    setAiMessage(null);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .update({ ai_system_instruction: aiSystemInstruction })
+        .eq('restaurant_id', restaurant?.id || activeRestaurantId);
+        
+      if (error) throw error;
+      
+      setAiMessage({ type: 'success', text: 'Prompt de la IA actualizado correctamente.' });
+      setTimeout(() => setAiMessage(null), 3000);
+    } catch (err) {
+      console.error('Error updating AI instruction:', err);
+      setAiMessage({ type: 'error', text: 'Error al actualizar el prompt.' });
+    } finally {
+      setAiSystemInstructionLoading(false);
+    }
+  };
 
   // Calculations for stats metrics
   const stats = React.useMemo(() => {
@@ -705,7 +882,8 @@ export default function Dashboard() {
   // Only show loading splash while auth or restaurant data is still being fetched.
   // IMPORTANT: only block if BOTH are still loading — if auth is done and user is null,
   // fall through so the redirect-to-login effect can fire.
-  if (authLoading || restaurantLoading) {
+  // ALSO: If auth is done but there is NO activeRestaurantId, don't block.
+  if (authLoading || (restaurantLoading && activeRestaurantId)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#09090b] text-zinc-100">
         <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mb-4" />
@@ -729,7 +907,7 @@ export default function Dashboard() {
   }
 
   // Seeding view if no restaurant exists (user IS authenticated but no restaurant found)
-  if (!restaurant) {
+  if (!restaurant && !isSuperAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#09090b] text-zinc-100 p-6">
         <div className="max-w-md w-full bg-zinc-900/60 border border-zinc-800 p-8 rounded-3xl text-center space-y-6 backdrop-blur-md shadow-2xl">
@@ -767,20 +945,104 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100 flex flex-col md:flex-row antialiased transition-colors duration-300">
       
+      {/* Alarm notification popup */}
+      {activeAlert && (
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border-2 border-red-500/80 max-w-md w-full rounded-3xl p-7 text-center space-y-6 shadow-[0_0_50px_rgba(239,68,68,0.35)]">
+            <div className="flex justify-center">
+              <div className="p-4 bg-red-500/10 text-red-500 border border-red-500/30 rounded-full animate-bounce">
+                <Bell className="h-10 w-10" />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-lg font-black text-red-500 uppercase tracking-widest">
+                🚨 ALERTA DE ALTA PRIORIDAD 🚨
+              </h2>
+              <h3 className="text-base font-bold text-zinc-100">{activeAlert.title}</h3>
+              <p className="text-xs text-zinc-400 font-medium leading-relaxed">{activeAlert.message}</p>
+            </div>
+
+            <div className="bg-zinc-900/60 border border-zinc-850 p-4 rounded-2xl text-left text-xs space-y-2">
+              <div className="flex justify-between text-zinc-400 font-semibold">
+                <span>Cliente:</span>
+                <span className="text-zinc-200">{activeAlert.customer_name || 'N/D'}</span>
+              </div>
+              <div className="flex justify-between text-zinc-400 font-semibold">
+                <span>Teléfono:</span>
+                <span className="text-zinc-200">+{activeAlert.customer_phone}</span>
+              </div>
+              <div className="flex justify-between text-zinc-400 font-semibold">
+                <span>Fecha/Hora:</span>
+                <span className="text-zinc-200">{new Date(activeAlert.created_at).toLocaleTimeString()}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  stopAlarmSound();
+                  window.open(`https://wa.me/${activeAlert.customer_phone}`, '_blank');
+                }}
+                className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg flex items-center justify-center gap-1.5 border border-transparent"
+              >
+                <Smartphone className="h-4 w-4" /> Chatear WhatsApp
+              </button>
+              
+              <button
+                onClick={() => handleResolveAlert(activeAlert.id)}
+                className="flex-1 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold rounded-xl text-xs transition-all border border-zinc-800 hover:border-zinc-700 cursor-pointer"
+              >
+                Resolver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation Sidebar */}
       <aside className="w-full md:w-64 bg-zinc-950 border-r border-zinc-900 flex flex-col shrink-0">
-        {/* Restaurant Header */}
-        <div className="p-6 border-b border-zinc-900 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-black">
-            <Utensils className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-zinc-100 line-clamp-1">{restaurant.name}</h1>
-            <p className="text-[10px] text-emerald-450 font-medium flex items-center gap-1 uppercase tracking-wider mt-0.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-550 animate-ping"></span>
-              SaaS Live Panel
-            </p>
-          </div>
+        {/* Restaurant Header — shows selector when user has multiple restaurants */}
+        <div className="p-4 border-b border-zinc-900">
+          {restaurantAccess.length > 1 ? (
+            /* Multi-restaurant selector */
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <div className="h-7 w-7 rounded-lg bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                  <Utensils className="h-3.5 w-3.5 text-emerald-400" />
+                </div>
+                <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">Restaurante activo</p>
+              </div>
+              <select
+                value={activeRestaurantId || ''}
+                onChange={(e) => {
+                  setActiveRestaurantId(e.target.value);
+                  setActiveTab('orders');
+                }}
+                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 text-xs font-semibold rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              >
+                {restaurantAccess.map(a => (
+                  <option key={a.restaurantId} value={a.restaurantId}>
+                    {restaurantNames[a.restaurantId] || `Restaurante ${a.restaurantId.substring(0, 8)}...`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            /* Single restaurant — simple header */
+            <div className="flex items-center gap-3 px-1">
+              <div className="h-9 w-9 rounded-xl bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                <Utensils className="h-4.5 w-4.5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm font-bold text-zinc-100 truncate">{restaurant?.name || 'Sin Restaurante'}</h1>
+                <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1 uppercase tracking-wider mt-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  SaaS Live Panel
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Links Navigation */}
@@ -799,24 +1061,38 @@ export default function Dashboard() {
             </button>
           )}
           {activePermissions.orders !== 'none' && (
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                activeTab === 'orders'
-                  ? 'bg-zinc-900 text-emerald-400 border border-zinc-800'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
-              }`}
-            >
-              <ClipboardList className="h-4.5 w-4.5" />
-              <span>
-                {role === 'cocinero' ? 'Cola de Cocina' : role === 'repartidor' ? 'Cola de Repartos' : 'Gestión Pedidos'}
-              </span>
-              {stats.activeCount > 0 && role !== 'repartidor' && (
-                <span className="ml-auto bg-emerald-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-md">
-                  {stats.activeCount}
+            <>
+              <button
+                onClick={() => setActiveTab('take_order')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                  activeTab === 'take_order'
+                    ? 'bg-zinc-900 text-emerald-400 border border-zinc-800'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+                }`}
+              >
+                <Utensils className="h-4.5 w-4.5" />
+                <span>Tomar Pedido</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                  activeTab === 'orders'
+                    ? 'bg-zinc-900 text-emerald-400 border border-zinc-800'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+                }`}
+              >
+                <ClipboardList className="h-4.5 w-4.5" />
+                <span>
+                  {role === 'cocinero' ? 'Cola de Cocina' : role === 'repartidor' ? 'Cola de Repartos' : 'Gestión Pedidos'}
                 </span>
-              )}
-            </button>
+                {stats.activeCount > 0 && role !== 'repartidor' && (
+                  <span className="ml-auto bg-emerald-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-md">
+                    {stats.activeCount}
+                  </span>
+                )}
+              </button>
+            </>
           )}
 
           {activePermissions.menu !== 'none' && (
@@ -931,6 +1207,7 @@ export default function Dashboard() {
                   {role === 'vendedor_cajero' && 'Vendedor / Cajero'}
                   {role === 'cocinero' && 'Cocinero'}
                   {role === 'repartidor' && 'Repartidor'}
+                  {role === 'camarero' && 'Camarero / Mesero'}
                 </p>
               </div>
             </div>
@@ -981,7 +1258,7 @@ export default function Dashboard() {
               <RefreshCw className="h-4 w-4" />
             </button>
             <span className="text-[11px] text-zinc-600 dark:text-zinc-400 bg-zinc-200 dark:bg-zinc-900/80 px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-850">
-              ID Local: {restaurant.id.substring(0, 8)}...
+              ID Local: {restaurant?.id?.substring(0, 8) || 'N/A'}...
             </span>
           </div>
         </header>
@@ -1052,6 +1329,13 @@ export default function Dashboard() {
 
         {/* Main Section Content Area */}
         <section className="flex-1 p-6 overflow-y-auto">
+          {activeTab === 'take_order' && activeRestaurantId && (
+            <TakeOrderPanel
+              restaurantId={restaurant?.id || activeRestaurantId || ''}
+              activeBranchId={branchId}
+            />
+          )}
+
           {activeTab === 'orders' && role === 'cocinero' ? (
             <KitchenDisplay 
               orders={filteredOrdersByRole} 
@@ -1070,11 +1354,13 @@ export default function Dashboard() {
               loading={ordersLoading} 
               role={role}
               readOnly={activePermissions.orders === 'read'}
+              restaurantAddress={restaurant?.address || ''}
             />
           ) : null}
 
           {activeTab === 'customers' && (
             <CustomersPanel 
+              restaurantId={activeRestaurantId || ''}
               orders={orders} 
               loading={ordersLoading} 
             />
@@ -1084,25 +1370,30 @@ export default function Dashboard() {
             <ReportsPanel 
               orders={orders} 
               loading={ordersLoading} 
-              restaurantId={restaurant.id}
+              restaurantId={restaurant?.id || activeRestaurantId || ''}
             />
           )}
 
           {activeTab === 'menu' && (
             <MenuPanel 
-              restaurantId={restaurant.id} 
+              restaurantId={restaurant?.id || activeRestaurantId || ''} 
               readOnly={activePermissions.menu === 'read'}
             />
           )}
 
-          {activeTab === 'simulator' && (
+          {activeTab === 'simulator' && activeRestaurantId && restaurant && (
             <SimulatorPanel 
-              restaurantId={restaurant.id} 
+              restaurantId={restaurant?.id || activeRestaurantId || ''} 
             />
           )}
 
           {activeTab === 'saas' && (
-            <SaaSAdminPanel />
+            <SaaSAdminPanel
+              onAccessRestaurant={(id: string) => {
+                setActiveRestaurantId(id);
+                setActiveTab('orders');
+              }}
+            />
           )}
 
           {activeTab === 'logs' && (
@@ -1238,12 +1529,15 @@ export default function Dashboard() {
                             ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40'
                             : member.role === 'cocinero'
                             ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/40'
+                            : member.role === 'camarero'
+                            ? 'bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/40'
                             : 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-650 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/40'
                         }`}>
                           {member.role === 'admin_general' && 'Admin General'}
                           {member.role === 'vendedor_cajero' && 'Vendedor / Cajero'}
                           {member.role === 'cocinero' && 'Cocinero'}
                           {member.role === 'repartidor' && 'Repartidor'}
+                          {member.role === 'camarero' && 'Camarero / Mesero'}
                         </span>
                       </div>
 
@@ -1283,102 +1577,121 @@ export default function Dashboard() {
               {/* Add Staff Modal */}
               {showAddStaffModal && (
                 <div className="fixed inset-0 z-50 bg-[#000000]/80 backdrop-blur-sm flex items-center justify-center p-4">
-                  <div className="bg-zinc-950 border border-zinc-900 max-w-md w-full rounded-3xl p-6.5 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                  <div className="bg-zinc-950 border border-zinc-900 max-w-lg w-full rounded-3xl p-6.5 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-zinc-150">Agregar Nuevo Personal</h4>
-                        <p className="text-xs text-zinc-500">Crea una cuenta para un miembro del personal.</p>
+                        <div className="flex items-center gap-2">
+                          <div className="bg-emerald-500/10 p-2 rounded-xl text-emerald-500">
+                            <UserPlus className="h-5 w-5" />
+                          </div>
+                          <h4 className="text-lg font-bold text-zinc-100">Agregar Nuevo Personal</h4>
+                        </div>
+                        <p className="text-sm text-zinc-500 mt-1">
+                          Crea una cuenta para un miembro del equipo en <span className="font-bold text-emerald-500">{restaurant?.name}</span>.
+                        </p>
                       </div>
                       <button 
                         onClick={() => setShowAddStaffModal(false)}
-                        className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-zinc-250 border border-zinc-850 cursor-pointer"
+                        className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-zinc-250 hover:bg-zinc-800 border border-zinc-850 cursor-pointer transition-all"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-5 w-5" />
                       </button>
                     </div>
 
                     {addStaffError && (
-                      <div className="bg-rose-950/10 border border-rose-950/45 p-3 rounded-lg text-rose-400 text-xs flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div className="bg-rose-950/20 border border-rose-900/40 p-4 rounded-xl text-rose-400 text-sm flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                         <span>{addStaffError}</span>
                       </div>
                     )}
 
-                    <form onSubmit={handleAddStaff} className="space-y-4.5">
-                      <div className="space-y-1 text-xs">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Nombre Completo</label>
-                        <input
-                          type="text"
-                          required
-                          value={staffFullName}
-                          onChange={(e) => setStaffFullName(e.target.value)}
-                          placeholder="Ej. María Clara Gómez"
-                          className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
-                        />
+                    <form onSubmit={handleAddStaff} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5 text-sm">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1">Nombre Completo</label>
+                          <input
+                            type="text"
+                            required
+                            value={staffFullName}
+                            onChange={(e) => setStaffFullName(e.target.value)}
+                            placeholder="Ej. María Clara Gómez"
+                            className="w-full bg-zinc-900/40 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all placeholder:text-zinc-600"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 text-sm">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1">Correo Electrónico</label>
+                          <input
+                            type="email"
+                            required
+                            value={staffEmail}
+                            onChange={(e) => setStaffEmail(e.target.value)}
+                            placeholder="ejemplo@restaurante.com"
+                            className="w-full bg-zinc-900/40 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all placeholder:text-zinc-600"
+                          />
+                        </div>
                       </div>
 
-                      <div className="space-y-1 text-xs">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico</label>
-                        <input
-                          type="email"
-                          required
-                          value={staffEmail}
-                          onChange={(e) => setStaffEmail(e.target.value)}
-                          placeholder="ejemplo@restaurante.com"
-                          className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5 text-sm">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
+                            Contraseña Inicial
+                          </label>
+                          <input
+                            type="password"
+                            required
+                            value={staffPassword}
+                            onChange={(e) => setStaffPassword(e.target.value)}
+                            placeholder="Mínimo 6 caracteres"
+                            className="w-full bg-zinc-900/40 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all placeholder:text-zinc-600"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 text-sm">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
+                            Rol del Usuario
+                          </label>
+                          <select
+                            value={staffRole}
+                            onChange={(e) => handleRoleChange(e.target.value as any)}
+                            className="w-full bg-zinc-900/80 border border-zinc-800 focus:border-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all cursor-pointer font-medium"
+                          >
+                            <option value="admin_general">Administrador General</option>
+                            <option value="vendedor_cajero">Vendedor / Cajero</option>
+                            <option value="cocinero">Cocinero</option>
+                            <option value="repartidor">Repartidor</option>
+                            <option value="camarero">Camarero / Mesero</option>
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="space-y-1 text-xs">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Contraseña Inicial</label>
-                        <input
-                          type="password"
-                          required
-                          value={staffPassword}
-                          onChange={(e) => setStaffPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
-                          className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
-                        />
-                      </div>
-
-                      <div className="space-y-1 text-xs">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Rol del Usuario</label>
-                        <select
-                          value={staffRole}
-                          onChange={(e) => handleRoleChange(e.target.value as any)}
-                          className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
-                        >
-                          <option value="vendedor_cajero">Vendedor / Cajero</option>
-                          <option value="cocinero">Cocinero</option>
-                          <option value="repartidor">Repartidor</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-3.5 border-t border-zinc-900/65 pt-4">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block mb-2">Permisos del Sistema</label>
-                        <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                      <div className="space-y-3.5 border-t border-zinc-900/65 pt-5 mt-2">
+                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
+                          <ShieldCheck className="h-4 w-4 text-amber-500" /> Permisos del Sistema
+                        </label>
+                        <div className="space-y-2.5 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
                           {modulesConfig.map(({ key, label, desc }) => {
                             const val = staffPermissions[key];
                             return (
-                              <div key={key} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl bg-zinc-900/30 border border-zinc-900 gap-2">
+                              <div key={key} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/80 gap-3 hover:border-zinc-700 transition-colors">
                                 <div className="min-w-0">
-                                  <span className="text-xs font-bold text-zinc-205 block">{label}</span>
-                                  <span className="text-[10px] text-zinc-500 block truncate">{desc}</span>
+                                  <span className="text-sm font-semibold text-zinc-100 block">{label}</span>
+                                  <span className="text-[11px] text-zinc-500 block truncate leading-tight mt-0.5">{desc}</span>
                                 </div>
-                                <div className="flex gap-0.5 bg-zinc-950 p-0.5 rounded-lg border border-zinc-850 shrink-0 self-start sm:self-center">
+                                <div className="flex gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-850 shrink-0 self-start sm:self-center shadow-inner">
                                   {(['write', 'read', 'none'] as const).map((level) => (
                                     <button
                                       key={level}
                                       type="button"
                                       onClick={() => setStaffPermissions(prev => ({ ...prev, [key]: level }))}
-                                      className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
+                                      className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all cursor-pointer ${
                                         val === level
                                           ? level === 'write'
-                                            ? 'bg-emerald-500/10 text-emerald-455 border border-emerald-500/20'
+                                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm'
                                             : level === 'read'
-                                            ? 'bg-amber-500/10 text-amber-455 border border-amber-500/20'
-                                            : 'bg-rose-500/10 text-rose-455 border border-rose-500/20'
-                                          : 'text-zinc-550 hover:text-zinc-300 hover:bg-zinc-900/40 border border-transparent'
+                                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm'
+                                            : 'bg-rose-500/15 text-rose-400 border border-rose-500/30 shadow-sm'
+                                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 border border-transparent'
                                       }`}
                                     >
                                       {level === 'write' ? 'Modi' : level === 'read' ? 'Ver' : 'N/A'}
@@ -1457,6 +1770,7 @@ export default function Dashboard() {
                           <option value="vendedor_cajero">Vendedor / Cajero</option>
                           <option value="cocinero">Cocinero</option>
                           <option value="repartidor">Repartidor</option>
+                          <option value="camarero">Camarero / Mesero</option>
                         </select>
                       </div>
 
@@ -1776,6 +2090,48 @@ export default function Dashboard() {
                     </button>
                   </form>
                 </div>
+              </div>
+
+              {/* AI Assistant Settings */}
+              <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 delay-100">
+                <div className="border-b border-zinc-900 pb-4">
+                  <h4 className="text-sm font-semibold text-zinc-200 font-bold">Personalidad de la Inteligencia Artificial</h4>
+                  <p className="text-xs text-zinc-500">Define cómo debe hablar el asistente virtual en este restaurante (Prompt del Sistema).</p>
+                </div>
+
+                {aiMessage && (
+                  <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+                    aiMessage.type === 'success' ? 'bg-emerald-950/15 border border-emerald-900/30 text-emerald-400' : 'bg-rose-950/15 border border-rose-900/30 text-rose-455'
+                  }`}>
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{aiMessage.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateAiInstruction} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Instrucción del Sistema (Prompt)</label>
+                    <textarea 
+                      required
+                      disabled={activePermissions.settings === 'read'}
+                      value={aiSystemInstruction}
+                      onChange={(e) => setAiSystemInstruction(e.target.value)}
+                      placeholder="Ej: Eres Appy, un asistente amable para un restaurante de comida rápida..."
+                      className="w-full h-48 bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-200 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed resize-y text-sm font-mono"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Esta instrucción reemplazará el comportamiento por defecto de la IA. Usa variables como el menú y las órdenes se inyectan automáticamente.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={aiSystemInstructionLoading || activePermissions.settings === 'read'}
+                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-850 disabled:text-zinc-555 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition-all cursor-pointer text-xs w-full sm:w-auto"
+                  >
+                    {aiSystemInstructionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Prompt'}
+                  </button>
+                </form>
               </div>
 
               {/* API and Integration settings for Admin General only */}

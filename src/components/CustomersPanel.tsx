@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 
 interface CustomersPanelProps {
+  restaurantId: string;
   orders: Order[]; // Keep this for history, but we fetch aggregate stats
   loading: boolean;
 }
@@ -35,29 +36,28 @@ interface CustomerProfile {
   history: Order[];
 }
 
-export default function CustomersPanel({ orders, loading }: CustomersPanelProps) {
+export default function CustomersPanel({ restaurantId, orders, loading }: CustomersPanelProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sortBy, setSortBy] = useState<'spent' | 'count' | 'date'>('spent');
   const [expandedPhones, setExpandedPhones] = useState<Record<string, boolean>>({});
   const [dbCustomers, setDbCustomers] = useState<any[]>([]);
-  const [loadingCustomers, setLoadingCustomers] = useState(true);
 
   useEffect(() => {
+    if (!restaurantId) return;
     const fetchCustomers = async () => {
-      setLoadingCustomers(true);
       const { data, error } = await supabase
         .from('customers')
-        .select('id, name, phone, total_orders, total_spent, last_visit, created_at, preferences');
+        .select('id, name, phone, total_orders, total_spent, last_visit, created_at, preferences')
+        .eq('restaurant_id', restaurantId);
       if (error) {
         console.error('Error fetching customers:', error);
         toast.error('Error al cargar clientes');
       } else {
         setDbCustomers(data || []);
       }
-      setLoadingCustomers(false);
     };
     fetchCustomers();
-  }, [orders]); // Refresh when orders change
+  }, [restaurantId, orders.length]); // Re-fetch when restaurant changes or new orders come in
 
   const toggleExpand = (phone: string) => {
     setExpandedPhones(prev => ({
@@ -70,8 +70,12 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
   const customers = useMemo(() => {
     const profiles: Record<string, CustomerProfile> = {};
 
+    // Build a Map for O(1) lookups instead of O(n²) array.find() calls
+    const dbCustomerMap = new Map(dbCustomers.map(c => [c.phone, c]));
+
     // Initialize with DB data if available
     dbCustomers.forEach(c => {
+      if (!c.phone) return; // Skip null/undefined phones
       profiles[c.phone] = {
         id: c.id,
         name: c.name || 'Cliente WhatsApp',
@@ -87,6 +91,7 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
     // Populate history and fallback stats from orders
     orders.forEach(order => {
       const phone = order.customer_phone;
+      if (!phone) return; // Guard against null/undefined phone — don't group as 'null'
       
       if (!profiles[phone]) {
         profiles[phone] = {
@@ -104,22 +109,24 @@ export default function CustomersPanel({ orders, loading }: CustomersPanelProps)
       const prof = profiles[phone];
       prof.history.push(order);
       
-      // If not in DB, fallback to calculate
-      if (!dbCustomers.find(c => c.phone === phone)) {
+      // If not in DB, fallback to calculate — O(1) with Map
+      if (!dbCustomerMap.has(phone)) {
         prof.orderCount += 1;
         if (order.status !== 'cancelled') {
           prof.totalSpent += Number(order.total_price);
         }
-        if (new Date(order.created_at) > new Date(prof.lastOrderDate)) {
+        const orderDate = order.created_at ? new Date(order.created_at) : null;
+        const lastDate = prof.lastOrderDate ? new Date(prof.lastOrderDate) : null;
+        if (orderDate && (!lastDate || orderDate > lastDate)) {
           prof.lastOrderDate = order.created_at;
           prof.name = order.customer_name;
         }
       }
     });
 
-    // Determine preferences based on history if not set in DB
+    // Determine preferences based on history if not set in DB — O(1) with Map
     Object.values(profiles).forEach(prof => {
-      if (!dbCustomers.find(c => c.phone === prof.phone) || !prof.preference || prof.preference === 'pickup') {
+      if (!dbCustomerMap.has(prof.phone) || !prof.preference || prof.preference === 'pickup') {
         const counts = { dine_in: 0, delivery: 0, pickup: 0 };
         prof.history.forEach(o => {
           counts[o.type as keyof typeof counts] = (counts[o.type as keyof typeof counts] || 0) + 1;

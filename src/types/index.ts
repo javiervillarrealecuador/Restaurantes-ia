@@ -70,6 +70,8 @@ export interface Order {
   created_at: string;
   updated_at: string;
   order_items?: OrderItem[];
+  source?: 'whatsapp' | 'waiter' | 'caja';
+  branch_id?: string | null;
 }
 
 export interface WebhookLog {
@@ -82,5 +84,95 @@ export interface WebhookLog {
   ai_parsed_response: unknown;
   status: string;
   error_message: string | null;
+  created_at: string;
+}
+
+export interface WhatsAppMessage {
+  from: string;
+  id: string;
+  timestamp: string;
+  text?: {
+    body: string;
+  };
+  type: string;
+  image?: {
+    mime_type: string;
+    sha256: string;
+    id: string;
+  };
+}
+
+export interface WhatsAppWebhookPayload {
+  object: string;
+  entry: Array<{
+    id: string;
+    changes: Array<{
+      value: {
+        messaging_product: string;
+        metadata: {
+          display_phone_number: string;
+          phone_number_id: string;
+        };
+        contacts?: Array<{
+          profile: {
+            name: string;
+          };
+          wa_id: string;
+        }>;
+        messages?: Array<WhatsAppMessage>;
+      };
+      field: string;
+    }>;
+  }>;
+}
+
+export interface BillingStats {
+  totalOrders: number;
+  deliveredOrders: number;
+  cancelledOrders: number;
+  currentPeriodDelivered: number;
+  cancellationRate: number;
+  unbilledAmount: number;
+}
+
+export interface RestaurantWithBilling {
+  id: string;
+  name: string;
+  slug: string;
+  email: string | null;
+  phone: string | null;
+  cost_per_order: number;
+  prepaid_credits: number;
+  status: string;
+  created_at: string;
+  stats: BillingStats;
+}
+
+export interface Branch {
+  id: string;
+  restaurant_id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MenuItemBranch {
+  menu_item_id: string;
+  branch_id: string;
+}
+
+export interface AdminAlert {
+  id: string;
+  restaurant_id: string;
+  branch_id: string | null;
+  type: 'buffet_inquiry' | 'special_event' | 'human_request';
+  title: string;
+  message: string;
+  customer_phone: string;
+  customer_name: string | null;
+  status: 'pending' | 'resolved';
   created_at: string;
 }

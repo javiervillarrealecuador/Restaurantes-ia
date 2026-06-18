@@ -100,8 +100,17 @@ export default function KitchenDisplay({ orders, onUpdateStatus }: KitchenDispla
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                     Pedido #{order.order_number || order.order_code?.substring(0, 4)}
                   </h3>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
-                    {order.type === 'dine_in' ? `Mesa: ${order.table_number}` : order.type === 'delivery' ? 'Delivery' : 'Para Llevar'}
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span>{order.type === 'dine_in' ? `Mesa: ${order.table_number}` : order.type === 'delivery' ? 'Delivery' : 'Para Llevar'}</span>
+                    <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                      order.source === 'waiter' 
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' 
+                        : order.source === 'caja'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                    }`}>
+                      {order.source === 'waiter' ? 'Mesero' : order.source === 'caja' ? 'Caja' : 'WhatsApp'}
+                    </span>
                   </p>
                 </div>
                 <div className={`flex items-center font-bold ${getTimeColor(waitTime)}`}>

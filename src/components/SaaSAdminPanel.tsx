@@ -7,7 +7,6 @@ import {
   ShieldCheck, 
   Building, 
   Receipt, 
-  Plus, 
   CreditCard, 
   AlertTriangle, 
   CheckCircle, 
@@ -62,7 +61,11 @@ interface SaaSInterfaceInvoice {
   };
 }
 
-export default function SaaSAdminPanel() {
+interface SaaSAdminPanelProps {
+  onAccessRestaurant?: (restaurantId: string) => void;
+}
+
+export default function SaaSAdminPanel({ onAccessRestaurant }: SaaSAdminPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'restaurants' | 'invoices'>('restaurants');
   const [restaurants, setRestaurants] = useState<SaaSInterfaceRestaurant[]>([]);
   const [invoices, setInvoices] = useState<SaaSInterfaceInvoice[]>([]);
@@ -599,6 +602,15 @@ export default function SaaSAdminPanel() {
                           >
                             {r.status === 'suspended' ? <Play className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
                           </button>
+                          {onAccessRestaurant && (
+                            <button
+                              onClick={() => onAccessRestaurant(r.id)}
+                              className="p-1.5 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 hover:bg-violet-600 dark:hover:bg-violet-600 rounded-lg text-violet-600 dark:text-violet-400 hover:text-white transition inline-flex items-center"
+                              title="Acceder al Dashboard de este restaurante"
+                            >
+                              <Play className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

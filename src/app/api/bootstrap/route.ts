@@ -1,7 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  // Security: verify the caller is an authenticated admin or super admin
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+  if (authErr || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     // Check if any restaurant already exists
     const { data: restaurantList } = await supabaseAdmin

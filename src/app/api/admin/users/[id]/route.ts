@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-async function verifyAdmin(req: NextRequest) {
+async function verifyAdmin(req: NextRequest, targetRestaurantId: string) {
+  if (!targetRestaurantId) return null;
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return null;
   const token = authHeader.replace('Bearer ', '');
@@ -9,15 +10,28 @@ async function verifyAdmin(req: NextRequest) {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return null;
 
+  // Check if super admin
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.is_super_admin) {
+    return { user, restaurantId: targetRestaurantId };
+  }
+
+  // Check if admin_general for this specific restaurant
   const { data: staff } = await supabaseAdmin
     .from('restaurant_staff')
     .select('role, restaurant_id')
     .eq('profile_id', user.id)
+    .eq('restaurant_id', targetRestaurantId)
     .eq('role', 'admin_general')
     .limit(1);
 
   if (!staff || staff.length === 0) return null;
-  return { user, restaurantId: staff[0].restaurant_id };
+  return { user, restaurantId: targetRestaurantId };
 }
 
 // PATCH: Modify user profile/role/password
@@ -26,15 +40,20 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const adminSession = await verifyAdmin(req);
+    const targetUserId = params.id;
+    const body = await req.json();
+    const { fullName, role, password, permissions, restaurantId: targetRestaurantId } = body;
+
+    if (!targetRestaurantId) {
+      return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    const adminSession = await verifyAdmin(req, targetRestaurantId);
     if (!adminSession) {
       return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 401 });
     }
 
     const { user: adminUser, restaurantId } = adminSession;
-    const targetUserId = params.id;
-    const body = await req.json();
-    const { fullName, role, password, permissions } = body;
 
     // Fetch the target user details first to verify they belong to same restaurant
     const { data: targetStaff, error: findErr } = await supabaseAdmin
@@ -123,7 +142,13 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const adminSession = await verifyAdmin(req);
+    const { searchParams } = new URL(req.url);
+    const targetRestaurantId = searchParams.get('restaurantId');
+    if (!targetRestaurantId) {
+      return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    const adminSession = await verifyAdmin(req, targetRestaurantId);
     if (!adminSession) {
       return NextResponse.json({ error: 'Unauthorized. Admin role required.' }, { status: 401 });
     }

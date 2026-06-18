@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Order, OrderStatus } from '@/types';
 import { 
   Clock, 
@@ -16,7 +16,6 @@ import {
   UtensilsCrossed,
   Banknote,
   Landmark,
-  Store,
   ShoppingBag,
   Printer
 } from 'lucide-react';
@@ -48,9 +47,10 @@ interface OrderTableProps {
   loading: boolean;
   role: string | null;
   readOnly?: boolean;
+  restaurantAddress?: string;
 }
 
-export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, loading, role, readOnly = false }: OrderTableProps) {
+export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, loading, role, readOnly = false, restaurantAddress = '' }: OrderTableProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
@@ -58,17 +58,25 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
   const componentRef = React.useRef<HTMLDivElement>(null);
   const [printingOrder, setPrintingOrder] = useState<Order | null>(null);
+  // Track whether we are ready to trigger print (after state settles)
+  const shouldPrintRef = useRef(false);
 
   const handlePrintAction = useReactToPrint({
     contentRef: componentRef,
     onAfterPrint: () => setPrintingOrder(null)
   });
 
-  const handlePrint = (order: Order) => {
-    setPrintingOrder(order);
-    setTimeout(() => {
+  // Trigger print only after printingOrder state has settled in the DOM
+  useEffect(() => {
+    if (printingOrder && shouldPrintRef.current) {
+      shouldPrintRef.current = false;
       handlePrintAction();
-    }, 100);
+    }
+  }, [printingOrder, handlePrintAction]);
+
+  const handlePrint = (order: Order) => {
+    shouldPrintRef.current = true;
+    setPrintingOrder(order);
   };
 
   const toggleExpand = (orderId: string) => {
@@ -80,8 +88,12 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
     setUpdatingId(orderId + '-status');
-    await onUpdateStatus(orderId, nextStatus);
+    const success = await onUpdateStatus(orderId, nextStatus);
     setUpdatingId(null);
+    if (!success) {
+      // Browser-level fallback alert since toast is not imported here
+      console.error(`Failed to update order ${orderId} status to ${nextStatus}`);
+    }
   };
 
   const handlePaymentToggle = async (orderId: string, currentPaid: boolean) => {
@@ -90,8 +102,11 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       return;
     }
     setUpdatingId(orderId + '-payment');
-    await onUpdatePayment(orderId, !currentPaid);
+    const success = await onUpdatePayment(orderId, !currentPaid);
     setUpdatingId(null);
+    if (!success) {
+      console.error(`Failed to update payment status for order ${orderId}`);
+    }
   };
 
   // Filter orders based on status tab and search text
@@ -104,7 +119,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     const matchesSearch = 
       safeName.toLowerCase().includes(searchQuery.toLowerCase()) || 
       safePhone.includes(searchQuery) ||
-      safeCode.toLowerCase().includes(searchQuery.toLowerCase());
+      safeCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.source || 'whatsapp').toLowerCase().includes(searchQuery.toLowerCase());
       
     return matchesStatus && matchesSearch;
   });
@@ -439,11 +455,20 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                             {formatOrderCode(order.order_code)}
                           </span>
                         )}
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                          order.source === 'waiter' 
+                            ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border border-blue-250 dark:border-blue-850/40' 
+                            : order.source === 'caja'
+                            ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-250 dark:border-amber-850/40'
+                            : 'bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-250 dark:border-green-850/40'
+                        }`}>
+                          {order.source === 'waiter' ? 'Camarero' : order.source === 'caja' ? 'Caja' : 'WhatsApp'}
+                        </span>
                         
                         {/* Order Type Badge */}
                         {order.type === 'delivery' && order.delivery_address ? (
                           <a 
-                            href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('Avenida Bolívar 396 y las gradas, Tulcán')}&destination=${encodeURIComponent(getMapDestination(order.delivery_address))}`}
+                            href={`https://www.google.com/maps/dir/?api=1${restaurantAddress ? `&origin=${encodeURIComponent(restaurantAddress)}` : ''}&destination=${encodeURIComponent(getMapDestination(order.delivery_address))}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -609,7 +634,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                           </p>
                           {order.type === 'delivery' && order.delivery_address && (
                             <a
-                              href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('Avenida Bolívar 396 y las gradas, Tulcán')}&destination=${encodeURIComponent(order.delivery_address)}`}
+                              href={`https://www.google.com/maps/dir/?api=1${restaurantAddress ? `&origin=${encodeURIComponent(restaurantAddress)}` : ''}&destination=${encodeURIComponent(order.delivery_address)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 mt-2 ml-6 text-[10px] bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-450 border border-emerald-200 dark:border-emerald-800/30 px-2.5 py-1 rounded-lg transition-all font-medium cursor-pointer"

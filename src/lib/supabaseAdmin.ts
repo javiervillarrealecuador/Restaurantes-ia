@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Admin client for server-side API/webhook execution (bypasses RLS using Service Role Key)
+// Env vars are validated at module load time to surface misconfiguration immediately.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://firophcgqwhmhztgcxqi.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('Warning: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set in environment variables.');
+if (!supabaseServiceKey) {
+  // This is a fatal misconfiguration: all admin API routes will silently fail without it.
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is required but not set.');
 }
 
-// Admin client for server-side API/webhook execution (bypasses RLS using Service Role Key)
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     persistSession: false,

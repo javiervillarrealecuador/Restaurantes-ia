@@ -379,6 +379,21 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       }
     });
 
+    // Group by Channel/Source
+    const sourceDistribution = {
+      whatsapp: { label: 'WhatsApp', count: 0, sales: 0 },
+      waiter: { label: 'Camarero', count: 0, sales: 0 },
+      caja: { label: 'Caja', count: 0, sales: 0 }
+    };
+    filteredOrders.forEach(order => {
+      if (order.status === 'cancelled') return;
+      const src = order.source || 'whatsapp';
+      if (sourceDistribution[src]) {
+        sourceDistribution[src].count += 1;
+        sourceDistribution[src].sales += Number(order.total_price);
+      }
+    });
+
     // 4. Top Selling Products
     const productStats: Record<string, { name: string, qty: number, sales: number }> = {};
     filteredItems.forEach(item => {
@@ -418,6 +433,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       salesByHour,
       ordersByHour,
       typeDistribution,
+      sourceDistribution,
       topProducts,
       categoryStats
     };
@@ -441,6 +457,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
         'Cliente': o.customer_name,
         'Teléfono': o.customer_phone,
         'Tipo de Entrega': o.type === 'dine_in' ? 'Mesa' : o.type === 'delivery' ? 'Domicilio' : 'Llevar',
+        'Canal/Origen': (o.source || 'whatsapp').toUpperCase(),
         'Estado': o.status.toUpperCase(),
         'Mesa': o.table_number || '',
         'Dirección Entrega': o.delivery_address || '',
@@ -506,6 +523,28 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       { id: 'dine_in', label: 'Mesa', color: '#ec4899', sales: dist.dine_in.sales, pct: dist.dine_in.sales / totalSales },
       { id: 'delivery', label: 'Domicilio', color: '#10b981', sales: dist.delivery.sales, pct: dist.delivery.sales / totalSales },
       { id: 'pickup', label: 'Llevar', color: '#3b82f6', sales: dist.pickup.sales, pct: dist.pickup.sales / totalSales },
+    ].map(seg => {
+      const strokeDashoffset = 100 - (seg.pct * 100);
+      const rotation = currentPercent * 360;
+      currentPercent += seg.pct;
+      return { ...seg, strokeDashoffset, rotation };
+    });
+  };
+
+  // Helper calculation for source donut path
+  const getSourceDonutSegments = () => {
+    const dist = reportStats.sourceDistribution || {
+      whatsapp: { label: 'WhatsApp', count: 0, sales: 0 },
+      waiter: { label: 'Camarero', count: 0, sales: 0 },
+      caja: { label: 'Caja', count: 0, sales: 0 }
+    };
+    const totalSales = (dist.whatsapp.sales + dist.waiter.sales + dist.caja.sales) || 1;
+    
+    let currentPercent = 0;
+    return [
+      { id: 'whatsapp', label: 'WhatsApp', color: '#10b981', sales: dist.whatsapp.sales, pct: dist.whatsapp.sales / totalSales },
+      { id: 'waiter', label: 'Camarero', color: '#3b82f6', sales: dist.waiter.sales, pct: dist.waiter.sales / totalSales },
+      { id: 'caja', label: 'Caja', color: '#f59e0b', sales: dist.caja.sales, pct: dist.caja.sales / totalSales },
     ].map(seg => {
       const strokeDashoffset = 100 - (seg.pct * 100);
       const rotation = currentPercent * 360;
@@ -691,10 +730,10 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
             </div>
           </div>
             {/* Collapsible Accordion Filters (Order Types, Statuses, Catalog Categories/Products) */}
-        <div className="border-t border-zinc-200 dark:border-zinc-800/60 pt-3 flex flex-wrap gap-2 text-xs">
+        <div className="border-t border-zinc-200 dark:border-zinc-800/60 pt-3 flex overflow-x-auto pb-2 gap-2 text-xs [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           
           {/* Order types toggle dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'types' ? null : 'types')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
@@ -729,7 +768,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           </div>
 
           {/* Order statuses toggle dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'statuses' ? null : 'statuses')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
@@ -768,7 +807,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           </div>
 
           {/* Menu Categories toggle dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'cats' ? null : 'cats')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
@@ -805,7 +844,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           </div>
 
           {/* Menu Items / Products toggle dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setOpenFilterSec(openFilterSec === 'prods' ? null : 'prods')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
@@ -977,7 +1016,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
       </section>
 
       {/* 4. CHARTS SECTION */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* Sales trend Area chart */}
         <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl lg:col-span-2 space-y-4">
@@ -1083,7 +1122,7 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
           <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
             <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
               <Coffee className="h-4 w-4 text-emerald-500" />
-              Canales de Distribución (Ventas)
+              Canales de Distribución
             </h4>
             <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Porcentaje total</span>
           </div>
@@ -1128,6 +1167,72 @@ export default function ReportsPanel({ orders, loading, restaurantId }: ReportsP
                 {/* Donut Legend */}
                 <div className="space-y-2 text-xs">
                   {getDonutSegments().map(seg => (
+                    <div key={seg.id} className="flex items-start gap-2">
+                      <span className="h-3 w-3 rounded-md shrink-0 mt-0.5" style={{ backgroundColor: seg.color }} />
+                      <div>
+                        <p className="font-bold text-zinc-700 dark:text-zinc-200 leading-tight">{seg.label}</p>
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                          ${seg.sales.toFixed(2)} ({Math.round(seg.pct * 100)}%)
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Order Source Distribution Donut chart */}
+        <div className="bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200 dark:border-zinc-800/30 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/60 pb-2">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+              <ShoppingBag className="h-4 w-4 text-emerald-500" />
+              Canales / Origen de Pedidos
+            </h4>
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Porcentaje ventas</span>
+          </div>
+
+          <div className="flex flex-col items-center justify-center py-2">
+            {reportStats.totalRevenue === 0 ? (
+              <div className="h-40 flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
+                No hay ventas para calcular origen.
+              </div>
+            ) : (
+              <div className="flex items-center justify-around w-full gap-2">
+                {/* SVG Donut */}
+                <div className="relative h-32 w-32 shrink-0">
+                  <svg viewBox="0 0 36 36" className="h-full w-full">
+                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="currentColor" className="text-zinc-150 dark:text-zinc-900" strokeWidth="3" />
+                    
+                    {getSourceDonutSegments().map((seg) => {
+                      if (seg.pct === 0) return null;
+                      return (
+                        <circle 
+                          key={seg.id}
+                          cx="18" 
+                          cy="18" 
+                          r="15.915" 
+                          fill="none" 
+                          stroke={seg.color} 
+                          strokeWidth="3.2" 
+                          strokeDasharray={`${seg.pct * 100} ${100 - (seg.pct * 100)}`}
+                          strokeDashoffset={seg.strokeDashoffset}
+                          transform={`rotate(${seg.rotation - 90} 18 18)`}
+                          className="transition-all duration-300 hover:stroke-[3.8]"
+                        />
+                      );
+                    })}
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest leading-none">Canales</span>
+                    <span className="text-sm font-black text-zinc-800 dark:text-zinc-150 mt-1">${reportStats.totalRevenue.toFixed(0)}</span>
+                  </div>
+                </div>
+
+                {/* Donut Legend */}
+                <div className="space-y-2 text-xs">
+                  {getSourceDonutSegments().map(seg => (
                     <div key={seg.id} className="flex items-start gap-2">
                       <span className="h-3 w-3 rounded-md shrink-0 mt-0.5" style={{ backgroundColor: seg.color }} />
                       <div>

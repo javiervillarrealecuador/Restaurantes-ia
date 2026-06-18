@@ -5,13 +5,8 @@ import {
   Send, 
   Smartphone, 
   User, 
-  Clock, 
-  Check, 
   CheckCheck, 
-  AlertCircle, 
   Image as ImageIcon, 
-  HelpCircle,
-  Copy,
   Info
 } from 'lucide-react';
 
@@ -28,7 +23,7 @@ interface ChatMessage {
   imageUrl?: string;
 }
 
-export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
+export default function SimulatorPanel({}: SimulatorPanelProps) {
   // Simulator configurations
   const [senderName, setSenderName] = useState('María López');
   const [senderPhone, setSenderPhone] = useState('593987654322');
@@ -47,7 +42,6 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
   
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -66,7 +60,6 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
   const sendMessage = async (text: string, type: 'text' | 'image' = 'text', customImgUrl?: string) => {
     if (type === 'text' && !text.trim()) return;
 
-    setErrorText(null);
     const msgId = 'TEST_MSG_' + Math.random().toString(36).substring(2, 11).toUpperCase();
     const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -173,7 +166,6 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
       const fetchErr = err as Error;
       setIsTyping(false);
       console.error('Webhook simulation error:', fetchErr);
-      setErrorText('Error al enviar el webhook al servidor local. Revisa la consola.');
       
       const errMsg: ChatMessage = {
         id: 'ERR_REPLY_' + Math.random().toString(36).substring(2, 10).toUpperCase(),

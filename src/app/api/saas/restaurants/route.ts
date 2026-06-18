@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 async function verifySuperAdmin(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return null;
-  const token = authHeader.replace('Bearer ', '');
+  const token = authHeader.replace(/^Bearer\s+/i, '');
 
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return null;
@@ -116,9 +116,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, restaurants: restaurantsWithStats });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error('Error fetching restaurants stats:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -230,8 +231,9 @@ export async function POST(req: NextRequest) {
       restaurant
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error('Error registering new restaurant:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }
