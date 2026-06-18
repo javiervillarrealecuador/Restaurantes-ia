@@ -78,6 +78,10 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(i
 -- Agregar branch_id a personal
 ALTER TABLE restaurant_staff ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id) ON DELETE SET NULL;
 
+-- Actualizar constraint de roles en el personal para permitir 'camarero'
+ALTER TABLE restaurant_staff DROP CONSTRAINT IF EXISTS chk_restaurant_staff_role;
+ALTER TABLE restaurant_staff ADD CONSTRAINT chk_restaurant_staff_role CHECK (role::text IN ('admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero'));
+
 -- Agregar control del bot en clientes (Handoff a humano)
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS bot_active BOOLEAN DEFAULT TRUE NOT NULL;
 
