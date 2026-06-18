@@ -2933,30 +2933,29 @@ export default function Dashboard() {
 
                       {/* Visual Table showing stored signature details */}
                       <div className="mt-4 border border-zinc-900 rounded-xl overflow-hidden bg-zinc-950/20 max-w-2xl">
-  <table className="w-full text-left border-collapse">
-    <thead>
-      <tr className="bg-zinc-900/60 border-b border-zinc-800 text-[10px] text-zinc-400">
-        <th className="p-2">Razón Social</th>
-        <th className="p-2">Expira</th>
-        <th className="p-2">Activa</th>
-        <th className="p-2">Acciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      {sriFirmas.map(firma => (
-        <tr key={firma.id} className="border-b border-zinc-800 hover:bg-zinc-900/30">
-          <td className="p-2">{firma.razon_social}</td>
-          <td className="p-2">{firma.expiracion ? new Date(firma.expiracion).toLocaleDateString() : '-'}</td>
-          <td className="p-2">{firma.esta_activa ? 'Sí' : 'No'}</td>
-          <td className="p-2 flex gap-2">
-            <button onClick={() => handleActivateSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded">Activar</button>
-            <button onClick={() => handleDeleteSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded">Eliminar</button>
-          </td>
-        </tr>
-      ))}
-    </tbody>
-  </table>
-</div>
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-zinc-900/60 border-b border-zinc-800 text-[10px] text-zinc-400">
+                              <th className="p-2">Razón Social</th>
+                              <th className="p-2">Expira</th>
+                              <th className="p-2">Activa</th>
+                              <th className="p-2">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sriFirmas.map(firma => (
+                              <tr key={firma.id} className="border-b border-zinc-800 hover:bg-zinc-900/30">
+                                <td className="p-2">{firma.razon_social}</td>
+                                <td className="p-2">{firma.expiracion ? new Date(firma.expiracion).toLocaleDateString() : '-'}</td>
+                                <td className="p-2">{firma.esta_activa ? 'Sí' : 'No'}</td>
+                                <td className="p-2 flex gap-2">
+                                  <button onClick={() => handleActivateSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded">Activar</button>
+                                  <button onClick={() => handleDeleteSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded">Eliminar</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
