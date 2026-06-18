@@ -126,12 +126,24 @@ export default function KitchenDisplay({ orders, onUpdateStatus }: KitchenDispla
                     <div className="flex gap-2">
                       <span className="font-bold text-gray-900 dark:text-white">{item.quantity}x</span>
                       <div>
-                        <span className="text-gray-800 dark:text-gray-200 font-medium">
+                        <span className="text-gray-800 dark:text-gray-200 font-bold block">
                           {item.menu_items?.name || 'Item Desconocido'}
                         </span>
+                        {item.selected_modifiers && item.selected_modifiers.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {item.selected_modifiers.map((mod: any, mIdx: number) => (
+                              <span 
+                                key={mIdx} 
+                                className="text-[10px] font-extrabold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 px-2 py-0.5 rounded tracking-wide border border-amber-200/20"
+                              >
+                                + {mod.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {item.notes && (
-                          <p className="text-sm text-red-600 dark:text-red-400 font-semibold mt-0.5 flex items-start gap-1">
-                            <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                          <p className="text-sm text-red-600 dark:text-red-400 font-semibold mt-1 flex items-start gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                             {item.notes}
                           </p>
                         )}

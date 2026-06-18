@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MenuItem, MenuCategory, Branch } from '@/types';
+import { MenuItem, MenuCategory, Branch, MenuModifier, RestaurantTable } from '@/types';
 import { toast } from 'sonner';
 import { 
   Search, 
@@ -30,6 +30,7 @@ interface CartItem {
   menuItem: MenuItem;
   quantity: number;
   notes: string;
+  selectedModifiers?: MenuModifier[];
 }
 
 export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrderPanelProps) {
@@ -52,9 +53,70 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [generalNotes, setGeneralNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
 
-  // Cart
+  // Cart & Modifiers
   const [cart, setCart] = useState<CartItem[]>([]);
   const [editingItemNotes, setEditingItemNotes] = useState<{ index: number; value: string } | null>(null);
+
+  // New states for Phase 4
+  const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [allModifiers, setAllModifiers] = useState<MenuModifier[]>([]);
+  const [activeOrder, setActiveOrder] = useState<any | null>(null);
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  const [selectedModifiers, setSelectedModifiers] = useState<MenuModifier[]>([]);
+  const [customizingNotes, setCustomizingNotes] = useState('');
+  const [seeding, setSeeding] = useState(false);
+  const [loadingActiveOrder, setLoadingActiveOrder] = useState(false);
+
+  // Audio synthesizer for ding-dong notification
+  const playReadyChime = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      gain1.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.35);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+      gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.55);
+      osc2.start(ctx.currentTime + 0.12);
+      osc2.stop(ctx.currentTime + 0.55);
+    } catch (e) {
+      console.error('Audio play failed:', e);
+    }
+  };
+
+  const fetchTables = async () => {
+    if (!selectedBranchId) return;
+    try {
+      const { data, error } = await supabase
+        .from('restaurant_tables')
+        .select('*')
+        .eq('branch_id', selectedBranchId)
+        .order('table_number', { ascending: true });
+      if (error) throw error;
+      setTables(data || []);
+    } catch (err) {
+      console.error('Error fetching tables:', err);
+    }
+  };
 
   // Fetch branches, categories, menu items, and relationships
   useEffect(() => {
@@ -73,11 +135,14 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         setBranches(activeBranches);
 
         // Set default branch
-        if (activeBranchId) {
-          setSelectedBranchId(activeBranchId);
+        const existsActive = activeBranchId ? activeBranches.some((b: any) => b.id === activeBranchId) : false;
+        let defaultBranchId = '';
+        if (existsActive && activeBranchId) {
+          defaultBranchId = activeBranchId;
         } else if (activeBranches.length > 0) {
-          setSelectedBranchId(activeBranches[0].id);
+          defaultBranchId = activeBranches[0].id;
         }
+        setSelectedBranchId(defaultBranchId);
 
         // 2. Fetch categories
         const { data: catData } = await supabase
@@ -108,6 +173,12 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           .select('*');
         setItemBranches(relationData || []);
 
+        // 5. Fetch modifiers
+        const { data: modifierData } = await supabase
+          .from('menu_modifiers')
+          .select('*');
+        setAllModifiers(modifierData || []);
+
       } catch (err) {
         console.error('Error loading order panel data:', err);
         toast.error('Error al cargar la carta o sucursales.');
@@ -117,6 +188,66 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     }
     loadData();
   }, [restaurantId, activeBranchId]);
+
+  // Load tables when selected branch changes
+  useEffect(() => {
+    if (selectedBranchId) {
+      fetchTables();
+    }
+  }, [selectedBranchId]);
+
+  // Realtime subscriptions for ready orders and floor plan changes
+  useEffect(() => {
+    if (!selectedBranchId) return;
+
+    // Listen for order updates (cooked/ready status notifications)
+    const orderChannel = supabase
+      .channel(`order-ready-branch-${selectedBranchId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `branch_id=eq.${selectedBranchId}`
+        },
+        (payload) => {
+          const newOrder = payload.new as any;
+          const oldOrder = payload.old as any;
+          if (newOrder.status === 'ready' && oldOrder.status !== 'ready') {
+            playReadyChime();
+            toast.success(`🛎️ ¡Mesa ${newOrder.table_number || 'S/M'}: Pedido #${newOrder.order_number} está listo!`, {
+              duration: 10000,
+              description: 'Retirar de cocina y servir al cliente.',
+            });
+            fetchTables();
+          }
+        }
+      )
+      .subscribe();
+
+    // Listen for table status updates to keep the visual grid synced
+    const tableChannel = supabase
+      .channel(`tables-branch-${selectedBranchId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'restaurant_tables',
+          filter: `branch_id=eq.${selectedBranchId}`
+        },
+        () => {
+          fetchTables();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(orderChannel);
+      supabase.removeChannel(tableChannel);
+    };
+  }, [selectedBranchId]);
 
   // Filter items based on selected branch and category & search query
   const filteredItems = menuItems.filter(item => {
@@ -144,32 +275,175 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     return true;
   });
 
-  // Cart Handlers
-  const addToCart = (item: MenuItem) => {
-    setCart(prev => {
-      const existing = prev.find(i => i.menuItem.id === item.id);
-      if (existing) {
-        return prev.map(i => i.menuItem.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, { menuItem: item, quantity: 1, notes: '' }];
-    });
-    toast.success(`${item.name} agregado al pedido`);
+  // Table Seeding Handler
+  const handleSeedTables = async () => {
+    if (!selectedBranchId || !restaurantId) return;
+    setSeeding(true);
+    try {
+      const defaultTables = Array.from({ length: 12 }, (_, i) => ({
+        restaurant_id: restaurantId,
+        branch_id: selectedBranchId,
+        table_number: `${i + 1}`,
+        status: 'free',
+        x_pos: (i % 4) + 1,
+        y_pos: Math.floor(i / 4) + 1,
+      }));
+      const { error } = await supabase.from('restaurant_tables').insert(defaultTables);
+      if (error) throw error;
+      toast.success('¡12 mesas inicializadas con éxito!');
+      fetchTables();
+    } catch (err: any) {
+      console.error('Error seeding tables:', err);
+      toast.error('Error al inicializar mesas: ' + err.message);
+    } finally {
+      setSeeding(false);
+    }
   };
 
-  const updateQuantity = (itemId: string, delta: number) => {
+  // Table Selection Handler
+  const handleSelectTable = async (table: RestaurantTable) => {
+    setTableNumber(table.table_number);
+    if (table.status === 'occupied' || table.status === 'payment_requested') {
+      if (table.current_order_id) {
+        setLoadingActiveOrder(true);
+        try {
+          const { data, error } = await supabase
+            .from('orders')
+            .select('*, order_items(*, menu_items(*))')
+            .eq('id', table.current_order_id)
+            .single();
+          if (error) throw error;
+          
+          setActiveOrder(data);
+          setCustomerName(data.customer_name || '');
+          setCustomerPhone(data.customer_phone || '');
+          setPaymentMethod(data.payment_method || 'cash');
+          setCart([]); // Reset new items
+        } catch (err) {
+          console.error('Error loading active order:', err);
+          toast.error('Error al cargar los platos activos de la mesa.');
+        } finally {
+          setLoadingActiveOrder(false);
+        }
+      } else {
+        setActiveOrder(null);
+        setCart([]);
+      }
+    } else {
+      setActiveOrder(null);
+      setCart([]);
+    }
+  };
+
+  // Request Bill Handler
+  const handleRequestBill = async () => {
+    if (!activeOrder || !tableNumber || !selectedBranchId) return;
+    try {
+      const { error } = await supabase
+        .from('restaurant_tables')
+        .update({ status: 'payment_requested' })
+        .eq('branch_id', selectedBranchId)
+        .eq('table_number', tableNumber);
+      if (error) throw error;
+      toast.success(`¡Cuenta solicitada para Mesa ${tableNumber}!`);
+      fetchTables();
+      setActiveOrder((prev: any) => prev ? { ...prev, status: 'payment_requested' } : null);
+    } catch (err) {
+      console.error('Error requesting bill:', err);
+      toast.error('Error al solicitar la cuenta.');
+    }
+  };
+
+  // Cart Modifiers Handlers
+  const handleAddToCartClick = (item: MenuItem) => {
+    if (!tableNumber) {
+      toast.error('Por favor selecciona una mesa del plano antes de agregar platos.');
+      return;
+    }
+    const itemModifiers = allModifiers.filter(m => m.menu_item_id === item.id);
+    if (itemModifiers.length > 0) {
+      setCustomizingItem(item);
+      setCustomizingNotes('');
+      setSelectedModifiers([]);
+    } else {
+      setCart(prev => {
+        const existing = prev.find(i => i.menuItem.id === item.id && (!i.selectedModifiers || i.selectedModifiers.length === 0));
+        if (existing) {
+          return prev.map(i => i.menuItem.id === item.id && (!i.selectedModifiers || i.selectedModifiers.length === 0) 
+            ? { ...i, quantity: i.quantity + 1 } : i);
+        }
+        return [...prev, { menuItem: item, quantity: 1, notes: '', selectedModifiers: [] }];
+      });
+      toast.success(`${item.name} agregado al pedido`);
+    }
+  };
+
+  const handleConfirmCustomization = () => {
+    if (!customizingItem) return;
+
+    const itemModifiers = allModifiers.filter(m => m.menu_item_id === customizingItem.id);
+    const requiredModifiers = itemModifiers.filter(m => m.is_required);
+    const missingRequired = requiredModifiers.filter(req => !selectedModifiers.some(sel => sel.id === req.id));
+
+    if (missingRequired.length > 0) {
+      toast.error(`Opciones obligatorias faltantes: ${missingRequired.map(m => m.name).join(', ')}`);
+      return;
+    }
+
+    setCart(prev => {
+      const existingIndex = prev.findIndex(i => {
+        if (i.menuItem.id !== customizingItem.id) return false;
+        if ((i.selectedModifiers?.length || 0) !== selectedModifiers.length) return false;
+        const selIds = selectedModifiers.map(m => m.id).sort();
+        const existingIds = (i.selectedModifiers || []).map(m => m.id).sort();
+        return selIds.every((id, index) => id === existingIds[index]);
+      });
+
+      if (existingIndex > -1) {
+        return prev.map((item, idx) => idx === existingIndex 
+          ? { ...item, quantity: item.quantity + 1, notes: customizingNotes.trim() || item.notes } : item);
+      }
+
+      return [...prev, {
+        menuItem: customizingItem,
+        quantity: 1,
+        notes: customizingNotes.trim(),
+        selectedModifiers: [...selectedModifiers]
+      }];
+    });
+
+    toast.success(`${customizingItem.name} (personalizado) agregado`);
+    setCustomizingItem(null);
+    setSelectedModifiers([]);
+    setCustomizingNotes('');
+  };
+
+  const updateQuantity = (itemId: string, delta: number, itemModifiers?: MenuModifier[]) => {
     setCart(prev => {
       return prev.map(i => {
         if (i.menuItem.id === itemId) {
-          const newQty = i.quantity + delta;
-          return newQty > 0 ? { ...i, quantity: newQty } : i;
+          // Verify matching modifiers config to target the correct row
+          const m1 = (itemModifiers || []).map(m => m.id).sort();
+          const m2 = (i.selectedModifiers || []).map(m => m.id).sort();
+          const matches = m1.length === m2.length && m1.every((val, index) => val === m2[index]);
+          if (matches) {
+            const newQty = i.quantity + delta;
+            return newQty > 0 ? { ...i, quantity: newQty } : i;
+          }
         }
         return i;
       }).filter(i => i.quantity > 0);
     });
   };
 
-  const removeFromCart = (itemId: string) => {
-    setCart(prev => prev.filter(i => i.menuItem.id !== itemId));
+  const removeFromCart = (itemId: string, itemModifiers?: MenuModifier[]) => {
+    setCart(prev => prev.filter(i => {
+      if (i.menuItem.id !== itemId) return true;
+      const m1 = (itemModifiers || []).map(m => m.id).sort();
+      const m2 = (i.selectedModifiers || []).map(m => m.id).sort();
+      const matches = m1.length === m2.length && m1.every((val, index) => val === m2[index]);
+      return !matches;
+    }));
     toast.error('Item eliminado del pedido');
   };
 
@@ -178,7 +452,10 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   };
 
   // Calculations
-  const subtotal = cart.reduce((acc, curr) => acc + (curr.menuItem.price * curr.quantity), 0);
+  const subtotal = cart.reduce((acc, curr) => {
+    const itemModifiersPrice = curr.selectedModifiers?.reduce((sum, m) => sum + Number(m.price), 0) || 0;
+    return acc + ((Number(curr.menuItem.price) + itemModifiersPrice) * curr.quantity);
+  }, 0);
   const tax = Number((subtotal * 0.10).toFixed(2));
   const total = Number((subtotal + tax).toFixed(2));
 
@@ -189,80 +466,131 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       return;
     }
     if (!tableNumber) {
-      toast.error('Por favor ingresa el número de mesa.');
+      toast.error('Por favor selecciona una mesa.');
       return;
     }
-    if (!selectedBranchId) {
+    if (branches.length > 0 && !selectedBranchId) {
       toast.error('Por favor selecciona una sucursal.');
       return;
     }
 
     setSubmitting(true);
     try {
-      // 1. Generate Order Code
-      const randSeq = String(Math.floor(100000 + Math.random() * 900000));
-      const orderCode = `MES-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randSeq}`;
+      if (activeOrder) {
+        // Appending new items to existing order
+        const newItemsToInsert = cart.map(item => ({
+          order_id: activeOrder.id,
+          menu_item_id: item.menuItem.id,
+          quantity: item.quantity,
+          unit_price: item.menuItem.price,
+          notes: item.notes.trim() || null,
+          selected_modifiers: item.selectedModifiers ? item.selectedModifiers.map(m => ({ name: m.name, price: Number(m.price) })) : []
+        }));
 
-      const nameFinal = customerName.trim() || `Mesa ${tableNumber}`;
-      const phoneFinal = customerPhone.trim() || '0999999999';
+        const { error: itemsErr } = await supabase
+          .from('order_items')
+          .insert(newItemsToInsert);
 
-      // 2. Insert Order Parent
-      const { data: order, error: orderErr } = await supabase
-        .from('orders')
-        .insert({
-          restaurant_id: restaurantId,
-          branch_id: selectedBranchId,
-          status: 'pending',
-          type: 'dine_in',
-          source: 'waiter',
-          customer_name: nameFinal,
-          customer_phone: phoneFinal,
-          table_number: tableNumber,
-          notes: generalNotes.trim() || null,
-          subtotal,
-          tax,
-          delivery_fee: 0.00,
-          total_price: total,
-          payment_method: paymentMethod,
-          is_paid: false
-        })
-        .select('id')
-        .single();
+        if (itemsErr) throw itemsErr;
 
-      if (orderErr) throw orderErr;
+        const updatedSubtotal = Number(activeOrder.subtotal) + subtotal;
+        const updatedTax = Number(activeOrder.tax) + tax;
+        const updatedTotal = Number(activeOrder.total_price) + total;
 
-      // 3. Insert Order Items
-      const orderItemsToInsert = cart.map(item => ({
-        order_id: order.id,
-        menu_item_id: item.menuItem.id,
-        quantity: item.quantity,
-        unit_price: item.menuItem.price,
-        notes: item.notes.trim() || null
-      }));
+        const { error: orderUpdateErr } = await supabase
+          .from('orders')
+          .update({
+            subtotal: updatedSubtotal,
+            tax: updatedTax,
+            total_price: updatedTotal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', activeOrder.id);
 
-      const { error: itemsErr } = await supabase
-        .from('order_items')
-        .insert(orderItemsToInsert);
+        if (orderUpdateErr) throw orderUpdateErr;
 
-      if (itemsErr) throw itemsErr;
+        // Restore table back to 'occupied' status in case it was 'payment_requested'
+        await supabase
+          .from('restaurant_tables')
+          .update({ status: 'occupied' })
+          .eq('branch_id', selectedBranchId)
+          .eq('table_number', tableNumber);
 
-      // Success
-      toast.success('¡Pedido creado con éxito y enviado a cocina!');
-      
-      // Reset Form
-      setCart([]);
-      setTableNumber('');
-      setCustomerName('');
-      setCustomerPhone('');
-      setGeneralNotes('');
-      
-      // Reproducir sonido de confirmación nativo (opcional)
-      try {
-        const audio = new Audio('/sounds/confirm.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
-      } catch (e) {}
+        toast.success('¡Platos adicionales enviados a cocina!');
+        
+        setCart([]);
+        setActiveOrder(null);
+        setTableNumber('');
+        setCustomerName('');
+        setCustomerPhone('');
+        setGeneralNotes('');
+        fetchTables();
+      } else {
+        // Creating a new order
+        const randSeq = String(Math.floor(100000 + Math.random() * 900000));
+        const orderCode = `MES-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randSeq}`;
 
+        const nameFinal = customerName.trim() || `Mesa ${tableNumber}`;
+        const phoneFinal = customerPhone.trim() || '0999999999';
+
+        const { data: order, error: orderErr } = await supabase
+          .from('orders')
+          .insert({
+            restaurant_id: restaurantId,
+            branch_id: selectedBranchId,
+            status: 'pending',
+            type: 'dine_in',
+            source: 'waiter',
+            customer_name: nameFinal,
+            customer_phone: phoneFinal,
+            table_number: tableNumber,
+            notes: generalNotes.trim() || null,
+            subtotal,
+            tax,
+            delivery_fee: 0.00,
+            total_price: total,
+            payment_method: paymentMethod,
+            is_paid: false
+          })
+          .select('id')
+          .single();
+
+        if (orderErr) throw orderErr;
+
+        const orderItemsToInsert = cart.map(item => ({
+          order_id: order.id,
+          menu_item_id: item.menuItem.id,
+          quantity: item.quantity,
+          unit_price: item.menuItem.price,
+          notes: item.notes.trim() || null,
+          selected_modifiers: item.selectedModifiers ? item.selectedModifiers.map(m => ({ name: m.name, price: Number(m.price) })) : []
+        }));
+
+        const { error: itemsErr } = await supabase
+          .from('order_items')
+          .insert(orderItemsToInsert);
+
+        if (itemsErr) throw itemsErr;
+
+        // Update table relation
+        await supabase
+          .from('restaurant_tables')
+          .update({
+            status: 'occupied',
+            current_order_id: order.id
+          })
+          .eq('branch_id', selectedBranchId)
+          .eq('table_number', tableNumber);
+
+        toast.success('¡Pedido creado con éxito y enviado a cocina!');
+        
+        setCart([]);
+        setTableNumber('');
+        setCustomerName('');
+        setCustomerPhone('');
+        setGeneralNotes('');
+        fetchTables();
+      }
     } catch (err) {
       console.error('Error creating waiter order:', err);
       toast.error('Error al registrar el pedido. Intenta de nuevo.');
@@ -275,18 +603,18 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-        <span className="text-sm text-zinc-400 font-medium">Cargando carta y sucursales...</span>
+        <span className="text-sm text-zinc-400 font-medium">Cargando carta y plano de mesas...</span>
       </div>
     );
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* LEFT: Menu Selection (8 cols) */}
+      {/* LEFT: Menu Selection & Tables (8 cols) */}
       <div className="lg:col-span-7 space-y-5">
-        {/* Branch Selector (Only if multiple branches exist or user is general admin) */}
-        {branches.length > 1 && (
-          <div className="bg-zinc-950 p-4 border border-zinc-900 rounded-3xl flex items-center justify-between gap-4">
+        {/* Branch Selector (Only if branches exist) */}
+        {branches.length > 0 && (
+          <div className="bg-zinc-950 p-4 border border-zinc-900 rounded-3xl flex items-center justify-between gap-4 animate-in fade-in duration-200">
             <div className="flex items-center gap-2.5">
               <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
                 <MapPin className="h-5 w-5" />
@@ -298,20 +626,89 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                 </span>
               </div>
             </div>
-            <select
-              value={selectedBranchId}
-              onChange={(e) => {
-                setSelectedBranchId(e.target.value);
-                setCart([]); // Clear cart when switching branch to avoid mismatch
-              }}
-              className="bg-zinc-900 border border-zinc-850 p-2.5 rounded-xl text-zinc-200 text-xs font-semibold outline-none cursor-pointer focus:border-emerald-500 transition-all"
-            >
-              {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
+            {branches.length > 1 ? (
+              <select
+                value={selectedBranchId}
+                onChange={(e) => {
+                  setSelectedBranchId(e.target.value);
+                  setCart([]);
+                  setActiveOrder(null);
+                  setTableNumber('');
+                }}
+                className="bg-zinc-900 border border-zinc-855 p-2.5 rounded-xl text-zinc-200 text-xs font-semibold outline-none cursor-pointer focus:border-emerald-500 transition-all"
+              >
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs font-bold text-zinc-500 bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-850">
+                Única sucursal
+              </span>
+            )}
           </div>
         )}
+
+        {/* Floor Plan (Tables Grid) */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
+          <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+            <div>
+              <h4 className="text-sm font-bold text-zinc-150 flex items-center gap-1.5">🍽️ Plano de Mesas</h4>
+              <p className="text-xs text-zinc-550">Selecciona una mesa para tomar o modificar pedidos</p>
+            </div>
+            {tables.length === 0 && selectedBranchId && (
+              <button
+                type="button"
+                onClick={handleSeedTables}
+                disabled={seeding}
+                className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:bg-zinc-900 disabled:text-zinc-650 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {seeding ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" /> Inicializando...
+                  </>
+                ) : (
+                  'Inicializar 12 Mesas'
+                )}
+              </button>
+            )}
+          </div>
+
+          {tables.length > 0 ? (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {tables.map(table => {
+                const isSelected = tableNumber === table.table_number;
+                const statusColors = {
+                  free: 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30',
+                  occupied: 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30',
+                  payment_requested: 'bg-amber-500/5 border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/30',
+                };
+                return (
+                  <button
+                    key={table.id}
+                    onClick={() => handleSelectTable(table)}
+                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
+                      isSelected 
+                        ? 'ring-2 ring-emerald-500 bg-zinc-900/60 border-emerald-500 scale-[1.03] shadow-lg shadow-black/40' 
+                        : ''
+                    } ${statusColors[table.status || 'free']}`}
+                  >
+                    <span className="text-xs font-bold block">Mesa {table.table_number}</span>
+                    <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-90 block">
+                      {table.status === 'free' && '🟢 Libre'}
+                      {table.status === 'occupied' && '🔴 Ocupada'}
+                      {table.status === 'payment_requested' && '🟡 Cuenta'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 text-center flex flex-col items-center justify-center gap-2 border border-dashed border-zinc-900 rounded-2xl">
+              <span className="text-xs text-zinc-650 font-medium">No hay mesas registradas en esta sucursal</span>
+            </div>
+          )}
+        </div>
 
         {/* Search & Categories */}
         <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
@@ -371,13 +768,13 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                   </div>
                   <h4 className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors">{item.name}</h4>
                   {item.description && (
-                    <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">{item.description}</p>
+                    <p className="text-xs text-zinc-550 line-clamp-2 leading-relaxed">{item.description}</p>
                   )}
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => addToCart(item)}
+                  onClick={() => handleAddToCartClick(item)}
                   className="w-full py-2 bg-zinc-900 hover:bg-emerald-600 border border-zinc-850 hover:border-emerald-500 text-zinc-200 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
                 >
                   <Plus className="h-3.5 w-3.5" /> Agregar al Pedido
@@ -388,7 +785,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             <div className="col-span-full bg-zinc-950 border border-zinc-900 rounded-3xl p-10 flex flex-col items-center justify-center text-center gap-3">
               <Coffee className="h-10 w-10 text-zinc-650" />
               <h5 className="text-sm font-bold text-zinc-300">No hay platos disponibles</h5>
-              <p className="text-xs text-zinc-500">Ningún plato coincide con tu búsqueda o categoría en esta sucursal.</p>
+              <p className="text-xs text-zinc-550">Ningún plato coincide con tu búsqueda o categoría en esta sucursal.</p>
             </div>
           )}
         </div>
@@ -408,23 +805,91 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             </div>
           </div>
 
-          {/* Table & Customer Inputs */}
+          {/* Active Order Details display if modifying an occupied table */}
+          {loadingActiveOrder ? (
+            <div className="flex items-center justify-center py-6 gap-2 bg-zinc-900/20 border border-zinc-900 rounded-2xl">
+              <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
+              <span className="text-xs text-zinc-450 font-bold">Cargando platos servidos...</span>
+            </div>
+          ) : (
+            activeOrder && (
+              <div className="bg-zinc-900/60 border border-zinc-900 p-3.5 rounded-2xl space-y-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-bold text-zinc-450 block uppercase tracking-wider">Orden Activa</span>
+                    <span className="text-xs font-extrabold text-rose-400 block">#{activeOrder.order_number} ({activeOrder.status === 'payment_requested' ? 'Cuenta pedida' : activeOrder.status})</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {activeOrder.status !== 'ready' && activeOrder.status !== 'delivered' && (
+                      <button
+                        type="button"
+                        onClick={handleRequestBill}
+                        className="px-2.5 py-1.5 bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-400 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+                      >
+                        Pedir Cuenta
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveOrder(null);
+                        setTableNumber('');
+                        setCart([]);
+                      }}
+                      className="px-2.5 py-1.5 bg-zinc-850 hover:bg-zinc-800 text-zinc-350 rounded-xl text-[10px] font-bold transition-all cursor-pointer border border-zinc-800"
+                    >
+                      Salir
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="border-t border-zinc-850 pt-2 space-y-2">
+                  <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block">Consumo Actual:</span>
+                  <div className="max-h-36 overflow-y-auto space-y-2 custom-scrollbar pr-1">
+                    {activeOrder.order_items?.map((item: any) => {
+                      const itemModifiersPrice = item.selected_modifiers?.reduce((sum: number, m: any) => sum + Number(m.price), 0) || 0;
+                      const priceWithModifiers = Number(item.unit_price) + itemModifiersPrice;
+                      return (
+                        <div key={item.id} className="flex justify-between items-start text-xs text-zinc-400 border-b border-zinc-900/30 pb-1.5">
+                          <div className="min-w-0">
+                            <span className="font-semibold block truncate text-zinc-350">{item.menu_items?.name || 'Plato'} x {item.quantity}</span>
+                            {item.selected_modifiers && item.selected_modifiers.length > 0 && (
+                              <span className="text-[10px] text-zinc-550 block truncate">
+                                + {item.selected_modifiers.map((m: any) => m.name).join(', ')}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-bold text-zinc-300 shrink-0">${(priceWithModifiers * item.quantity).toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t border-zinc-850 pt-2 flex justify-between text-xs font-bold text-zinc-300">
+                    <span>Subtotal actual:</span>
+                    <span>${activeOrder.total_price?.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* Table & Customer Info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5 text-xs">
-              <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
-                <Hash className="h-3 w-3 text-emerald-400" /> Mesa #
+              <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
+                <Hash className="h-3 w-3 text-emerald-400" /> Mesa Seleccionada
               </label>
               <input
                 type="text"
+                readOnly
                 required
-                value={tableNumber}
-                onChange={(e) => setTableNumber(e.target.value)}
-                placeholder="Ej. 5"
-                className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none font-semibold text-center text-sm"
+                value={tableNumber ? `Mesa ${tableNumber}` : ''}
+                placeholder="Selecciona del plano 🍽️"
+                className="w-full bg-zinc-900/60 border border-zinc-850 p-2.5 rounded-xl text-zinc-200 outline-none font-bold text-center text-sm cursor-not-allowed placeholder:text-zinc-650"
               />
             </div>
             <div className="space-y-1.5 text-xs">
-              <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
+              <label className="font-bold text-zinc-455 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
                 <User className="h-3 w-3 text-emerald-400" /> Cliente (Opcional)
               </label>
               <input
@@ -439,7 +904,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5 text-xs">
-              <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] ml-1">Teléfono (Opcional)</label>
+              <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1">Teléfono (Opcional)</label>
               <input
                 type="text"
                 value={customerPhone}
@@ -449,7 +914,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
               />
             </div>
             <div className="space-y-1.5 text-xs">
-              <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] ml-1">Pago</label>
+              <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1">Pago</label>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value as any)}
@@ -463,79 +928,90 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
           {/* Cart List */}
           <div className="space-y-3">
-            <span className="text-xs font-bold text-zinc-450 uppercase tracking-wider block">Items Seleccionados</span>
+            <span className="text-xs font-bold text-zinc-450 uppercase tracking-wider block">
+              {activeOrder ? 'Nuevos Platos por Agregar' : 'Items Seleccionados'}
+            </span>
             <div className="max-h-60 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar">
               {cart.length > 0 ? (
-                cart.map((item, idx) => (
-                  <div key={item.menuItem.id} className="bg-zinc-900/40 border border-zinc-850/80 p-3 rounded-2xl space-y-2 hover:border-zinc-800 transition-colors">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-zinc-200 block truncate">{item.menuItem.name}</span>
-                        <span className="text-[11px] text-zinc-500 block font-semibold">${Number(item.menuItem.price).toFixed(2)} c/u</span>
+                cart.map((item, idx) => {
+                  const itemModifiersPrice = item.selectedModifiers?.reduce((sum, m) => sum + Number(m.price), 0) || 0;
+                  const priceWithModifiers = Number(item.menuItem.price) + itemModifiersPrice;
+                  return (
+                    <div key={`${item.menuItem.id}-${idx}`} className="bg-zinc-900/40 border border-zinc-850/80 p-3 rounded-2xl space-y-2 hover:border-zinc-800 transition-colors">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-zinc-200 block truncate">{item.menuItem.name}</span>
+                          <span className="text-[11px] text-zinc-500 block font-semibold">${priceWithModifiers.toFixed(2)} c/u</span>
+                          {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                            <span className="text-[10px] text-emerald-450 block truncate font-semibold">
+                              + {item.selectedModifiers.map(m => m.name).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.menuItem.id, -1, item.selectedModifiers)}
+                            className="p-1 rounded bg-zinc-905 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 cursor-pointer"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-6 text-center text-xs font-bold text-zinc-200">{item.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.menuItem.id, 1, item.selectedModifiers)}
+                            className="p-1 rounded bg-zinc-905 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 cursor-pointer"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.menuItem.id, item.selectedModifiers)}
+                            className="p-1 ml-1 rounded bg-zinc-900 text-rose-500 hover:bg-rose-500/10 cursor-pointer border border-transparent"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.menuItem.id, -1)}
-                          className="p-1 rounded bg-zinc-905 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 cursor-pointer"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="w-6 text-center text-xs font-bold text-zinc-200">{item.quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.menuItem.id, 1)}
-                          className="p-1 rounded bg-zinc-905 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 cursor-pointer"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.menuItem.id)}
-                          className="p-1 ml-1 rounded bg-zinc-900 text-rose-500 hover:bg-rose-500/10 cursor-pointer border border-transparent"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
 
-                    {/* Item Notes */}
-                    {editingItemNotes?.index === idx ? (
-                      <div className="flex gap-1.5 items-center">
-                        <input
-                          type="text"
-                          autoFocus
-                          value={editingItemNotes.value}
-                          onChange={(e) => setEditingItemNotes(prev => prev ? { ...prev, value: e.target.value } : null)}
-                          placeholder="Ej. sin hielo, bien cocido"
-                          className="w-full bg-zinc-950 border border-zinc-850 p-1.5 rounded-lg text-zinc-300 outline-none text-[11px]"
-                        />
-                        <button
-                          onClick={() => {
-                            updateItemNotes(idx, editingItemNotes.value);
-                            setEditingItemNotes(null);
-                          }}
-                          className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 cursor-pointer"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between text-[11px] gap-2">
-                        <span className="text-zinc-550 italic truncate max-w-[200px]">
-                          {item.notes ? `Nota: "${item.notes}"` : 'Sin especificaciones'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setEditingItemNotes({ index: idx, value: item.notes })}
-                          className="text-[10px] text-emerald-450 hover:underline cursor-pointer bg-transparent border-none outline-none font-semibold shrink-0"
-                        >
-                          {item.notes ? 'Editar nota' : 'Agregar nota'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                      {/* Item Notes */}
+                      {editingItemNotes?.index === idx ? (
+                        <div className="flex gap-1.5 items-center">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingItemNotes.value}
+                            onChange={(e) => setEditingItemNotes(prev => prev ? { ...prev, value: e.target.value } : null)}
+                            placeholder="Ej. sin hielo, bien cocido"
+                            className="w-full bg-zinc-950 border border-zinc-850 p-1.5 rounded-lg text-zinc-300 outline-none text-[11px]"
+                          />
+                          <button
+                            onClick={() => {
+                              updateItemNotes(idx, editingItemNotes.value);
+                              setEditingItemNotes(null);
+                            }}
+                            className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 cursor-pointer"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-[11px] gap-2">
+                          <span className="text-zinc-550 italic truncate max-w-[200px]">
+                            {item.notes ? `Nota: "${item.notes}"` : 'Sin especificaciones'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingItemNotes({ index: idx, value: item.notes })}
+                            className="text-[10px] text-emerald-450 hover:underline cursor-pointer bg-transparent border-none outline-none font-semibold shrink-0"
+                          >
+                            {item.notes ? 'Editar nota' : 'Agregar nota'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="py-8 text-center flex flex-col items-center justify-center gap-2 border border-dashed border-zinc-900 rounded-2xl">
                   <ShoppingCart className="h-8 w-8 text-zinc-800" />
@@ -547,7 +1023,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
           {/* General Notes */}
           <div className="space-y-1.5 text-xs">
-            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
+            <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
               <Clipboard className="h-3 w-3 text-emerald-400" /> Notas Generales del Pedido
             </label>
             <textarea
@@ -562,7 +1038,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           {/* Totals */}
           <div className="border-t border-zinc-900 pt-4 space-y-2 text-xs">
             <div className="flex justify-between text-zinc-450 font-semibold">
-              <span>Subtotal:</span>
+              <span>Subtotal {activeOrder ? 'Adicionales' : ''}:</span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-zinc-450 font-semibold">
@@ -570,7 +1046,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
               <span>${tax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-zinc-150 text-sm font-bold pt-1.5 border-t border-zinc-900/50">
-              <span>Total a Pagar:</span>
+              <span>Total {activeOrder ? 'Adicionales' : 'a Pagar'}:</span>
               <span className="text-emerald-400 font-extrabold text-base">${total.toFixed(2)}</span>
             </div>
           </div>
@@ -584,7 +1060,11 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         >
           {submitting ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Registrando pedido...
+              <Loader2 className="h-4 w-4 animate-spin" /> Procesando...
+            </>
+          ) : activeOrder ? (
+            <>
+              <Check className="h-4 w-4" /> Enviar Adicionales a Cocina
             </>
           ) : (
             <>
@@ -593,6 +1073,97 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           )}
         </button>
       </div>
+
+      {/* Modifiers / Customization Modal */}
+      {customizingItem && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl relative">
+            <div>
+              <h3 className="text-base font-bold text-zinc-100">Personalizar {customizingItem.name}</h3>
+              <p className="text-xs text-zinc-555">Selecciona las opciones adicionales</p>
+            </div>
+
+            <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+              {allModifiers.filter(m => m.menu_item_id === customizingItem.id).map(mod => {
+                const isSelected = selectedModifiers.some(m => m.id === mod.id);
+                return (
+                  <button
+                    key={mod.id}
+                    onClick={() => {
+                      setSelectedModifiers(prev => {
+                        if (prev.some(m => m.id === mod.id)) {
+                          return prev.filter(m => m.id !== mod.id);
+                        } else {
+                          // Handle mutually exclusive options if allow_multiple is false
+                          if (!mod.allow_multiple) {
+                            // Flat list exclusion: exclude other modifiers with allow_multiple = false
+                            // If they want beef temp like 3/4 and well done, allow_multiple = false avoids selecting both.
+                            const otherModifiersOfItem = allModifiers.filter(m => m.menu_item_id === customizingItem.id);
+                            const activeSingleSelectIds = otherModifiersOfItem.filter(m => !m.allow_multiple).map(m => m.id);
+                            return [...prev.filter(m => !activeSingleSelectIds.includes(m.id)), mod];
+                          }
+                          return [...prev, mod];
+                        }
+                      });
+                    }}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all text-left cursor-pointer ${
+                      isSelected 
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold' 
+                        : 'bg-zinc-900/40 border-zinc-850 text-zinc-400 hover:text-zinc-250'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                        isSelected ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-zinc-750'
+                      }`}>
+                        {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                      </div>
+                      <span className="text-xs">{mod.name}</span>
+                    </div>
+                    {Number(mod.price) > 0 && (
+                      <span className="text-xs text-emerald-400 font-bold">+${Number(mod.price).toFixed(2)}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Notes */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider block ml-1">Notas especiales para este plato</label>
+              <input
+                type="text"
+                value={customizingNotes}
+                onChange={(e) => setCustomizingNotes(e.target.value)}
+                placeholder="Ej. Sin cebolla, término 3/4"
+                className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomizingItem(null);
+                  setSelectedModifiers([]);
+                  setCustomizingNotes('');
+                }}
+                className="flex-1 py-2.5 border border-zinc-850 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCustomization}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

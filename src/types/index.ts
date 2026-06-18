@@ -46,6 +46,7 @@ export interface OrderItem {
   unit_price: number;
   notes: string | null;
   menu_items?: MenuItem | null;
+  selected_modifiers?: { name: string; price: number }[] | null;
 }
 
 export interface Order {
@@ -175,4 +176,26 @@ export interface AdminAlert {
   customer_name: string | null;
   status: 'pending' | 'resolved';
   created_at: string;
+}
+
+export interface MenuModifier {
+  id: string;
+  menu_item_id: string;
+  name: string;
+  price: number;
+  is_required: boolean;
+  allow_multiple: boolean;
+  created_at?: string;
+}
+
+export interface RestaurantTable {
+  id: string;
+  restaurant_id: string;
+  branch_id: string;
+  table_number: string;
+  status: 'free' | 'occupied' | 'payment_requested';
+  current_order_id: string | null;
+  x_pos: number;
+  y_pos: number;
+  created_at?: string;
 }

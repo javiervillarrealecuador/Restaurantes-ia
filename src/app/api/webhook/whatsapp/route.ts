@@ -7,6 +7,7 @@ interface ParsedOrderItem {
   product_id: string;
   quantity: number;
   notes: string | null;
+  modifiers?: { name: string; price: number }[] | null;
 }
 
 interface ParsedOrder {
@@ -468,6 +469,12 @@ async function processMessageInBackground(
       category_name: row.menu_categories?.name || null,
     }));
 
+    // Fetch modifiers from database
+    const { data: dbModifiersData } = await supabaseAdmin
+      .from('menu_modifiers')
+      .select('*');
+    const dbModifiers = dbModifiersData || [];
+
     // --- 4. CRM & RUN AI AGENT ---
     // Fetch customer CRM data
     const { data: customerData } = await supabaseAdmin
@@ -546,6 +553,7 @@ async function processMessageInBackground(
           customerMessage, 
           customerName, 
           menuItems, 
+          dbModifiers,
           deepseekKey, 
           historyContext, 
           cartContext, 
@@ -699,25 +707,31 @@ async function processMessageInBackground(
       quantity: number;
       unit_price: number;
       notes: string | null;
+      selected_modifiers?: { name: string; price: number }[];
     }[] = [];
     const itemsDetailForMessage: string[] = [];
 
     for (const parsedItem of parsedOrder.items) {
       const dbItem = menuItems.find((item) => item.id === parsedItem.product_id);
       if (dbItem) {
-        const itemPrice = Number(dbItem.price);
+        const basePrice = Number(dbItem.price);
+        const itemModifiers = parsedItem.modifiers || [];
+        const modifiersPriceSum = itemModifiers.reduce((sum, m) => sum + Number(m.price || 0), 0);
+        const itemPrice = basePrice + modifiersPriceSum;
         const itemSubtotal = parsedItem.quantity * itemPrice;
         subtotal += itemSubtotal;
 
         orderItemsToInsert.push({
           menu_item_id: dbItem.id,
           quantity: parsedItem.quantity,
-          unit_price: itemPrice,
+          unit_price: basePrice,
           notes: parsedItem.notes || null,
+          selected_modifiers: itemModifiers.map(m => ({ name: m.name, price: Number(m.price || 0) }))
         });
 
+        const modifiersText = itemModifiers.length > 0 ? ` (+ ${itemModifiers.map(m => m.name).join(', ')})` : '';
         itemsDetailForMessage.push(
-          `- ${parsedItem.quantity}x ${dbItem.name} (${parsedItem.notes ? `Nota: ${parsedItem.notes}` : 'Sin notas'})`
+          `- ${parsedItem.quantity}x ${dbItem.name}${modifiersText} (${parsedItem.notes ? `Nota: ${parsedItem.notes}` : 'Sin notas'})`
         );
       }
     }
@@ -757,7 +771,6 @@ async function processMessageInBackground(
     const itemsWithOrderId = orderItemsToInsert.map((item) => ({
       ...item,
       order_id: order.id,
-      notes: (item as any).notes || null,
     }));
 
     const { error: itemsError } = await supabaseAdmin
@@ -937,6 +950,7 @@ async function runAIAgent(
   message: string,
   customerName: string,
   menuItems: DBMenuItem[],
+  modifiers: any[],
   apiKey: string,
   historyContext: string,
   cartContext: string,
@@ -953,9 +967,13 @@ async function runAIAgent(
 
   const menuContext = Object.entries(grouped)
     .map(([cat, items]) => {
-      const rows = items.map(
-        (i) => `    - ID:"${i.id}" | Código:"${i.code || ''}" | Nombre:"${i.name}" | Precio:$${i.price} | Desc:"${i.description || ''}"`,
-      );
+      const rows = items.map((i) => {
+        const itemModifiers = modifiers.filter(m => m.menu_item_id === i.id);
+        const modString = itemModifiers.length > 0 
+          ? ` | Opciones/Modificadores disponibles: [${itemModifiers.map(m => `"${m.name}" (+$${Number(m.price).toFixed(2)})`).join(', ')}]`
+          : '';
+        return `    - ID:"${i.id}" | Código:"${i.code || ''}" | Nombre:"${i.name}" | Precio:$${i.price} | Desc:"${i.description || ''}"${modString}`;
+      });
       return `  📂 ${cat}:\n${rows.join('\n')}`;
     })
     .join('\n\n');
@@ -999,7 +1017,14 @@ Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta
   "human_response": "Tu respuesta completa y natural para enviar al cliente por WhatsApp",
   "order": {
     "items": [
-      { "product_id": "UUID exacto del menú", "quantity": 1, "notes": null }
+      { 
+        "product_id": "UUID exacto del menú", 
+        "quantity": 1, 
+        "notes": null, 
+        "modifiers": [
+          { "name": "Nombre del modificador", "price": 0.00 }
+        ]
+      }
     ],
     "order_type": "pickup" | "delivery" | "dine_in" | null,
     "delivery_address": null,
@@ -1046,7 +1071,12 @@ REGLAS CRÍTICAS:
    - Si el cliente envía un número del 1 al 5, estrellas (⭐), o un comentario evaluativo corto (ej. "Todo rico", "Estuvo malo", "5") justo después de que se le entregó su pedido, el intent debe ser "other".
    - Tu human_response debe ser un agradecimiento muy amable por la calificación. Si la nota es baja (1-3), pide disculpas sinceramente e indica que trabajarán para mejorar. No ofrezcas ni intentes tomar un nuevo pedido en este momento.
 
-7. Siempre usa los IDs exactos del menú y sé conversacional.`;
+7. GESTIÓN DE MODIFICADORES Y PERSONALIZACIÓN DE PLATOS:
+   - Si el cliente solicita opciones adicionales, términos de carne, o extras (ej. "con extra de papas", "término medio"), y estas opciones están listadas en los "Opciones/Modificadores disponibles" del plato correspondiente, DEBES extraerlos e incluirlos en el arreglo "modifiers" con su nombre y precio exactos.
+   - Si el cliente menciona personalizaciones que NO están en la lista oficial de modificadores del plato (ej. "sin cebolla" cuando no existe esa opción con precio), colócalo en el campo "notes" del item (como nota de texto libre), en lugar de "modifiers".
+   - NUNCA inventes modificadores en el arreglo "modifiers" que no existan en la lista oficial del plato.
+
+8. Siempre usa los IDs exactos del menú y sé conversacional.`;
 
   const url = 'https://api.deepseek.com/chat/completions';
   const response = await fetch(url, {

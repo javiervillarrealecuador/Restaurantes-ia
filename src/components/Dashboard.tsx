@@ -46,7 +46,10 @@ import {
   X,
   BookOpen,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  Plus,
+  MapPin,
+  Phone
 } from 'lucide-react';
 
 const formatOrderCode = (code: string | null): string => {
@@ -131,6 +134,19 @@ export default function Dashboard() {
 
   // Map of restaurantId -> name for the restaurant switcher
   const [restaurantNames, setRestaurantNames] = useState<Record<string, string>>({});
+
+  // Branch management state
+  const [branches, setBranches] = useState<any[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [showAddBranch, setShowAddBranch] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<any | null>(null);
+
+  // Form states for branches
+  const [branchName, setBranchName] = useState('');
+  const [branchAddress, setBranchAddress] = useState('');
+  const [branchPhone, setBranchPhone] = useState('');
+  const [branchIsActive, setBranchIsActive] = useState(true);
+  const [branchSubmitting, setBranchSubmitting] = useState(false);
 
   // Load names for all accessible restaurants (for the switcher dropdown)
   useEffect(() => {
@@ -817,11 +833,30 @@ export default function Dashboard() {
     }
   }, [restaurant?.id]);
 
+  const fetchBranches = React.useCallback(async () => {
+    if (!restaurant?.id) return;
+    setBranchesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('branches')
+        .select('*')
+        .eq('restaurant_id', restaurant.id)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      setBranches(data || []);
+    } catch (err) {
+      console.error('Error fetching branches:', err);
+    } finally {
+      setBranchesLoading(false);
+    }
+  }, [restaurant?.id]);
+
   useEffect(() => {
     if (activeTab === 'settings' && restaurant?.id) {
       fetchSettings();
+      fetchBranches();
     }
-  }, [activeTab, restaurant?.id, fetchSettings]);
+  }, [activeTab, restaurant?.id, fetchSettings, fetchBranches]);
 
   const handleUpdateAiInstruction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -844,6 +879,73 @@ export default function Dashboard() {
       setAiMessage({ type: 'error', text: 'Error al actualizar el prompt.' });
     } finally {
       setAiSystemInstructionLoading(false);
+    }
+  };
+
+  const handleSaveBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant?.id) return;
+    if (!branchName.trim()) {
+      toast.error('El nombre de la sucursal es obligatorio.');
+      return;
+    }
+
+    setBranchSubmitting(true);
+    try {
+      if (editingBranch) {
+        const { error } = await supabase
+          .from('branches')
+          .update({
+            name: branchName.trim(),
+            address: branchAddress.trim() || null,
+            phone: branchPhone.trim() || null,
+            is_active: branchIsActive
+          })
+          .eq('id', editingBranch.id);
+        if (error) throw error;
+        toast.success('Sucursal actualizada con éxito.');
+      } else {
+        const { error } = await supabase
+          .from('branches')
+          .insert({
+            restaurant_id: restaurant.id,
+            name: branchName.trim(),
+            address: branchAddress.trim() || null,
+            phone: branchPhone.trim() || null,
+            is_active: branchIsActive
+          });
+        if (error) throw error;
+        toast.success('Sucursal creada con éxito.');
+      }
+
+      setBranchName('');
+      setBranchAddress('');
+      setBranchPhone('');
+      setBranchIsActive(true);
+      setShowAddBranch(false);
+      setEditingBranch(null);
+      await fetchBranches();
+    } catch (err) {
+      console.error('Error saving branch:', err);
+      toast.error('Error al guardar la sucursal.');
+    } finally {
+      setBranchSubmitting(false);
+    }
+  };
+
+  const handleDeleteBranch = async (id: string) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta sucursal?')) return;
+    try {
+      const { error } = await supabase
+        .from('branches')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      toast.success('Sucursal eliminada.');
+      await fetchBranches();
+    } catch (err) {
+      console.error('Error deleting branch:', err);
+      toast.error('Error al eliminar la sucursal.');
     }
   };
 
@@ -2091,6 +2193,176 @@ export default function Dashboard() {
                   </form>
                 </div>
               </div>
+
+              {/* Branch Management Section */}
+              {role === 'admin_general' && (
+                <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200">
+                  <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-zinc-200 font-bold">Sucursales de la Empresa</h4>
+                      <p className="text-xs text-zinc-500">Configura y gestiona las sucursales físicas de tu restaurante.</p>
+                    </div>
+                    {!showAddBranch && !editingBranch && (
+                      <button
+                        onClick={() => {
+                          setEditingBranch(null);
+                          setBranchName('');
+                          setBranchAddress('');
+                          setBranchPhone('');
+                          setBranchIsActive(true);
+                          setShowAddBranch(true);
+                        }}
+                        className="flex items-center gap-1 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Nueva Sucursal
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Add / Edit Form */}
+                  {(showAddBranch || editingBranch) && (
+                    <form onSubmit={handleSaveBranch} className="bg-zinc-900/40 border border-zinc-850 p-4 rounded-xl space-y-4 animate-in slide-in-from-top-4 duration-200">
+                      <h5 className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                        {editingBranch ? 'Editar Sucursal' : 'Nueva Sucursal'}
+                      </h5>
+                      <div className="space-y-3">
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Nombre de Sucursal</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Ej. Sucursal Norte"
+                            value={branchName}
+                            onChange={(e) => setBranchName(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Teléfono</label>
+                            <input
+                              type="text"
+                              placeholder="Ej. +593999999999"
+                              value={branchPhone}
+                              onChange={(e) => setBranchPhone(e.target.value)}
+                              className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Dirección</label>
+                            <input
+                              type="text"
+                              placeholder="Ej. Av. de la República"
+                              value={branchAddress}
+                              onChange={(e) => setBranchAddress(e.target.value)}
+                              className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs pt-1">
+                          <input
+                            type="checkbox"
+                            id="branch_is_active"
+                            checked={branchIsActive}
+                            onChange={(e) => setBranchIsActive(e.target.checked)}
+                            className="rounded border-zinc-800 text-emerald-600 focus:ring-emerald-500 bg-zinc-900 h-4 w-4 cursor-pointer"
+                          />
+                          <label htmlFor="branch_is_active" className="text-zinc-350 cursor-pointer font-semibold">
+                            Sucursal Activa (Se mostrará en la toma de pedidos)
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 text-xs pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddBranch(false);
+                            setEditingBranch(null);
+                          }}
+                          className="px-3 py-2 border border-zinc-800 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 rounded-xl font-bold transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={branchSubmitting}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          {branchSubmitting && <Loader2 className="h-3 w-3 animate-spin" />}
+                          {editingBranch ? 'Guardar Cambios' : 'Crear Sucursal'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Branches List */}
+                  {branchesLoading ? (
+                    <div className="flex justify-center items-center py-6 gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+                      <span className="text-xs text-zinc-500">Cargando sucursales...</span>
+                    </div>
+                  ) : branches.length > 0 ? (
+                    <div className="space-y-3">
+                      {branches.map((b) => (
+                        <div key={b.id} className="bg-zinc-900/30 border border-zinc-900 p-4 rounded-xl flex items-center justify-between gap-4 hover:border-zinc-800/80 transition-colors animate-in fade-in duration-150">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-zinc-200 truncate">{b.name}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                b.is_active 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' 
+                                  : 'bg-zinc-800 text-zinc-500 border border-zinc-850'
+                              }`}>
+                                {b.is_active ? 'Activa' : 'Inactiva'}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 text-[11px] text-zinc-500 font-medium">
+                              {b.address && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 text-zinc-600 shrink-0" /> {b.address}
+                                </span>
+                              )}
+                              {b.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-3 w-3 text-zinc-600 shrink-0" /> {b.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => {
+                                setEditingBranch(b);
+                                setBranchName(b.name);
+                                setBranchAddress(b.address || '');
+                                setBranchPhone(b.phone || '');
+                                setBranchIsActive(b.is_active);
+                                setShowAddBranch(false);
+                              }}
+                              className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-transparent hover:border-zinc-850 cursor-pointer"
+                              title="Editar"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBranch(b.id)}
+                              className="p-1.5 rounded-lg bg-zinc-900 text-rose-500 hover:bg-rose-500/10 border border-transparent hover:border-rose-950/20 cursor-pointer"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 border border-dashed border-zinc-900 rounded-xl space-y-2">
+                      <MapPin className="h-8 w-8 text-zinc-700 mx-auto" />
+                      <p className="text-xs text-zinc-500">No hay sucursales registradas aún.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* AI Assistant Settings */}
               <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 delay-100">

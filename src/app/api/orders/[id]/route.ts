@@ -90,6 +90,22 @@ export async function PATCH(
 
     if (updateErr) throw updateErr;
 
+    // 2.5 Release table if the order is delivered or cancelled (dine-in orders)
+    if (status !== undefined && (status === 'delivered' || status === 'cancelled')) {
+      if (order.type === 'dine_in' && order.table_number && order.branch_id) {
+        try {
+          await supabaseAdmin
+            .from('restaurant_tables')
+            .update({ status: 'free', current_order_id: null })
+            .eq('branch_id', order.branch_id)
+            .eq('table_number', order.table_number);
+          console.log(`Table ${order.table_number} in branch ${order.branch_id} released successfully.`);
+        } catch (tableErr) {
+          console.error(`Failed to release table for order ${orderId}:`, tableErr);
+        }
+      }
+    }
+
     // 3. Send WhatsApp notification based on the status change
     if (status !== undefined && previousStatus !== status) {
       // Fetch WhatsApp Phone Number ID from restaurant settings
