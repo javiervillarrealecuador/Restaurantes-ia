@@ -827,7 +827,7 @@ export default function Dashboard() {
       const latestOrder = orders[0];
       toast.success(`¡Nuevo pedido recibido de ${latestOrder.customer_name} por $${Number(latestOrder.total_price).toFixed(2)}!`, {
         duration: 7000,
-        icon: <Bell className="h-5 w-5 animate-pulse text-emerald-500" />
+        icon: React.createElement(Bell, { className: 'h-5 w-5 animate-pulse text-emerald-500' })
       });
 
       // Play subtle chime sound if possible
