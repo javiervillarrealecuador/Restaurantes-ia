@@ -12,6 +12,38 @@ export interface Restaurant {
   logo_url: string | null;
   created_at: string;
   updated_at: string;
+  ruc?: string | null;
+  sri_dir_matriz?: string | null;
+  sri_dir_estab?: string | null;
+  sri_estab?: string | null;
+  sri_pto_emi?: string | null;
+  sri_obligado_contab?: boolean;
+  sri_rimpe?: string | null;
+  sri_agente_retencion?: string | null;
+  sri_contrib_especial?: string | null;
+  sri_ambiente?: number;
+  sri_p12_b64?: string | null;
+  sri_p12_pwd?: string | null;
+  sri_firma_expira?: string | null;
+  sri_firma_razon?: string | null;
+  sri_logo_b64?: string | null;
+  sri_email_envio?: string | null;
+  sri_iva_rate?: number;
+  sri_iva_temporal?: number | null;
+  sri_iva_temporal_inicio?: string | null;
+  sri_iva_temporal_fin?: string | null;
+}
+
+export interface SriFirma {
+  id: string;
+  restaurant_id: string;
+  archivo_base64: string;
+  clave: string;
+  razon_social: string | null;
+  expiracion: string | null;
+  esta_activa: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface MenuItem {
@@ -47,6 +79,7 @@ export interface OrderItem {
   notes: string | null;
   menu_items?: MenuItem | null;
   selected_modifiers?: { name: string; price: number }[] | null;
+  iva_rate?: number;
 }
 
 export interface Order {
@@ -73,6 +106,20 @@ export interface Order {
   order_items?: OrderItem[];
   source?: 'whatsapp' | 'waiter' | 'caja';
   branch_id?: string | null;
+  // SRI billing fields
+  invoice_ref?: string | null;
+  invoice_auth?: string | null;
+  sri_estado?: string | null;
+  sri_autorizacion?: string | null;
+  sri_fecha_aut?: string | null;
+  sri_ambiente?: number | null;
+  sri_mensajes?: string | null;
+  forma_pago?: string | null;
+  sri_requiere_factura?: boolean;
+  billing_vat?: string | null;
+  billing_name?: string | null;
+  billing_email?: string | null;
+  billing_address?: string | null;
 }
 
 export interface WebhookLog {

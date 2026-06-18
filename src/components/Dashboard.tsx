@@ -97,6 +97,72 @@ export default function Dashboard() {
   const [aiSystemInstructionLoading, setAiSystemInstructionLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  // SRI Settings States
+  const [sriRuc, setSriRuc] = useState('');
+  const [sriDirMatriz, setSriDirMatriz] = useState('');
+  const [sriDirEstab, setSriDirEstab] = useState('');
+  const [sriEstab, setSriEstab] = useState('001');
+  const [sriPtoEmi, setSriPtoEmi] = useState('001');
+  const [sriObligadoContab, setSriObligadoContab] = useState(true);
+  const [sriRimpe, setSriRimpe] = useState('');
+  const [sriAgenteRetencion, setSriAgenteRetencion] = useState('');
+  const [sriContribEspecial, setSriContribEspecial] = useState('');
+  const [sriAmbiente, setSriAmbiente] = useState<number>(1);
+  const [sriP12B64, setSriP12B64] = useState('');
+  const [sriP12Pwd, setSriP12Pwd] = useState('');
+  const [sriEmailEnvio, setSriEmailEnvio] = useState('');
+  const [sriIvaRate, setSriIvaRate] = useState<number>(15.00);
+  const [sriIvaTemporal, setSriIvaTemporal] = useState<string>('');
+  const [sriIvaTemporalInicio, setSriIvaTemporalInicio] = useState('');
+  const [sriIvaTemporalFin, setSriIvaTemporalFin] = useState('');
+  const [sriFirmaExpira, setSriFirmaExpira] = useState('');
+  const [sriFirmaRazon, setSriFirmaRazon] = useState('');
+  
+  const [sriLoading, setSriLoading] = useState(false);
+  const [sriMessage, setSriMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sriFirmas, setSriFirmas] = useState<any[]>([]);
+  const [newP12Uploaded, setNewP12Uploaded] = useState(false);
+
+  const fetchSriFirmas = async (restaurantId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('sri_firmas')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setSriFirmas(data);
+      }
+    } catch (err) {
+      console.error('Error fetching signatures:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (restaurant) {
+      setSriRuc(restaurant.ruc || '');
+      setSriDirMatriz(restaurant.sri_dir_matriz || '');
+      setSriDirEstab(restaurant.sri_dir_estab || '');
+      setSriEstab(restaurant.sri_estab || '001');
+      setSriPtoEmi(restaurant.sri_pto_emi || '001');
+      setSriObligadoContab(restaurant.sri_obligado_contab !== false);
+      setSriRimpe(restaurant.sri_rimpe || '');
+      setSriAgenteRetencion(restaurant.sri_agente_retencion || '');
+      setSriContribEspecial(restaurant.sri_contrib_especial || '');
+      setSriAmbiente(restaurant.sri_ambiente === 2 ? 2 : 1);
+      setSriP12B64(restaurant.sri_p12_b64 || '');
+      setSriP12Pwd(restaurant.sri_p12_pwd || '');
+      setSriEmailEnvio(restaurant.sri_email_envio || '');
+      setSriIvaRate(restaurant.sri_iva_rate !== undefined ? Number(restaurant.sri_iva_rate) : 15.00);
+      setSriIvaTemporal(restaurant.sri_iva_temporal !== null && restaurant.sri_iva_temporal !== undefined ? String(restaurant.sri_iva_temporal) : '');
+      setSriIvaTemporalInicio(restaurant.sri_iva_temporal_inicio || '');
+      setSriIvaTemporalFin(restaurant.sri_iva_temporal_fin || '');
+      setSriFirmaExpira(restaurant.sri_firma_expira || '');
+      setSriFirmaRazon(restaurant.sri_firma_razon || '');
+      fetchSriFirmas(restaurant.id);
+    }
+  }, [restaurant]);
+
   // Admin alerts (high priority)
   const [alerts, setAlerts] = useState<any[]>([]);
   const [activeAlert, setActiveAlert] = useState<any | null>(null);
@@ -882,6 +948,233 @@ export default function Dashboard() {
     }
   };
 
+  const handleUpdateSriSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant?.id) return;
+    
+    setSriLoading(true);
+    setSriMessage(null);
+    try {
+      let metadata: any = {};
+      
+      // 1. If a new signature has been uploaded or password changed with a file present
+      if (newP12Uploaded && sriP12B64 && sriP12Pwd) {
+        try {
+          const res = await fetch('/api/sri/metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p12B64: sriP12B64, pwd: sriP12Pwd })
+          });
+          const json = await res.json();
+          if (res.ok) {
+            metadata.sri_firma_razon = json.razon;
+            metadata.sri_firma_expira = json.expira;
+            setSriFirmaRazon(json.razon);
+            setSriFirmaExpira(json.expira);
+
+            // Deactivate other signatures in table
+            await supabase
+              .from('sri_firmas')
+              .update({ esta_activa: false })
+              .eq('restaurant_id', restaurant.id);
+
+            // Insert new active signature in sri_firmas
+            const { error: insErr } = await supabase
+              .from('sri_firmas')
+              .insert({
+                restaurant_id: restaurant.id,
+                archivo_base64: sriP12B64,
+                clave: sriP12Pwd,
+                razon_social: json.razon,
+                expiracion: json.expira,
+                esta_activa: true
+              });
+
+            if (insErr) throw insErr;
+            setNewP12Uploaded(false);
+            await fetchSriFirmas(restaurant.id);
+          } else {
+            throw new Error(json.error || 'Firma .p12 o contraseña inválida.');
+          }
+        } catch (err: any) {
+          throw new Error(`Firma .p12 inválida: ${err.message}`);
+        }
+      }
+
+      const updates: any = {
+        ruc: sriRuc.trim() || null,
+        sri_dir_matriz: sriDirMatriz.trim() || null,
+        sri_dir_estab: sriDirEstab.trim() || null,
+        sri_estab: sriEstab.trim() || '001',
+        sri_pto_emi: sriPtoEmi.trim() || '001',
+        sri_obligado_contab: sriObligadoContab,
+        sri_rimpe: sriRimpe || null,
+        sri_agente_retencion: sriAgenteRetencion.trim() || null,
+        sri_contrib_especial: sriContribEspecial.trim() || null,
+        sri_ambiente: Number(sriAmbiente),
+        sri_p12_b64: sriP12B64 || null,
+        sri_p12_pwd: sriP12Pwd || null,
+        sri_email_envio: sriEmailEnvio.trim() || null,
+        sri_iva_rate: Number(sriIvaRate),
+        sri_iva_temporal: sriIvaTemporal ? Number(sriIvaTemporal) : null,
+        sri_iva_temporal_inicio: sriIvaTemporalInicio || null,
+        sri_iva_temporal_fin: sriIvaTemporalFin || null,
+        ...metadata,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('restaurants')
+        .update(updates)
+        .eq('id', restaurant.id);
+        
+      if (error) throw error;
+      
+      setSriMessage({ type: 'success', text: 'Configuración de facturación SRI guardada con éxito.' });
+      setRestaurant(prev => prev ? { ...prev, ...updates } : null);
+      setTimeout(() => setSriMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error updating SRI settings:', err);
+      setSriMessage({ type: 'error', text: err.message || 'Error al guardar la configuración.' });
+    } finally {
+      setSriLoading(false);
+    }
+  };
+
+  const [sriTesting, setSriTesting] = useState(false);
+
+  const handleTestSriConnection = async () => {
+    if (!sriP12B64 || !sriP12Pwd) {
+      setSriMessage({ 
+        type: 'error', 
+        text: 'Por favor, carga una firma digital (.p12) e ingresa la contraseña para realizar la prueba.' 
+      });
+      return;
+    }
+    setSriTesting(true);
+    setSriMessage(null);
+    try {
+      const res = await fetch('/api/sri/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p12B64: sriP12B64, pwd: sriP12Pwd, ambiente: sriAmbiente })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Fallo de conexión o certificado no válido.');
+      }
+      
+      const expDate = new Date(data.certificate.expira).toLocaleDateString();
+      setSriMessage({
+        type: 'success',
+        text: `✓ Conexión exitosa con el SRI en ambiente de ${sriAmbiente === 2 ? 'PRODUCCIÓN' : 'PRUEBAS'}. Firmante: ${data.certificate.subject}. Vence el: ${expDate}.`
+      });
+    } catch (err: any) {
+      console.error(err);
+      setSriMessage({ type: 'error', text: `Error de prueba: ${err.message}` });
+    } finally {
+      setSriTesting(false);
+    }
+  };
+
+  const handleActivateSignature = async (firmaId: string) => {
+    if (!restaurant?.id) return;
+    try {
+      setSriLoading(true);
+      setSriMessage(null);
+      
+      // 1. Deactivate all other signatures
+      await supabase
+        .from('sri_firmas')
+        .update({ esta_activa: false })
+        .eq('restaurant_id', restaurant.id);
+
+      // 2. Activate selected signature
+      const { data: activated, error: actErr } = await supabase
+        .from('sri_firmas')
+        .update({ esta_activa: true })
+        .eq('id', firmaId)
+        .select()
+        .single();
+
+      if (actErr || !activated) throw actErr || new Error('No se pudo activar la firma.');
+
+      // 3. Update legacy fields on restaurant
+      const updates = {
+        sri_p12_b64: activated.archivo_base64,
+        sri_p12_pwd: activated.clave,
+        sri_firma_razon: activated.razon_social,
+        sri_firma_expira: activated.expiracion
+      };
+
+      const { error: restErr } = await supabase
+        .from('restaurants')
+        .update(updates)
+        .eq('id', restaurant.id);
+
+      if (restErr) throw restErr;
+
+      // 4. Update UI states
+      setSriP12B64(activated.archivo_base64 || '');
+      setSriP12Pwd(activated.clave || '');
+      setSriFirmaRazon(activated.razon_social || '');
+      setSriFirmaExpira(activated.expiracion || '');
+      setRestaurant(prev => prev ? { ...prev, ...updates } : null);
+
+      await fetchSriFirmas(restaurant.id);
+      setSriMessage({ type: 'success', text: 'Firma electrónica activada con éxito.' });
+      setTimeout(() => setSriMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error activating signature:', err);
+      setSriMessage({ type: 'error', text: `Error al activar firma: ${err.message}` });
+    } finally {
+      setSriLoading(false);
+    }
+  };
+
+  const handleDeleteSignature = async (firmaId: string) => {
+    if (!restaurant?.id) return;
+    if (!confirm('¿Está seguro de eliminar esta firma electrónica permanentemente?')) return;
+    try {
+      setSriLoading(true);
+      setSriMessage(null);
+      
+      const target = sriFirmas.find(f => f.id === firmaId);
+      const wasActive = target?.esta_activa;
+
+      const { error } = await supabase
+        .from('sri_firmas')
+        .delete()
+        .eq('id', firmaId);
+
+      if (error) throw error;
+
+      if (wasActive) {
+        const updates = {
+          sri_p12_b64: null,
+          sri_p12_pwd: null,
+          sri_firma_razon: null,
+          sri_firma_expira: null
+        };
+        await supabase.from('restaurants').update(updates).eq('id', restaurant.id);
+        setSriP12B64('');
+        setSriP12Pwd('');
+        setSriFirmaRazon('');
+        setSriFirmaExpira('');
+        setRestaurant(prev => prev ? { ...prev, ...updates } : null);
+      }
+
+      await fetchSriFirmas(restaurant.id);
+      setSriMessage({ type: 'success', text: 'Firma electrónica eliminada.' });
+      setTimeout(() => setSriMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error deleting signature:', err);
+      setSriMessage({ type: 'error', text: `Error al eliminar firma: ${err.message}` });
+    } finally {
+      setSriLoading(false);
+    }
+  };
+
   const handleSaveBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restaurant?.id) return;
@@ -1457,6 +1750,7 @@ export default function Dashboard() {
               role={role}
               readOnly={activePermissions.orders === 'read'}
               restaurantAddress={restaurant?.address || ''}
+              onRefresh={refreshOrders}
             />
           ) : null}
 
@@ -2361,6 +2655,345 @@ export default function Dashboard() {
                       <p className="text-xs text-zinc-500">No hay sucursales registradas aún.</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Facturación Electrónica SRI (Ecuador) */}
+              {role === 'admin_general' && (
+                <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 lg:col-span-2">
+                  <div className="border-b border-zinc-900 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-zinc-200 font-bold flex items-center gap-2">
+                        <Utensils className="h-4 w-4 text-emerald-500" /> Facturación Electrónica SRI (Ecuador)
+                      </h4>
+                      <p className="text-xs text-zinc-500">Configura los parámetros para la emisión de facturas electrónicas válidas ante el SRI.</p>
+                    </div>
+                    {sriFirmaExpira && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Firma Válida hasta: {new Date(sriFirmaExpira).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {sriMessage && (
+                    <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+                      sriMessage.type === 'success' ? 'bg-emerald-950/15 border border-emerald-900/30 text-emerald-400' : 'bg-rose-950/15 border border-rose-900/30 text-rose-455'
+                    }`}>
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{sriMessage.text}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleUpdateSriSettings} className="space-y-6">
+                    {/* Sección 1: Datos Emisor */}
+                    <div className="space-y-4">
+                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">1. Datos del Emisor</h5>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">RUC de la Empresa</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={13}
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. 1790000000001"
+                            value={sriRuc}
+                            onChange={(e) => setSriRuc(e.target.value.replace(/\D/g, ''))}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Código Establecimiento</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={3}
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. 001"
+                            value={sriEstab}
+                            onChange={(e) => setSriEstab(e.target.value.replace(/\D/g, ''))}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Punto de Emisión</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={3}
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. 001"
+                            value={sriPtoEmi}
+                            onChange={(e) => setSriPtoEmi(e.target.value.replace(/\D/g, ''))}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Dirección Matriz</label>
+                          <input
+                            type="text"
+                            required
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. Av. Amazonas 123 y Colón"
+                            value={sriDirMatriz}
+                            onChange={(e) => setSriDirMatriz(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Dirección Establecimiento (Opcional)</label>
+                          <input
+                            type="text"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. Centro Comercial El Recreo, Local 15"
+                            value={sriDirEstab}
+                            onChange={(e) => setSriDirEstab(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                        <div className="flex items-center gap-2 text-xs pt-4">
+                          <input
+                            type="checkbox"
+                            id="sri_obligado_contab"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            checked={sriObligadoContab}
+                            onChange={(e) => setSriObligadoContab(e.target.checked)}
+                            className="rounded border-zinc-800 text-emerald-600 focus:ring-emerald-500 bg-zinc-900 h-4 w-4 cursor-pointer"
+                          />
+                          <label htmlFor="sri_obligado_contab" className="text-zinc-350 cursor-pointer font-semibold">
+                            Obligado a llevar Contabilidad
+                          </label>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Régimen RIMPE (Opcional)</label>
+                          <select
+                            value={sriRimpe}
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            onChange={(e) => setSriRimpe(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          >
+                            <option value="">Ninguno / Régimen General</option>
+                            <option value="CONTRIBUYENTE RÉGIMEN RIMPE">RIMPE Emprendedor/Popular</option>
+                            <option value="RIMPE EMPRENDEDOR">RIMPE Emprendedor (Detallado)</option>
+                            <option value="RIMPE POPULAR">RIMPE Popular (Detallado)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Resolución Agente Retención (Opcional)</label>
+                          <input
+                            type="text"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. NAC-DNCRASC20-00000001"
+                            value={sriAgenteRetencion}
+                            onChange={(e) => setSriAgenteRetencion(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Nro. Contribuyente Especial (Opcional)</label>
+                          <input
+                            type="text"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ej. 1234"
+                            value={sriContribEspecial}
+                            onChange={(e) => setSriContribEspecial(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sección 2: Configuración del IVA */}
+                    <div className="space-y-4">
+                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">2. Configuración de IVA (Ecuador)</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Porcentaje IVA General (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            min="0"
+                            max="100"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            value={sriIvaRate}
+                            onChange={(e) => setSriIvaRate(Number(e.target.value))}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Porcentaje IVA Temporal (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="Ninguno"
+                            value={sriIvaTemporal}
+                            onChange={(e) => setSriIvaTemporal(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Inicio IVA Temporal</label>
+                          <input
+                            type="date"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            value={sriIvaTemporalInicio}
+                            onChange={(e) => setSriIvaTemporalInicio(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Fin IVA Temporal</label>
+                          <input
+                            type="date"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            value={sriIvaTemporalFin}
+                            onChange={(e) => setSriIvaTemporalFin(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-zinc-500">
+                        El IVA temporal anulará el IVA General únicamente durante el rango de fechas indicado (inclusive).
+                      </p>
+                    </div>
+
+                    {/* Sección 3: Firma Electrónica y Ambiente */}
+                    <div className="space-y-4">
+                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">3. Firma Electrónica (.p12) y Ambiente</h5>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Ambiente SRI</label>
+                          <select
+                            required
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            value={sriAmbiente}
+                            onChange={(e) => setSriAmbiente(Number(e.target.value))}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          >
+                            <option value={1}>PRUEBAS (Test)</option>
+                            <option value={2}>PRODUCCIÓN (Real)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">
+                            Archivo Firma Digital (.p12) {sriP12B64 ? '✓ Cargado' : ''}
+                          </label>
+                          <input
+                            type="file"
+                            accept=".p12"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const result = ev.target?.result as string;
+                                const base64 = result.split(',')[1] || result;
+                                setSriP12B64(base64);
+                                setNewP12Uploaded(true);
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2 rounded-xl text-zinc-400 outline-none text-xs file:bg-zinc-800 file:border-0 file:rounded-lg file:text-zinc-200 file:text-[10px] file:font-bold file:px-3 file:py-1.5 file:mr-3 file:cursor-pointer hover:file:bg-zinc-700"
+                          />
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Contraseña de la Firma</label>
+                          <input
+                            type="password"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder={sriP12Pwd ? "••••••••••••" : "Ingresar contraseña"}
+                            value={sriP12Pwd}
+                            onChange={(e) => setSriP12Pwd(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico de Envío (Notificaciones SMTP)</label>
+                          <input
+                            type="email"
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="facturas@turestaurante.com"
+                            value={sriEmailEnvio}
+                            onChange={(e) => setSriEmailEnvio(e.target.value)}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                          />
+                        </div>
+                        {sriFirmaRazon && (
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Firmante / Razón Social Firma</label>
+                            <input
+                              type="text"
+                              readOnly
+                              value={sriFirmaRazon}
+                              className="w-full bg-zinc-900/30 border border-zinc-850 p-2.5 rounded-xl text-zinc-500 outline-none select-all"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Visual Table showing stored signature details */}
+                      <div className="mt-4 border border-zinc-900 rounded-xl overflow-hidden bg-zinc-950/20 max-w-2xl">
+  <table className="w-full text-left border-collapse">
+    <thead>
+      <tr className="bg-zinc-900/60 border-b border-zinc-800 text-[10px] text-zinc-400">
+        <th className="p-2">Razón Social</th>
+        <th className="p-2">Expira</th>
+        <th className="p-2">Activa</th>
+        <th className="p-2">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {sriFirmas.map(firma => (
+        <tr key={firma.id} className="border-b border-zinc-800 hover:bg-zinc-900/30">
+          <td className="p-2">{firma.razon_social}</td>
+          <td className="p-2">{firma.expiracion ? new Date(firma.expiracion).toLocaleDateString() : '-'}</td>
+          <td className="p-2">{firma.esta_activa ? 'Sí' : 'No'}</td>
+          <td className="p-2 flex gap-2">
+            <button onClick={() => handleActivateSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded">Activar</button>
+            <button onClick={() => handleDeleteSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded">Eliminar</button>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap gap-3">
+                      <button
+                        type="submit"
+                        disabled={sriLoading || activePermissions.settings === 'read'}
+                        className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-850 disabled:text-zinc-555 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg transition-all cursor-pointer text-xs w-full sm:w-auto"
+                      >
+                        {sriLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Ajustes Facturación'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTestSriConnection}
+                        disabled={sriTesting || !sriP12B64 || !sriP12Pwd}
+                        className="flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 border border-zinc-800 font-semibold py-2.5 px-6 rounded-xl transition-all cursor-pointer text-xs w-full sm:w-auto"
+                      >
+                        {sriTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" /> : 'Probar Firma y Conexión SRI'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 

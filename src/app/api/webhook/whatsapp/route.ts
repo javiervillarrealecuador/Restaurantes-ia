@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { sendWhatsAppMessage, sendWhatsAppTypingIndicator } from '@/lib/whatsapp';
+import { getActiveIvaRate } from '@/lib/sri/db';
 
 interface ParsedOrderItem {
   product_id: string;
   quantity: number;
   notes: string | null;
   modifiers?: { name: string; price: number }[] | null;
+}
+
+interface BillingInfo {
+  requiere_factura: boolean;
+  vat: string | null;
+  name: string | null;
+  email: string | null;
+  address: string | null;
 }
 
 interface ParsedOrder {
@@ -17,6 +26,7 @@ interface ParsedOrder {
   table_number: string | null;
   payment_method: 'cash' | 'transfer' | null;
   notes: string | null;
+  billing_info?: BillingInfo | null;
 }
 
 interface DBMenuItem {
@@ -495,13 +505,13 @@ async function processMessageInBackground(
       }
       return NextResponse.json({ success: true, status: 'bot_paused_for_human_handoff' });
     }
-
     let crmContext = 'Este es un cliente nuevo. Dale una cálida bienvenida.';
     if (customerData) {
       crmContext = `Este es un cliente recurrente llamado ${customerData.name || customerName}. Ha realizado ${customerData.total_orders} pedidos en el pasado y ha gastado un total de $${customerData.total_spent}. ${customerData.preferences ? 'Preferencias: ' + customerData.preferences : ''}. Salúdalo de nuevo calurosamente (ej: "¡Hola de nuevo Juan!").`;
-    }
-
-    // Fetch conversation history and active cart
+      if (customerData.vat) {
+        crmContext += `\nDATOS DE FACTURACIÓN REGISTRADOS: Cédula/RUC: "${customerData.vat}", Nombre/Razón Social: "${customerData.billing_name || customerData.name}", Email: "${customerData.email || ''}", Dirección: "${customerData.address || ''}". Pregúntale al cliente si desea facturar a estos mismos datos o prefiere Consumidor Final o cambiarlos.`;
+      }
+    }    // Fetch conversation history and active cart
     const { data: logsData } = await supabaseAdmin
       .from('whatsapp_webhook_logs')
       .select('message_body, ai_parsed_response, created_at, status')
@@ -568,7 +578,6 @@ async function processMessageInBackground(
         agentResult.human_response += `\n\n[DIAGNÓSTICO TÉCNICO DE DEEPSEEK]: ${agentErr.message}`;
       }
     }
-
     // --- STRICT BACKEND ENFORCEMENT ---
     // If the AI hallucinates and tries to confirm the order prematurely, we forcefully intercept it.
     if (agentResult.intent === 'confirm_order' && agentResult.order) {
@@ -581,9 +590,18 @@ async function processMessageInBackground(
       } else if (!agentResult.order.payment_method) {
         agentResult.intent = 'add_to_order';
         agentResult.human_response = '¡Entendido! Por último, ¿cómo deseas cancelar tu pedido? ¿En Efectivo o mediante Transferencia Bancaria?';
+      } else if (!agentResult.order.billing_info || agentResult.order.billing_info.requiere_factura === undefined || agentResult.order.billing_info.requiere_factura === null) {
+        agentResult.intent = 'add_to_order';
+        agentResult.human_response = 'Perfecto. Una última pregunta, ¿requieres factura con datos (factura electrónica) o prefieres Consumidor Final?';
+      } else if (agentResult.order.billing_info.requiere_factura && (!agentResult.order.billing_info.vat || !agentResult.order.billing_info.name || !agentResult.order.billing_info.email)) {
+        agentResult.intent = 'add_to_order';
+        const missing = [];
+        if (!agentResult.order.billing_info.vat) missing.push('Cédula o RUC');
+        if (!agentResult.order.billing_info.name) missing.push('Nombre completo/Razón Social');
+        if (!agentResult.order.billing_info.email) missing.push('Correo electrónico (para enviarte la factura)');
+        agentResult.human_response = `¡Entendido! Para poder emitir tu factura con datos, por favor indícame tu: ${missing.join(', ')}.`;
       }
     }
-
     // If it's just adding to order, save to logs and ask if they want more
     if (agentResult.intent === 'add_to_order' && agentResult.order) {
       await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
@@ -736,7 +754,16 @@ async function processMessageInBackground(
       }
     }
 
-    const taxRate = 0.10;
+    // Fetch restaurant IVA settings
+    const { data: restaurant } = await supabaseAdmin
+      .from('restaurants')
+      .select('sri_iva_rate, sri_iva_temporal, sri_iva_temporal_inicio, sri_iva_temporal_fin')
+      .eq('id', restaurantId)
+      .single();
+
+    const currentIvaRate = restaurant ? getActiveIvaRate(restaurant as any) : 15.00;
+
+    const taxRate = currentIvaRate / 100;
     const tax = Number((subtotal * taxRate).toFixed(2));
     const deliveryFee = parsedOrder.order_type === 'delivery' ? 2.50 : 0.00;
     const total = Number((subtotal + tax + deliveryFee).toFixed(2));
@@ -761,16 +788,23 @@ async function processMessageInBackground(
         total_price: total,
         payment_method: parsedOrder.payment_method || 'cash',
         is_paid: false,
+        // SRI Billing details from Bot
+        sri_requiere_factura: !!(parsedOrder.billing_info && parsedOrder.billing_info.requiere_factura),
+        billing_vat: parsedOrder.billing_info?.vat || null,
+        billing_name: parsedOrder.billing_info?.name || null,
+        billing_email: parsedOrder.billing_info?.email || null,
+        billing_address: parsedOrder.billing_info?.address || null,
       })
       .select('id, order_code')
       .single();
 
     if (orderError) throw orderError;
 
-    // Insert Order Line Items
+    // Insert Order Line Items with the current active IVA rate
     const itemsWithOrderId = orderItemsToInsert.map((item) => ({
       ...item,
       order_id: order.id,
+      iva_rate: currentIvaRate
     }));
 
     const { error: itemsError } = await supabaseAdmin
@@ -786,11 +820,19 @@ async function processMessageInBackground(
       name: customerName,
     }, { onConflict: 'restaurant_id, phone' }).select().single().then(async ({ data: existingCrm }) => {
       if (existingCrm) {
-        await supabaseAdmin.from('customers').update({
+        const crmUpdates: any = {
           total_orders: (existingCrm.total_orders || 0) + 1,
           total_spent: Number((Number(existingCrm.total_spent || 0) + total).toFixed(2)),
           last_visit: new Date().toISOString()
-        }).eq('id', existingCrm.id);
+        };
+        // Update customer billing profile if provided by bot
+        if (parsedOrder.billing_info && parsedOrder.billing_info.requiere_factura) {
+          if (parsedOrder.billing_info.vat) crmUpdates.vat = parsedOrder.billing_info.vat;
+          if (parsedOrder.billing_info.name) crmUpdates.billing_name = parsedOrder.billing_info.name;
+          if (parsedOrder.billing_info.email) crmUpdates.email = parsedOrder.billing_info.email;
+          if (parsedOrder.billing_info.address) crmUpdates.address = parsedOrder.billing_info.address;
+        }
+        await supabaseAdmin.from('customers').update(crmUpdates).eq('id', existingCrm.id);
       }
     });
 
@@ -811,9 +853,9 @@ async function processMessageInBackground(
     const orderCodeStr = order?.order_code ? `*Código de Pedido:* ${formatOrderCode(order.order_code)}\n\n` : '';
 
     if (parsedOrder.payment_method === 'transfer') {
-      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (10%): $${tax.toFixed(2)}${isDelivery ? `\n- Costo Envío: $${deliveryFee.toFixed(2)}` : ''}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${isDelivery ? `Domicilio (${parsedOrder.delivery_address || 'Sin dirección'})` : parsedOrder.order_type === 'dine_in' ? `Consumo en Mesa` : 'Retiro en Local'}\n*Método de Pago:* Transferencia Bancaria\n\n⚠️ *Para procesar tu pedido, por favor envíanos la FOTO DEL COMPROBANTE de transferencia por este medio.* Quedamos a la espera.`;
+      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (${currentIvaRate}%): $${tax.toFixed(2)}${isDelivery ? `\n- Costo Envío: $${deliveryFee.toFixed(2)}` : ''}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${isDelivery ? `Domicilio (${parsedOrder.delivery_address || 'Sin dirección'})` : parsedOrder.order_type === 'dine_in' ? `Consumo en Mesa` : 'Retiro en Local'}\n*Método de Pago:* Transferencia Bancaria\n\n⚠️ *Para procesar tu pedido, por favor envíanos la FOTO DEL COMPROBANTE de transferencia por este medio.* Quedamos a la espera.`;
     } else {
-      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (10%): $${tax.toFixed(2)}${isDelivery ? `\n- Costo Envío: $${deliveryFee.toFixed(2)}` : ''}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${isDelivery ? `Domicilio (${parsedOrder.delivery_address || 'Sin dirección'})` : parsedOrder.order_type === 'dine_in' ? `Consumo en Mesa` : 'Retiro en Local'}\n*Método de Pago:* Efectivo al ${isDelivery ? 'recibir' : 'entregar'}\n\nTu pedido está siendo procesado en cocina. Te notificaremos por aquí cuando cambie su estado. ¡Buen provecho!`;
+      confirmationMessage = `¡Gracias, ${customerName}! Hemos registrado tu pedido con éxito. 📝🍽\n\n${orderCodeStr}*Detalle del pedido:*\n${itemsDetailForMessage.join('\n')}\n\n*Resumen financiero:*\n- Subtotal: $${subtotal.toFixed(2)}\n- IVA (${currentIvaRate}%): $${tax.toFixed(2)}${isDelivery ? `\n- Costo Envío: $${deliveryFee.toFixed(2)}` : ''}\n*Total a Pagar: $${total.toFixed(2)}*\n\n*Tipo de pedido:* ${isDelivery ? `Domicilio (${parsedOrder.delivery_address || 'Sin dirección'})` : parsedOrder.order_type === 'dine_in' ? `Consumo en Mesa` : 'Retiro en Local'}\n*Método de Pago:* Efectivo al ${isDelivery ? 'recibir' : 'entregar'}\n\nTu pedido está siendo procesado en cocina. Te notificaremos por aquí cuando cambie su estado. ¡Buen provecho!`;
     }
 
     await sendWhatsAppMessage(customerPhone, confirmationMessage, whatsappPhoneId);
@@ -1009,9 +1051,9 @@ ${historyContext}
 ${cartContext}`;
 
   const userPrompt = `MENSAJE DEL CLIENTE: "${message}"
-
+ 
 Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta (sin bloques de código, sin texto extra):
-
+ 
 {
   "intent": "add_to_order" | "confirm_order" | "menu_query" | "full_menu" | "greeting" | "transfer_to_human" | "special_event" | "other",
   "human_response": "Tu respuesta completa y natural para enviar al cliente por WhatsApp",
@@ -1030,12 +1072,19 @@ Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta
     "delivery_address": null,
     "table_number": null,
     "payment_method": "cash" | "transfer" | null,
-    "notes": null
+    "notes": null,
+    "billing_info": {
+      "requiere_factura": boolean | null,
+      "vat": "Cédula o RUC si aplica" | null,
+      "name": "Razón social / Nombre de facturación" | null,
+      "email": "Email para envío de factura" | null,
+      "address": "Dirección fiscal si aplica" | null
+    } | null
   } | null
 }
-
+ 
 REGLAS CRÍTICAS:
-
+ 
 1. INTENTS:
    - "greeting": Solo saluda.
    - "full_menu": Pide ver TODO el menú.
@@ -1045,20 +1094,25 @@ REGLAS CRÍTICAS:
    - "transfer_to_human": El cliente explícitamente solicita hablar con un humano, persona real, administrador, soporte técnico o agente de servicio.
    - "special_event": El cliente pregunta sobre buffets, catering, preparación de banquetes, comidas especiales para eventos, contratos grandes, etc.
    - "other": Otra cosa.
-
+ 
 2. Para "add_to_order" y "confirm_order":
    - El arreglo "items" dentro de "order" DEBE contener SIEMPRE el pedido completo (es decir, TODOS los items que ya estaban en el ESTADO DEL CARRITO ACTUAL + los nuevos items que haya solicitado el cliente ahora). NUNCA borres los items anteriores.
    - Si es "add_to_order", el human_response debe listar lo que lleva hasta ahora y preguntar explícitamente: "¿Deseas agregar algo más a tu pedido o confirmamos?"
-
+ 
 3. Para "confirm_order":
-   - ES OBLIGATORIO que el JSON final incluya "order_type", "delivery_address" (si aplica) y "payment_method".
-   - NUNCA uses "confirm_order" si aún no conoces la modalidad (order_type) o la forma de pago (payment_method). Si falta alguno, mantén el intent en "add_to_order" y pregúntaselo.
-   - Si el cliente NO ha especificado la modalidad de entrega, es OBLIGATORIO preguntarle explícitamente: "¿Su pedido es para consumir en la mesa, para retirar en el local, o para envío a domicilio? (También puedes enviarme tu ubicación de WhatsApp si es para domicilio)".
+   - ES OBLIGATORIO que el JSON final incluya "order_type", "delivery_address" (si aplica), "payment_method" y la confirmación de "billing_info".
+   - NUNCA uses "confirm_order" si aún no conoces la modalidad (order_type), el método de pago (payment_method) o si requiere factura con sus datos correspondientes. Si falta alguno, mantén el intent en "add_to_order" y pregúntaselo.
+   - Si el cliente NO ha especificado la modalidad de entrega, es OBLIGATORIO preguntarle: "¿Su pedido es para consumir en la mesa, para retirar en el local, o para envío a domicilio? (También puedes enviarme tu ubicación de WhatsApp si es para domicilio)".
    - EXCEPCIÓN y REGLA DE ORO: Si el cliente ya indica la modalidad (ej. dice "es a domicilio", "para llevar", "en la mesa", o envía una dirección o [Ubicación Compartida]), DEDUCE inmediatamente el "order_type" (delivery, pickup, dine_in). NO VUELVAS a preguntarle si es para mesa/llevar/domicilio. Si es "delivery" y falta la dirección, pídesela. Si ya tienes la modalidad (y dirección si aplica), pasa directo a preguntar el método de pago.
-   - Una vez tengas el tipo de pedido (y la dirección si aplica), pregúntale SIEMPRE por su método de pago de forma muy empática y cortés (Efectivo o Transferencia) manteniendo el intent "add_to_order".
-   - SOLO cuando el cliente te confirme el método de pago (ej. responde "efectivo" o "transferencia"), puedes cambiar el intent a "confirm_order".
+   - Una vez tengas el tipo de pedido (y la dirección si aplica), pregúntale por su método de pago (Efectivo o Transferencia) manteniendo el intent "add_to_order".
+   - Una vez definido el método de pago, es OBLIGATORIO preguntar al cliente: "¿Requieres factura con datos (factura electrónica) o prefieres Consumidor Final?".
+     - Si responde "Consumidor Final", llena "billing_info" con {"requiere_factura": false, "vat": "9999999999999", "name": "CONSUMIDOR FINAL", "email": null, "address": null}.
+     - Si responde "Factura con datos", busca si tiene datos en === PERFIL DEL CLIENTE (CRM) ===.
+       - Si están registrados, pídele confirmación: "Veo que tienes registrados estos datos: RUC: ZZZ, Nombre: YYY, Email: XXX. ¿Deseas usarlos o cambiarlos?".
+       - Si no los tiene (o desea cambiarlos), pídele su Identificación (Cédula o RUC), Nombres/Razón Social y Correo Electrónico. Llena el objeto "billing_info" con estos datos y pon requiere_factura = true.
+   - SOLO cuando el cliente te confirme todos los campos (incluyendo si requiere factura y sus datos si aplica), puedes cambiar el intent a "confirm_order".
    - El human_response de "confirm_order" debe ser un mensaje breve y amable despidiéndose, indicando que el pedido está siendo generado.
-
+ 
 4. Para "full_menu" o "menu_query":
    - ES OBLIGATORIO usar listas verticales. Cada plato debe ir en una nueva línea.
    - Formato exacto esperado:
@@ -1066,16 +1120,16 @@ REGLAS CRÍTICAS:
      - Plato 1 ($X.XX)
      - Plato 2 ($X.XX)
    - NUNCA respondas con los platos separados por comas en un solo párrafo, es ilegible.
-
+ 
 6. GESTIÓN DE CALIFICACIONES (POST-ENTREGA):
    - Si el cliente envía un número del 1 al 5, estrellas (⭐), o un comentario evaluativo corto (ej. "Todo rico", "Estuvo malo", "5") justo después de que se le entregó su pedido, el intent debe ser "other".
    - Tu human_response debe ser un agradecimiento muy amable por la calificación. Si la nota es baja (1-3), pide disculpas sinceramente e indica que trabajarán para mejorar. No ofrezcas ni intentes tomar un nuevo pedido en este momento.
-
+ 
 7. GESTIÓN DE MODIFICADORES Y PERSONALIZACIÓN DE PLATOS:
    - Si el cliente solicita opciones adicionales, términos de carne, o extras (ej. "con extra de papas", "término medio"), y estas opciones están listadas en los "Opciones/Modificadores disponibles" del plato correspondiente, DEBES extraerlos e incluirlos en el arreglo "modifiers" con su nombre y precio exactos.
    - Si el cliente menciona personalizaciones que NO están en la lista oficial de modificadores del plato (ej. "sin cebolla" cuando no existe esa opción con precio), colócalo en el campo "notes" del item (como nota de texto libre), en lugar de "modifiers".
    - NUNCA inventes modificadores en el arreglo "modifiers" que no existan en la lista oficial del plato.
-
+ 
 8. Siempre usa los IDs exactos del menú y sé conversacional.`;
 
   const url = 'https://api.deepseek.com/chat/completions';
