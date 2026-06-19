@@ -97,19 +97,31 @@ async function guardar() {
     reader.readAsArrayBuffer(p12file);
   });
 
-  // Guardar directo en Supabase
-  const { error } = await sb.from('restaurants').update({
-    sri_p12_b64: p12B64,
-    sri_p12_pwd: p12pwd,
-    updated_at: new Date().toISOString()
-  }).eq('id', restaurantId);
+  // Obtener JWT token de la sesion activa
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.access_token) {
+    msg('❌ Sesión expirada. Recarga la página e inicia sesión de nuevo.', false);
+    document.getElementById('btnGuardar').disabled = false;
+    return;
+  }
+
+  // Llamar al API route que usa supabaseAdmin (bypasa RLS)
+  const res = await fetch('/api/sri/upload-p12', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + session.access_token
+    },
+    body: JSON.stringify({ restaurantId, p12B64, p12Pwd: p12pwd })
+  });
 
   document.getElementById('btnGuardar').disabled = false;
+  const json = await res.json();
 
-  if (error) {
-    msg('❌ Error: ' + error.message, false);
+  if (!res.ok) {
+    msg('❌ Error: ' + (json.error || res.statusText), false);
   } else {
-    msg('✅ Firma guardada correctamente en la base de datos.', true);
+    msg('✅ Firma guardada correctamente (' + Math.round(p12B64.length * 0.75 / 1024) + ' KB). Ya puedes facturar.', true);
   }
 }
 </script>
