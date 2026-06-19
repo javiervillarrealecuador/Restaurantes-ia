@@ -83,6 +83,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [billingName, setBillingName] = useState('');
   const [billingEmail, setBillingEmail] = useState('');
   const [billingAddress, setBillingAddress] = useState('');
+  const [billingPhone, setBillingPhone] = useState('');
   const [formaPago, setFormaPago] = useState('01');
   const [sriSubmitting, setSriSubmitting] = useState(false);
   const [sriError, setSriError] = useState<string | null>(null);
@@ -94,6 +95,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     setBillingName(order.billing_name || 'CONSUMIDOR FINAL');
     setBillingEmail(order.billing_email || '');
     setBillingAddress(order.billing_address || 'Quito');
+    setBillingPhone(order.customer_phone || '');
     setFormaPago(order.forma_pago || '01');
     setSriError(null);
   };
@@ -115,7 +117,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
           billingName,
           billingVat,
           billingAddress,
-          billingEmail
+          billingEmail,
+          billingPhone
         })
       });
 
@@ -810,10 +813,32 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                         </>
                       )}
                       {getActionButton(order)}
+                      {/* FACTURAR button: only when invoiceable and not yet authorized */}
+                      {!order.sri_requiere_factura && !readOnly && role !== 'cocinero' && role !== 'repartidor' && (
+                        <button
+                          onClick={(e) => handleOpenSriModal(e, order)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-emerald-700 text-zinc-300 hover:text-white border border-zinc-700 hover:border-emerald-600 text-xs font-semibold transition-all shadow-sm"
+                          title="Emitir Factura SRI"
+                        >
+                          <FileText className="h-3.5 w-3.5" /> Facturar
+                        </button>
+                      )}
+                      {/* Printer / RIDE print button */}
                       <button 
-                        onClick={(e) => { e.stopPropagation(); handlePrint(order); }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white dark:bg-zinc-805 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 transition-all shadow-sm"
-                        title="Imprimir Ticket"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (order.sri_estado === 'AUTORIZADO') {
+                            handleDownloadRide(order);
+                          } else {
+                            handlePrint(order);
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border transition-all shadow-sm ${
+                          order.sri_estado === 'AUTORIZADO'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+                            : 'bg-white dark:bg-zinc-805 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+                        }`}
+                        title={order.sri_estado === 'AUTORIZADO' ? 'Imprimir Factura (RIDE)' : 'Imprimir Ticket de Pedido'}
                       >
                         <Printer className="h-3.5 w-3.5" />
                       </button>
@@ -1139,15 +1164,27 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                 />
               </div>
 
-              <div className="space-y-1 text-xs">
-                <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico (Para envío XML/RIDE)</label>
-                <input
-                  type="email"
-                  value={billingEmail}
-                  onChange={(e) => setBillingEmail(e.target.value)}
-                  placeholder="cliente@correo.com (Opcional)"
-                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-100 outline-none text-xs"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1 text-xs">
+                  <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico</label>
+                  <input
+                    type="email"
+                    value={billingEmail}
+                    onChange={(e) => setBillingEmail(e.target.value)}
+                    placeholder="cliente@correo.com (Opcional)"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-100 outline-none text-xs"
+                  />
+                </div>
+                <div className="space-y-1 text-xs">
+                  <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Teléfono</label>
+                  <input
+                    type="tel"
+                    value={billingPhone}
+                    onChange={(e) => setBillingPhone(e.target.value)}
+                    placeholder="0999999999 (Opcional)"
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-100 outline-none text-xs"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1 text-xs">
