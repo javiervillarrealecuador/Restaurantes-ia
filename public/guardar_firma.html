@@ -89,7 +89,6 @@ async function guardar() {
   document.getElementById('btnGuardar').disabled = true;
   msg('Guardando...', true);
 
-  // Leer .p12 como base64
   const p12B64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload  = e => resolve(btoa(String.fromCharCode(...new Uint8Array(e.target.result))));
@@ -97,7 +96,6 @@ async function guardar() {
     reader.readAsArrayBuffer(p12file);
   });
 
-  // Obtener JWT token de la sesion activa
   const { data: { session } } = await sb.auth.getSession();
   if (!session?.access_token) {
     msg('❌ Sesión expirada. Recarga la página e inicia sesión de nuevo.', false);
@@ -105,24 +103,18 @@ async function guardar() {
     return;
   }
 
-  // Llamar al API route que usa supabaseAdmin (bypasa RLS)
-  const res = await fetch('/api/sri/upload-p12', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + session.access_token
-    },
-    body: JSON.stringify({ restaurantId, p12B64, p12Pwd: p12pwd })
+  const { data: result, error: rpcErr } = await sb.rpc('save_restaurant_p12', {
+    p_restaurant_id: restaurantId,
+    p_p12_b64: p12B64,
+    p_p12_pwd: p12pwd
   });
 
   document.getElementById('btnGuardar').disabled = false;
-  const json = await res.json();
 
-  if (!res.ok) {
-    msg('❌ Error: ' + (json.error || res.statusText), false);
-  } else {
-    msg('✅ Firma guardada correctamente (' + Math.round(p12B64.length * 0.75 / 1024) + ' KB). Ya puedes facturar.', true);
-  }
+  if (rpcErr) { msg('❌ Error RPC: ' + rpcErr.message, false); return; }
+  if (result?.error) { msg('❌ ' + result.error, false); return; }
+
+  msg('✅ Firma guardada correctamente (' + Math.round(p12B64.length * 0.75 / 1024) + ' KB). Ya puedes facturar.', true);
 }
 </script>
 </body>
