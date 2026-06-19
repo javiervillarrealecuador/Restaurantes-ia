@@ -123,12 +123,20 @@ export default function Dashboard() {
   const [sriFirmas, setSriFirmas] = useState<any[]>([]);
   const [newP12Uploaded, setNewP12Uploaded] = useState(false);
 
-  // La tabla sri_firmas no existe. La firma se guarda directamente en restaurants.
-  const fetchSriFirmas = async (_restaurantId: string) => {
-    // No-op: la firma se carga desde restaurant.sri_p12_b64 directamente
-    setSriFirmas([]);
+  const fetchSriFirmas = async (restaurantId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('sri_firmas')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setSriFirmas(data);
+      }
+    } catch (err) {
+      console.error('Error fetching signatures:', err);
+    }
   };
-
 
   useEffect(() => {
     if (restaurant) {
@@ -967,31 +975,19 @@ export default function Dashboard() {
     setSriMessage(null);
     try {
       let metadata: any = {};
-
-      // 1. Si se subió una nueva firma, guardarla con endpoint dedicado
+      
+      // 1. If a new signature has been uploaded or password changed with a file present
       if (newP12Uploaded && sriP12B64 && sriP12Pwd) {
-        // a) Guardar la firma en BD PRIMERO — el guardado no depende de que
-        //    la extracción de metadatos tenga éxito.
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        const sessData = await supabase.auth.getSession();
+        const tok = sessData.data.session?.access_token;
         const p12Res = await fetch('/api/sri/upload-p12', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({
-            restaurantId: restaurant.id,
-            p12B64: sriP12B64,
-            p12Pwd: sriP12Pwd
-          })
+          headers: { 'Content-Type': 'application/json', ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}) },
+          body: JSON.stringify({ restaurantId: restaurant.id, p12B64: sriP12B64, p12Pwd: sriP12Pwd })
         });
         const p12Json = await p12Res.json();
-        if (!p12Res.ok) throw new Error(p12Json.error || 'Error al guardar la firma en el servidor');
-
+        if (!p12Res.ok) throw new Error(p12Json.error || 'Error al guardar la firma');
         setNewP12Uploaded(false);
-
-        // b) Extraer metadatos de forma opcional — si falla, la firma ya está guardada
         try {
           const metaRes = await fetch('/api/sri/metadata', {
             method: 'POST',
@@ -1004,17 +1000,11 @@ export default function Dashboard() {
             metadata.sri_firma_expira = metaJson.expira;
             setSriFirmaRazon(metaJson.razon);
             setSriFirmaExpira(metaJson.expira);
-            setSriMessage({ type: 'success', text: `Firma electrónica guardada correctamente (${Math.round(sriP12B64.length / 1024)} KB). Vence: ${metaJson.expira || 'N/D'}` });
-          } else {
-            // Firma guardada pero no se pudieron leer los metadatos — no es un error crítico
-            setSriMessage({ type: 'success', text: `Firma electrónica guardada (${Math.round(sriP12B64.length / 1024)} KB). No se pudieron extraer los metadatos del certificado.` });
           }
-        } catch {
-          // Metadata es opcional — la firma ya se guardó correctamente
-          setSriMessage({ type: 'success', text: `Firma electrónica guardada (${Math.round(sriP12B64.length / 1024)} KB).` });
+        } catch (_e) {
+          // metadata es opcional
         }
       }
-
 
       const updates: any = {
         ruc: sriRuc.trim() || null,
@@ -1027,12 +1017,8 @@ export default function Dashboard() {
         sri_agente_retencion: sriAgenteRetencion.trim() || null,
         sri_contrib_especial: sriContribEspecial.trim() || null,
         sri_ambiente: Number(sriAmbiente),
-        // Solo actualizar la firma si el usuario seleccionó un archivo nuevo
-        // (newP12Uploaded=true). Si no, no incluir estos campos para no borrar la firma guardada.
-        ...(newP12Uploaded && sriP12B64 ? {
-          sri_p12_b64: sriP12B64,
-          sri_p12_pwd: sriP12Pwd || null,
-        } : {}),
+        sri_p12_b64: sriP12B64 || null,
+        sri_p12_pwd: sriP12Pwd || null,
         sri_email_envio: sriEmailEnvio.trim() || null,
         sri_iva_rate: Number(sriIvaRate),
         sri_iva_temporal: sriIvaTemporal ? Number(sriIvaTemporal) : null,
@@ -1042,23 +1028,16 @@ export default function Dashboard() {
         updated_at: new Date().toISOString()
       };
 
-
-      // Usar API route del servidor para evitar restricciones de RLS
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
+      const sessData2 = await supabase.auth.getSession();
+      const tok2 = sessData2.data.session?.access_token;
       const apiRes = await fetch('/api/sri/settings', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
+        headers: { 'Content-Type': 'application/json', ...(tok2 ? { 'Authorization': 'Bearer ' + tok2 } : {}) },
         body: JSON.stringify({ restaurantId: restaurant.id, updates })
       });
       const apiJson = await apiRes.json();
-      if (!apiRes.ok) throw new Error(apiJson.error || 'Error al guardar en el servidor');
-      
-      setSriMessage({ type: 'success', text: 'Configuración de facturación SRI guardada con éxito.' });
+      if (!apiRes.ok) throw new Error(apiJson.error || 'Error al guardar');
+      setSriMessage({ type: 'success', text: 'Configuracion guardada con exito.' });
       setRestaurant(prev => prev ? { ...prev, ...updates } : null);
       setTimeout(() => setSriMessage(null), 3000);
     } catch (err: any) {
@@ -1105,8 +1084,103 @@ export default function Dashboard() {
     }
   };
 
-  // handleActivateSignature y handleDeleteSignature eliminadas:
-  // la firma se gestiona directamente en restaurants.sri_p12_b64
+  const handleActivateSignature = async (firmaId: string) => {
+    if (!restaurant?.id) return;
+    try {
+      setSriLoading(true);
+      setSriMessage(null);
+      
+      // 1. Deactivate all other signatures
+      await supabase
+        .from('sri_firmas')
+        .update({ esta_activa: false })
+        .eq('restaurant_id', restaurant.id);
+
+      // 2. Activate selected signature
+      const { data: activated, error: actErr } = await supabase
+        .from('sri_firmas')
+        .update({ esta_activa: true })
+        .eq('id', firmaId)
+        .select()
+        .single();
+
+      if (actErr || !activated) throw actErr || new Error('No se pudo activar la firma.');
+
+      // 3. Update legacy fields on restaurant
+      const updates = {
+        sri_p12_b64: activated.archivo_base64,
+        sri_p12_pwd: activated.clave,
+        sri_firma_razon: activated.razon_social,
+        sri_firma_expira: activated.expiracion
+      };
+
+      const { error: restErr } = await supabase
+        .from('restaurants')
+        .update(updates)
+        .eq('id', restaurant.id);
+
+      if (restErr) throw restErr;
+
+      // 4. Update UI states
+      setSriP12B64(activated.archivo_base64 || '');
+      setSriP12Pwd(activated.clave || '');
+      setSriFirmaRazon(activated.razon_social || '');
+      setSriFirmaExpira(activated.expiracion || '');
+      setRestaurant(prev => prev ? { ...prev, ...updates } : null);
+
+      await fetchSriFirmas(restaurant.id);
+      setSriMessage({ type: 'success', text: 'Firma electrónica activada con éxito.' });
+      setTimeout(() => setSriMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error activating signature:', err);
+      setSriMessage({ type: 'error', text: `Error al activar firma: ${err.message}` });
+    } finally {
+      setSriLoading(false);
+    }
+  };
+
+  const handleDeleteSignature = async (firmaId: string) => {
+    if (!restaurant?.id) return;
+    if (!confirm('¿Está seguro de eliminar esta firma electrónica permanentemente?')) return;
+    try {
+      setSriLoading(true);
+      setSriMessage(null);
+      
+      const target = sriFirmas.find(f => f.id === firmaId);
+      const wasActive = target?.esta_activa;
+
+      const { error } = await supabase
+        .from('sri_firmas')
+        .delete()
+        .eq('id', firmaId);
+
+      if (error) throw error;
+
+      if (wasActive) {
+        const updates = {
+          sri_p12_b64: null,
+          sri_p12_pwd: null,
+          sri_firma_razon: null,
+          sri_firma_expira: null
+        };
+        await supabase.from('restaurants').update(updates).eq('id', restaurant.id);
+        setSriP12B64('');
+        setSriP12Pwd('');
+        setSriFirmaRazon('');
+        setSriFirmaExpira('');
+        setRestaurant(prev => prev ? { ...prev, ...updates } : null);
+      }
+
+      await fetchSriFirmas(restaurant.id);
+      setSriMessage({ type: 'success', text: 'Firma electrónica eliminada.' });
+      setTimeout(() => setSriMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error deleting signature:', err);
+      setSriMessage({ type: 'error', text: `Error al eliminar firma: ${err.message}` });
+    } finally {
+      setSriLoading(false);
+    }
+  };
 
   const handleSaveBranch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2845,16 +2919,32 @@ export default function Dashboard() {
                         )}
                       </div>
 
-
-                      {/* Indicador de firma activa */}
-                      {(sriFirmaRazon || sriP12B64) && (
-                        <div className="mt-4 bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 max-w-2xl">
-                          <p className="text-xs text-emerald-400 font-bold mb-1">✓ Firma electrónica cargada</p>
-                          {sriFirmaRazon && <p className="text-xs text-zinc-300">Firmante: {sriFirmaRazon}</p>}
-                          {sriFirmaExpira && <p className="text-xs text-zinc-400">Vence: {sriFirmaExpira}</p>}
-                        </div>
-                      )}
-
+                      {/* Visual Table showing stored signature details */}
+                      <div className="mt-4 border border-zinc-900 rounded-xl overflow-hidden bg-zinc-950/20 max-w-2xl">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-zinc-900/60 border-b border-zinc-800 text-[10px] text-zinc-400">
+                              <th className="p-2">Razón Social</th>
+                              <th className="p-2">Expira</th>
+                              <th className="p-2">Activa</th>
+                              <th className="p-2">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sriFirmas.map(firma => (
+                              <tr key={firma.id} className="border-b border-zinc-800 hover:bg-zinc-900/30">
+                                <td className="p-2">{firma.razon_social}</td>
+                                <td className="p-2">{firma.expiracion ? new Date(firma.expiracion).toLocaleDateString() : '-'}</td>
+                                <td className="p-2">{firma.esta_activa ? 'Sí' : 'No'}</td>
+                                <td className="p-2 flex gap-2">
+                                  <button onClick={() => handleActivateSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded">Activar</button>
+                                  <button onClick={() => handleDeleteSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded">Eliminar</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
 
                     <div className="pt-2 flex flex-wrap gap-3">

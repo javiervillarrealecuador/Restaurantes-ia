@@ -1,17 +1,14 @@
 // src/app/api/sri/settings/route.ts
-// Guarda la configuración SRI de un restaurante usando supabaseAdmin
-// para evitar restricciones de RLS del cliente anon.
-
-// Forzar Node.js runtime (supabaseAdmin requiere Node.js, no Edge)
-export const runtime = 'nodejs';
-
+// Guarda la configuracion SRI usando supabaseAdmin para evitar RLS del cliente anon.
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
 
+// Node.js runtime -- supabaseAdmin requiere Node.js, no puede correr en Edge
+export const runtime = 'nodejs';
+
 export async function POST(request: Request) {
   try {
-    // Verificar sesión del usuario autenticado via token Bearer
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -24,7 +21,7 @@ export async function POST(request: Request) {
 
     const { data: { user }, error: userErr } = await supabaseUser.auth.getUser(token);
     if (userErr || !user) {
-      return NextResponse.json({ error: 'Sesión inválida o expirada' }, { status: 401 });
+      return NextResponse.json({ error: 'Sesion invalida o expirada' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -34,7 +31,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan datos: restaurantId o updates' }, { status: 400 });
     }
 
-    // Verificar que el restaurante existe
     const { data: rest, error: restErr } = await supabaseAdmin
       .from('restaurants')
       .select('id, name')
@@ -45,8 +41,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Restaurante no encontrado' }, { status: 404 });
     }
 
-    // Verificar que el usuario autenticado tiene acceso a este restaurante
-    // a través de la tabla saas_restaurant_users o similar
     const { data: access } = await supabaseAdmin
       .from('saas_restaurant_users')
       .select('id')
@@ -54,7 +48,6 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .maybeSingle();
 
-    // Si no tiene acceso directo, verificar si es super admin
     if (!access) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
@@ -63,24 +56,10 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (!profile?.is_super_admin) {
-        // Último recurso: verificar si el usuario es el creador del restaurante
-        // buscando en cualquier tabla de acceso disponible
-        const { data: anyAccess } = await supabaseAdmin
-          .from('restaurant_staff')
-          .select('id')
-          .eq('restaurant_id', restaurantId)
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!anyAccess) {
-          // Si no encontramos ninguna restricción explícita, permitimos el acceso
-          // ya que el usuario está autenticado y la aplicación no tiene RLS estricto
-          console.warn(`User ${user.id} updating restaurant ${restaurantId} without explicit membership`);
-        }
+        console.warn(`User ${user.id} updating restaurant ${restaurantId} without explicit membership`);
       }
     }
 
-    // Sanitizar campos permitidos para actualización
     const allowedFields = [
       'ruc', 'name', 'address',
       'sri_dir_matriz', 'sri_dir_estab', 'sri_estab', 'sri_pto_emi',
@@ -100,7 +79,7 @@ export async function POST(request: Request) {
     }
 
     if (Object.keys(safeUpdates).length === 0) {
-      return NextResponse.json({ error: 'No hay campos válidos para actualizar' }, { status: 400 });
+      return NextResponse.json({ error: 'No hay campos validos para actualizar' }, { status: 400 });
     }
 
     const { error: updateErr } = await supabaseAdmin

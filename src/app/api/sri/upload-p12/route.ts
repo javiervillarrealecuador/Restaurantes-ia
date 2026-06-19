@@ -1,18 +1,16 @@
 // src/app/api/sri/upload-p12/route.ts
-// Endpoint dedicado exclusivamente para guardar la firma .p12 en la BD
+// Endpoint dedicado para guardar la firma .p12 en la BD usando supabaseAdmin
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
 
-// Forzar Node.js runtime (node-forge y supabaseAdmin requieren Node.js, no Edge)
+// Forzar Node.js runtime (supabaseAdmin requiere Node.js, no Edge)
 export const runtime = 'nodejs';
-// Aumentar límite del body para archivos .p12 en base64
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
   try {
-    // 1. Verificar autenticación
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -26,10 +24,9 @@ export async function POST(request: Request) {
     const { data: { user }, error: userErr } = await supabaseUser.auth.getUser(token);
     if (userErr || !user) {
       console.error('upload-p12: auth error', userErr);
-      return NextResponse.json({ error: 'Sesión inválida' }, { status: 401 });
+      return NextResponse.json({ error: 'Sesion invalida' }, { status: 401 });
     }
 
-    // 2. Leer body
     const body = await request.json();
     const { restaurantId, p12B64, p12Pwd } = body;
 
@@ -42,10 +39,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falta el archivo .p12 (p12B64)' }, { status: 400 });
     }
     if (!p12Pwd) {
-      return NextResponse.json({ error: 'Falta la contraseña de la firma' }, { status: 400 });
+      return NextResponse.json({ error: 'Falta la contrasena de la firma' }, { status: 400 });
     }
 
-    // 3. Verificar que el restaurante existe
     const { data: rest, error: restErr } = await supabaseAdmin
       .from('restaurants')
       .select('id, name')
@@ -57,7 +53,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Restaurante no encontrado' }, { status: 404 });
     }
 
-    // 4. Guardar la firma en la tabla restaurants
     const { error: updateErr } = await supabaseAdmin
       .from('restaurants')
       .update({
@@ -78,7 +73,7 @@ export async function POST(request: Request) {
     console.log('upload-p12: SUCCESS for restaurant', restaurantId);
     return NextResponse.json({
       success: true,
-      message: 'Firma electrónica guardada correctamente',
+      message: 'Firma electronica guardada correctamente',
       restaurantId,
       p12Size: p12B64.length
     });

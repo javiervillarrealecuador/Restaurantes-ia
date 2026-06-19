@@ -1,9 +1,9 @@
 // src/app/api/sri/metadata/route.ts
-// Forzar Node.js runtime (node-forge requiere Node.js, no Edge)
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 import { extractP12Metadata } from '@/lib/sri/firma';
+
+// Node.js runtime -- node-forge requiere Node.js, no puede correr en Edge
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +14,6 @@ export async function POST(request: Request) {
     const meta = extractP12Metadata(p12B64, pwd);
     return NextResponse.json(meta);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Firma .p12 inválida' }, { status: 422 });
+    return NextResponse.json({ error: err.message || 'Firma .p12 invalida' }, { status: 422 });
   }
 }
