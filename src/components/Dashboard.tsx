@@ -2842,8 +2842,11 @@ export default function Dashboard() {
                           </select>
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">
-                            Archivo Firma Digital (.p12) {sriP12B64 ? '✓ Cargado' : ''}
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                            <span>Archivo Firma Digital (.p12) {sriP12B64 ? '✓ Cargado' : ''}</span>
+                            <a href="/guardar_firma.html" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400 underline font-normal normal-case text-[10px]">
+                              ¿Problemas al guardar? Usar herramienta directa
+                            </a>
                           </label>
                           <input
                             type="file"

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Guardar Firma .p12 — Restaurantes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 500px; margin: 60px auto; padding: 20px; background: #111; color: #eee; }
+  h2 { color: #10b981; }
+  label { display: block; margin-top: 16px; font-size: 13px; color: #aaa; }
+  input, select { width: 100%; padding: 10px; margin-top: 6px; background: #222; border: 1px solid #444; color: #eee; border-radius: 6px; box-sizing: border-box; }
+  button { margin-top: 24px; width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  button:disabled { background: #555; cursor: not-allowed; }
+  #msg { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; }
+  .ok  { background: #064e3b; color: #6ee7b7; }
+  .err { background: #450a0a; color: #fca5a5; }
+  #loginSection { margin-bottom: 24px; padding: 16px; border: 1px solid #333; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h2>🔐 Guardar Firma Electrónica .p12</h2>
+<p style="color:#666;font-size:13px">Herramienta directa — guarda el .p12 en Supabase sin pasar por Vercel.</p>
+
+<div id="loginSection">
+  <b style="color:#f59e0b">Paso 1: Inicia sesión</b>
+  <label>Email</label>
+  <input type="email" id="email" placeholder="tu@email.com" />
+  <label>Contraseña</label>
+  <input type="password" id="password" placeholder="Contraseña de la app" />
+  <button onclick="login()">Iniciar sesión</button>
+</div>
+
+<div id="saveSection" style="display:none">
+  <b style="color:#10b981">Paso 2: Guardar firma</b>
+  <label>Restaurante</label>
+  <select id="restaurantSelect"><option value="">Cargando...</option></select>
+  <label>Archivo .p12</label>
+  <input type="file" id="p12file" accept=".p12,.pfx" />
+  <label>Contraseña de la firma</label>
+  <input type="password" id="p12pwd" placeholder="Contraseña del certificado .p12" />
+  <button onclick="guardar()" id="btnGuardar">Guardar Firma en Base de Datos</button>
+</div>
+
+<div id="msg"></div>
+
+<script>
+const SUPABASE_URL  = 'https://firophcgqwhmhztgcxqi.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_xU3B7fPKc-ekvk92Ch3Hdg_3FvGRGd8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+function msg(text, ok) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = ok ? 'ok' : 'err';
+  el.style.display = 'block';
+}
+
+async function login() {
+  const email = document.getElementById('email').value.trim();
+  const pass  = document.getElementById('password').value;
+  if (!email || !pass) return msg('Ingresa email y contraseña.', false);
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) return msg('Error: ' + error.message, false);
+  msg('✓ Sesión iniciada', true);
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('saveSection').style.display = 'block';
+  await cargarRestaurantes();
+}
+
+async function cargarRestaurantes() {
+  const { data, error } = await sb.from('restaurants').select('id, name');
+  if (error || !data?.length) {
+    document.getElementById('restaurantSelect').innerHTML = '<option value="">Sin acceso a restaurantes</option>';
+    return;
+  }
+  document.getElementById('restaurantSelect').innerHTML =
+    data.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+}
+
+async function guardar() {
+  const restaurantId = document.getElementById('restaurantSelect').value;
+  const p12file = document.getElementById('p12file').files[0];
+  const p12pwd  = document.getElementById('p12pwd').value;
+
+  if (!restaurantId) return msg('Selecciona un restaurante.', false);
+  if (!p12file)      return msg('Selecciona un archivo .p12.', false);
+  if (!p12pwd)       return msg('Ingresa la contraseña del .p12.', false);
+
+  document.getElementById('btnGuardar').disabled = true;
+  msg('Guardando...', true);
+
+  // Leer .p12 como base64
+  const p12B64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = e => resolve(btoa(String.fromCharCode(...new Uint8Array(e.target.result))));
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(p12file);
+  });
+
+  // Guardar directo en Supabase
+  const { error } = await sb.from('restaurants').update({
+    sri_p12_b64: p12B64,
+    sri_p12_pwd: p12pwd,
+    updated_at: new Date().toISOString()
+  }).eq('id', restaurantId);
+
+  document.getElementById('btnGuardar').disabled = false;
+
+  if (error) {
+    msg('❌ Error: ' + error.message, false);
+  } else {
+    msg('✅ Firma guardada correctamente en la base de datos.', true);
+  }
+}
+</script>
+</body>
+</html>
