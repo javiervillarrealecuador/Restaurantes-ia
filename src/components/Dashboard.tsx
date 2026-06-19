@@ -976,41 +976,29 @@ export default function Dashboard() {
     try {
       let metadata: any = {};
 
-      // Si se subio nueva firma: guardar p12 directamente en restaurants (mismo cliente que funciona para todo)
-      // Nota: no usamos sri_firmas, guardamos directo en restaurants.sri_p12_b64
+      // Si se subio nueva firma, extraer metadatos via API (no lanzar error si falla - es opcional)
       if (newP12Uploaded && sriP12B64 && sriP12Pwd) {
-        const { error: p12Err } = await supabase
-          .from('restaurants')
-          .update({
-            sri_p12_b64: sriP12B64,
-            sri_p12_pwd: sriP12Pwd,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', restaurant.id);
-
-        if (p12Err) throw new Error('Error al guardar la firma: ' + p12Err.message);
-        setNewP12Uploaded(false);
-
-        // Extraer metadatos del certificado (opcional - si falla, la firma ya esta guardada)
         try {
-          const metaRes = await fetch('/api/sri/metadata', {
+          const res = await fetch('/api/sri/metadata', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ p12B64: sriP12B64, pwd: sriP12Pwd })
           });
-          const metaJson = await metaRes.json();
-          if (metaRes.ok) {
-            metadata.sri_firma_razon = metaJson.razon;
-            metadata.sri_firma_expira = metaJson.expira;
-            setSriFirmaRazon(metaJson.razon);
-            setSriFirmaExpira(metaJson.expira);
+          const json = await res.json();
+          if (res.ok) {
+            metadata.sri_firma_razon = json.razon;
+            metadata.sri_firma_expira = json.expira;
+            setSriFirmaRazon(json.razon);
+            setSriFirmaExpira(json.expira);
           }
         } catch (_e) {
-          // Metadata es informativa, la firma ya quedo guardada
+          // Metadatos son opcionales
         }
+        setNewP12Uploaded(false);
       }
 
-      // Guardar el resto de la configuracion SRI directamente con el cliente anon
+      // Una sola llamada guarda TODO: p12, configuracion general y metadatos
+      // sri_p12_b64 siempre incluido para que setRestaurant actualice el estado local correctamente
       const updates: any = {
         ruc: sriRuc.trim() || null,
         sri_dir_matriz: sriDirMatriz.trim() || null,
@@ -1022,6 +1010,8 @@ export default function Dashboard() {
         sri_agente_retencion: sriAgenteRetencion.trim() || null,
         sri_contrib_especial: sriContribEspecial.trim() || null,
         sri_ambiente: Number(sriAmbiente),
+        sri_p12_b64: sriP12B64 || null,
+        sri_p12_pwd: sriP12Pwd || null,
         sri_email_envio: sriEmailEnvio.trim() || null,
         sri_iva_rate: Number(sriIvaRate),
         sri_iva_temporal: sriIvaTemporal ? Number(sriIvaTemporal) : null,
@@ -1038,12 +1028,13 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      setSriMessage({ type: 'success', text: 'Configuracion de facturacion SRI guardada con exito.' });
+      // Actualizar estado local incluyendo p12 para que el useEffect no sobreescriba con null
       setRestaurant(prev => prev ? { ...prev, ...updates } : null);
+      setSriMessage({ type: 'success', text: 'Configuracion de facturacion SRI guardada.' });
       setTimeout(() => setSriMessage(null), 3000);
     } catch (err: any) {
       console.error('Error updating SRI settings:', err);
-      setSriMessage({ type: 'error', text: err.message || 'Error al guardar la configuracion.' });
+      setSriMessage({ type: 'error', text: err.message || 'Error al guardar.' });
     } finally {
       setSriLoading(false);
     }
