@@ -128,6 +128,7 @@ export function signXml(
   unsignedXml: string,
   p12Override?: { p12B64: string; pwd: string },
 ): string {
+  unsignedXml = unsignedXml.replace(/\r\n/g, '\n');
   const p12 = p12Override ? loadP12FromBase64(p12Override.p12B64, p12Override.pwd) : loadP12();
 
   const sId = rand(), siId = rand(), spId = rand(), spRefId = rand();
