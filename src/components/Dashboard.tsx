@@ -123,19 +123,10 @@ export default function Dashboard() {
   const [sriFirmas, setSriFirmas] = useState<any[]>([]);
   const [newP12Uploaded, setNewP12Uploaded] = useState(false);
 
-  const fetchSriFirmas = async (restaurantId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('sri_firmas')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        setSriFirmas(data);
-      }
-    } catch (err) {
-      console.error('Error fetching signatures:', err);
-    }
+  // sri_firmas table removed — signatures are stored in restaurants.sri_p12_b64
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const fetchSriFirmas = async (_restaurantId: string) => {
+    setSriFirmas([]);
   };
 
   useEffect(() => {
