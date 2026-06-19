@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -124,7 +124,7 @@ export default function Dashboard() {
   const [sriFirmas, setSriFirmas] = useState<any[]>([]);
   const [newP12Uploaded, setNewP12Uploaded] = useState(false);
 
-  // sri_firmas table removed ÔÇö signatures are stored in restaurants.sri_p12_b64
+  // sri_firmas table removed — signatures are stored in restaurants.sri_p12_b64
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const fetchSriFirmas = async (_restaurantId: string) => {
     setSriFirmas([]);
@@ -237,11 +237,11 @@ export default function Dashboard() {
   const modulesConfig = [
     { key: 'orders', label: 'Pedidos', desc: 'Gestionar pedidos de clientes' },
     { key: 'customers', label: 'Clientes', desc: 'Ver y fidelizar base de clientes' },
-    { key: 'menu', label: 'Carta / Men├║', desc: 'Configurar platos y categor├¡as' },
+    { key: 'menu', label: 'Carta / Menú', desc: 'Configurar platos y categorías' },
     { key: 'simulator', label: 'Simulador WhatsApp', desc: 'Probar pedidos simulados' },
-    { key: 'reports', label: 'Reportes', desc: 'Anal├¡ticas y descargas Excel/PDF' },
-    { key: 'logs', label: 'Historial Webhooks', desc: 'Ver logs t├®cnicos de Meta/Gemini' },
-    { key: 'staff', label: 'Gesti├│n Personal', desc: 'Administrar accesos y seguimiento' },
+    { key: 'reports', label: 'Reportes', desc: 'Analíticas y descargas Excel/PDF' },
+    { key: 'logs', label: 'Historial Webhooks', desc: 'Ver logs técnicos de Meta/Gemini' },
+    { key: 'staff', label: 'Gestión Personal', desc: 'Administrar accesos y seguimiento' },
     { key: 'settings', label: 'Ajustes', desc: 'Ver perfil y llaves de API' },
   ] as const;
   const [auditFilterAction, setAuditFilterAction] = useState<string>('all');
@@ -429,7 +429,7 @@ export default function Dashboard() {
             setAlerts(prev => [newAlert, ...prev]);
             setActiveAlert(newAlert);
             triggerAlarmSound();
-            toast.warning(`­ƒÜ¿ ┬íALERTA! Nueva solicitud: ${newAlert.title}`);
+            toast.warning(`🚨 ¡ALERTA! Nueva solicitud: ${newAlert.title}`);
           }
         }
       )
@@ -483,7 +483,7 @@ export default function Dashboard() {
       const customer = order?.customer_name || 'Cliente';
       await logActivity(
         'order_status_update',
-        `Cambi├│ el estado del pedido #${code} (${customer}) a: ${status}`
+        `Cambió el estado del pedido #${code} (${customer}) a: ${status}`
       );
     }
     // Liberar mesa si el pedido se marca como entregado o cancelado
@@ -519,8 +519,8 @@ export default function Dashboard() {
       await logActivity(
         isPaid ? 'payment_confirmed' : 'payment_revoked',
         isPaid 
-          ? `Confirm├│ el pago del pedido #${code} (${customer})`
-          : `Revoc├│ el pago del pedido #${code} (${customer})`
+          ? `Confirmó el pago del pedido #${code} (${customer})`
+          : `Revocó el pago del pedido #${code} (${customer})`
       );
     }
     return success;
@@ -578,7 +578,7 @@ export default function Dashboard() {
       setAuditLogs(data || []);
     } catch (err: any) {
       console.error('Error fetching audit logs:', err);
-      setAuditError(err.message || 'Error al cargar los logs de auditor├¡a.');
+      setAuditError(err.message || 'Error al cargar los logs de auditoría.');
     } finally {
       setAuditLoading(false);
     }
@@ -614,11 +614,11 @@ export default function Dashboard() {
       if (restaurant?.id) {
         await logActivity(
           'profile_updated',
-          `Usuario actualiz├│ sus datos de perfil a: ${profileFirstName} ${profileLastName}`
+          `Usuario actualizó sus datos de perfil a: ${profileFirstName} ${profileLastName}`
         );
       }
 
-      setProfileMessage({ type: 'success', text: 'Perfil actualizado con ├®xito.' });
+      setProfileMessage({ type: 'success', text: 'Perfil actualizado con éxito.' });
     } catch (err: any) {
       setProfileMessage({ type: 'error', text: err.message || 'Error al actualizar el perfil.' });
     } finally {
@@ -630,11 +630,11 @@ export default function Dashboard() {
     e.preventDefault();
     if (!user) return;
     if (newPassword.length < 6) {
-      setPasswordMessage({ type: 'error', text: 'La contrase├▒a debe tener al menos 6 caracteres.' });
+      setPasswordMessage({ type: 'error', text: 'La contraseña debe tener al menos 6 caracteres.' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordMessage({ type: 'error', text: 'Las contrase├▒as no coinciden.' });
+      setPasswordMessage({ type: 'error', text: 'Las contraseñas no coinciden.' });
       return;
     }
 
@@ -650,15 +650,15 @@ export default function Dashboard() {
       if (restaurant?.id) {
         await logActivity(
           'password_changed',
-          'Usuario cambi├│ su contrase├▒a de acceso'
+          'Usuario cambió su contraseña de acceso'
         );
       }
 
-      setPasswordMessage({ type: 'success', text: 'Contrase├▒a actualizada con ├®xito.' });
+      setPasswordMessage({ type: 'success', text: 'Contraseña actualizada con éxito.' });
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      setPasswordMessage({ type: 'error', text: err.message || 'Error al actualizar la contrase├▒a.' });
+      setPasswordMessage({ type: 'error', text: err.message || 'Error al actualizar la contraseña.' });
     } finally {
       setPasswordLoading(false);
     }
@@ -784,7 +784,7 @@ export default function Dashboard() {
   };
 
   const handleDeleteStaff = async (memberId: string, fullName: string) => {
-    const confirmDelete = window.confirm(`┬┐Est├ís seguro de que deseas eliminar a ${fullName}? Esta acci├│n no se puede deshacer y revocar├í todo el acceso.`);
+    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar a ${fullName}? Esta acción no se puede deshacer y revocará todo el acceso.`);
     if (!confirmDelete) return;
 
     try {
@@ -826,7 +826,7 @@ export default function Dashboard() {
     if (prevOrdersCount.current !== null && orders.length > prevOrdersCount.current) {
       // Find the latest inserted order
       const latestOrder = orders[0];
-      toast.success(`┬íNuevo pedido recibido de ${latestOrder.customer_name} por $${Number(latestOrder.total_price).toFixed(2)}!`, {
+      toast.success(`¡Nuevo pedido recibido de ${latestOrder.customer_name} por $${Number(latestOrder.total_price).toFixed(2)}!`, {
         duration: 7000,
         icon: React.createElement(Bell, { className: 'h-5 w-5 animate-pulse text-emerald-500' })
       });
@@ -1055,7 +1055,7 @@ export default function Dashboard() {
     if (!sriP12B64 || !sriP12Pwd) {
       setSriMessage({ 
         type: 'error', 
-        text: 'Por favor, carga una firma digital (.p12) e ingresa la contrase├▒a para realizar la prueba.' 
+        text: 'Por favor, carga una firma digital (.p12) e ingresa la contraseña para realizar la prueba.' 
       });
       return;
     }
@@ -1069,13 +1069,13 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Fallo de conexi├│n o certificado no v├ílido.');
+        throw new Error(data.error || 'Fallo de conexión o certificado no válido.');
       }
       
       const expDate = new Date(data.certificate.expira).toLocaleDateString();
       setSriMessage({
         type: 'success',
-        text: `Ô£ô Conexi├│n exitosa con el SRI en ambiente de ${sriAmbiente === 2 ? 'PRODUCCI├ôN' : 'PRUEBAS'}. Firmante: ${data.certificate.subject}. Vence el: ${expDate}.`
+        text: `✓ Conexión exitosa con el SRI en ambiente de ${sriAmbiente === 2 ? 'PRODUCCIÓN' : 'PRUEBAS'}. Firmante: ${data.certificate.subject}. Vence el: ${expDate}.`
       });
     } catch (err: any) {
       console.error(err);
@@ -1130,7 +1130,7 @@ export default function Dashboard() {
       setRestaurant(prev => prev ? { ...prev, ...updates } : null);
 
       await fetchSriFirmas(restaurant.id);
-      setSriMessage({ type: 'success', text: 'Firma electr├│nica activada con ├®xito.' });
+      setSriMessage({ type: 'success', text: 'Firma electrónica activada con éxito.' });
       setTimeout(() => setSriMessage(null), 3000);
     } catch (err: any) {
       console.error('Error activating signature:', err);
@@ -1142,7 +1142,7 @@ export default function Dashboard() {
 
   const handleDeleteSignature = async (firmaId: string) => {
     if (!restaurant?.id) return;
-    if (!confirm('┬┐Est├í seguro de eliminar esta firma electr├│nica permanentemente?')) return;
+    if (!confirm('¿Está seguro de eliminar esta firma electrónica permanentemente?')) return;
     try {
       setSriLoading(true);
       setSriMessage(null);
@@ -1173,7 +1173,7 @@ export default function Dashboard() {
       }
 
       await fetchSriFirmas(restaurant.id);
-      setSriMessage({ type: 'success', text: 'Firma electr├│nica eliminada.' });
+      setSriMessage({ type: 'success', text: 'Firma electrónica eliminada.' });
       setTimeout(() => setSriMessage(null), 3000);
     } catch (err: any) {
       console.error('Error deleting signature:', err);
@@ -1204,7 +1204,7 @@ export default function Dashboard() {
           })
           .eq('id', editingBranch.id);
         if (error) throw error;
-        toast.success('Sucursal actualizada con ├®xito.');
+        toast.success('Sucursal actualizada con éxito.');
       } else {
         const { error } = await supabase
           .from('branches')
@@ -1216,7 +1216,7 @@ export default function Dashboard() {
             is_active: branchIsActive
           });
         if (error) throw error;
-        toast.success('Sucursal creada con ├®xito.');
+        toast.success('Sucursal creada con éxito.');
       }
 
       setBranchName('');
@@ -1235,7 +1235,7 @@ export default function Dashboard() {
   };
 
   const handleDeleteBranch = async (id: string) => {
-    if (!window.confirm('┬┐Est├ís seguro de que deseas eliminar esta sucursal?')) return;
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta sucursal?')) return;
     try {
       const { error } = await supabase
         .from('branches')
@@ -1283,7 +1283,7 @@ export default function Dashboard() {
   }, [orders]);
 
   // Only show loading splash while auth or restaurant data is still being fetched.
-  // IMPORTANT: only block if BOTH are still loading ÔÇö if auth is done and user is null,
+  // IMPORTANT: only block if BOTH are still loading — if auth is done and user is null,
   // fall through so the redirect-to-login effect can fire.
   // ALSO: If auth is done but there is NO activeRestaurantId, don't block.
   if (authLoading || (restaurantLoading && activeRestaurantId)) {
@@ -1304,7 +1304,7 @@ export default function Dashboard() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#09090b] text-zinc-100">
         <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mb-4" />
-        <p className="text-zinc-400 text-sm">Redirigiendo al inicio de sesi├│n...</p>
+        <p className="text-zinc-400 text-sm">Redirigiendo al inicio de sesión...</p>
       </div>
     );
   }
@@ -1325,7 +1325,7 @@ export default function Dashboard() {
             
             <div className="space-y-2">
               <h2 className="text-lg font-black text-red-500 uppercase tracking-widest">
-                ­ƒÜ¿ ALERTA DE ALTA PRIORIDAD ­ƒÜ¿
+                🚨 ALERTA DE ALTA PRIORIDAD 🚨
               </h2>
               <h3 className="text-base font-bold text-zinc-100">{activeAlert.title}</h3>
               <p className="text-xs text-zinc-400 font-medium leading-relaxed">{activeAlert.message}</p>
@@ -1337,7 +1337,7 @@ export default function Dashboard() {
                 <span className="text-zinc-200">{activeAlert.customer_name || 'N/D'}</span>
               </div>
               <div className="flex justify-between text-zinc-400 font-semibold">
-                <span>Tel├®fono:</span>
+                <span>Teléfono:</span>
                 <span className="text-zinc-200">+{activeAlert.customer_phone}</span>
               </div>
               <div className="flex justify-between text-zinc-400 font-semibold">
@@ -1370,7 +1370,7 @@ export default function Dashboard() {
 
       {/* Navigation Sidebar */}
       <aside className="w-full md:w-64 bg-zinc-950 border-r border-zinc-900 flex flex-col shrink-0">
-        {/* Restaurant Header ÔÇö shows selector when user has multiple restaurants */}
+        {/* Restaurant Header — shows selector when user has multiple restaurants */}
         <div className="p-4 border-b border-zinc-900">
           {restaurantAccess.length > 1 ? (
             /* Multi-restaurant selector */
@@ -1397,7 +1397,7 @@ export default function Dashboard() {
               </select>
             </div>
           ) : (
-            /* Single restaurant ÔÇö simple header */
+            /* Single restaurant — simple header */
             <div className="flex items-center gap-3 px-1">
               <div className="h-9 w-9 rounded-xl bg-emerald-600/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                 <Utensils className="h-4.5 w-4.5" />
@@ -1425,7 +1425,7 @@ export default function Dashboard() {
               }`}
             >
               <ShieldCheck className="h-4.5 w-4.5" />
-              <span>Administraci├│n SaaS</span>
+              <span>Administración SaaS</span>
             </button>
           )}
           {activePermissions.orders !== 'none' && (
@@ -1452,7 +1452,7 @@ export default function Dashboard() {
               >
                 <ClipboardList className="h-4.5 w-4.5" />
                 <span>
-                  {role === 'cocinero' ? 'Cola de Cocina' : role === 'repartidor' ? 'Cola de Repartos' : 'Gesti├│n Pedidos'}
+                  {role === 'cocinero' ? 'Cola de Cocina' : role === 'repartidor' ? 'Cola de Repartos' : 'Gestión Pedidos'}
                 </span>
                 {stats.activeCount > 0 && role !== 'repartidor' && (
                   <span className="ml-auto bg-emerald-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-md">
@@ -1473,7 +1473,7 @@ export default function Dashboard() {
               }`}
             >
               <BookOpen className="h-4.5 w-4.5" />
-              <span>Carta / Men├║</span>
+              <span>Carta / Menú</span>
             </button>
           )}
 
@@ -1487,7 +1487,7 @@ export default function Dashboard() {
               }`}
             >
               <Users className="h-4.5 w-4.5" />
-              <span>Fidelizaci├│n Clientes</span>
+              <span>Fidelización Clientes</span>
             </button>
           )}
 
@@ -1502,7 +1502,7 @@ export default function Dashboard() {
                 }`}
               >
                 <UserCheck className="h-4.5 w-4.5" />
-                <span>Gesti├│n Personal</span>
+                <span>Gestión Personal</span>
               </button>
 
               <button
@@ -1529,7 +1529,7 @@ export default function Dashboard() {
               }`}
             >
               <BarChart3 className="h-4.5 w-4.5" />
-              <span>Reportes & Anal├¡tica</span>
+              <span>Reportes & Analítica</span>
             </button>
           )}
 
@@ -1543,7 +1543,7 @@ export default function Dashboard() {
               }`}
             >
               <Settings2 className="h-4.5 w-4.5" />
-              <span>Configuraci├│n / Perfil</span>
+              <span>Configuración / Perfil</span>
             </button>
           )}
 
@@ -1584,14 +1584,14 @@ export default function Dashboard() {
               className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-350 bg-rose-950/5 hover:bg-rose-950/15 border border-rose-950/20 hover:border-rose-900/30 transition-all cursor-pointer"
             >
               <LogOut className="h-4 w-4 shrink-0" />
-              <span>Cerrar Sesi├│n</span>
+              <span>Cerrar Sesión</span>
             </button>
           </div>
         )}
 
         {/* Footer Brand Info */}
         <div className="p-4 border-t border-zinc-900 text-[10px] text-zinc-600 text-center">
-          <p>┬® 2026 Restaurante SaaS</p>
+          <p>© 2026 Restaurante SaaS</p>
           <p className="mt-0.5 text-zinc-700">WhatsApp & Gemini Powered</p>
         </div>
       </aside>
@@ -1602,15 +1602,15 @@ export default function Dashboard() {
         {/* Top Header Navbar */}
         <header className="h-16 border-b border-zinc-200 dark:border-zinc-900 px-6 flex items-center justify-between shrink-0">
           <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-150 uppercase tracking-widest">
-            {activeTab === 'saas' && 'Administraci├│n Global de la Plataforma'}
+            {activeTab === 'saas' && 'Administración Global de la Plataforma'}
             {activeTab === 'orders' && 'Panel de Pedidos WhatsApp'}
             {activeTab === 'customers' && 'Base de Clientes'}
-            {activeTab === 'reports' && 'Reportes & Anal├¡tica de Ventas'}
-            {activeTab === 'logs' && 'Logs de Integraci├│n WhatsApp & AI'}
-            {activeTab === 'settings' && 'Configuraci├│n & Perfil'}
-            {activeTab === 'staff' && 'Administraci├│n de Personal'}
+            {activeTab === 'reports' && 'Reportes & Analítica de Ventas'}
+            {activeTab === 'logs' && 'Logs de Integración WhatsApp & AI'}
+            {activeTab === 'settings' && 'Configuración & Perfil'}
+            {activeTab === 'staff' && 'Administración de Personal'}
             {activeTab === 'audit' && 'Seguimiento de Actividades'}
-            {activeTab === 'menu' && 'Carta / Men├║ del Restaurante'}
+            {activeTab === 'menu' && 'Carta / Menú del Restaurante'}
             {activeTab === 'simulator' && 'Simulador de Chat de WhatsApp'}
           </h2>
 
@@ -1770,7 +1770,7 @@ export default function Dashboard() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-900/60 mb-6 gap-3">
                 <div>
                   <h4 className="text-base font-bold text-zinc-800 dark:text-zinc-200">Historial de Webhooks Recibidos</h4>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Muestra las ├║ltimas transacciones de Meta y las interpretaciones de Gemini AI.</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Muestra las últimas transacciones de Meta y las interpretaciones de Gemini AI.</p>
                 </div>
                 <button
                   onClick={fetchWebhookLogs}
@@ -1785,7 +1785,7 @@ export default function Dashboard() {
                 <div className="text-center py-20 text-zinc-500 text-xs">Cargando webhook logs...</div>
               ) : webhookLogs.length === 0 ? (
                 <div className="text-center py-20 bg-zinc-100 dark:bg-zinc-950/20 border border-zinc-200 dark:border-zinc-850 rounded-2xl px-4 text-xs text-zinc-550">
-                  No se han registrado mensajes de webhook de WhatsApp. Env├¡a un mensaje de prueba al webhook para registrar logs.
+                  No se han registrado mensajes de webhook de WhatsApp. Envía un mensaje de prueba al webhook para registrar logs.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1794,7 +1794,7 @@ export default function Dashboard() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{log.sender_phone}</span>
-                          <span className="text-zinc-300 dark:text-zinc-700 text-xs">ÔÇó</span>
+                          <span className="text-zinc-300 dark:text-zinc-700 text-xs">•</span>
                           <span className="text-xs text-zinc-550 dark:text-zinc-400">{new Date(log.created_at).toLocaleString()}</span>
                         </div>
                         <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
@@ -1819,7 +1819,7 @@ export default function Dashboard() {
                       {/* AI parsed block / error details */}
                       {!!log.ai_parsed_response && (
                         <div>
-                          <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1">Extracci├│n Inteligente (Gemini):</p>
+                          <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1">Extracción Inteligente (Gemini):</p>
                           <pre className="text-[11px] text-emerald-600 dark:text-emerald-350 bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-850 p-3 rounded-xl overflow-x-auto font-mono">
                             {JSON.stringify(log.ai_parsed_response, null, 2)}
                           </pre>
@@ -1845,8 +1845,8 @@ export default function Dashboard() {
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-zinc-200 dark:border-zinc-900/60 mb-6 gap-4">
                 <div>
-                  <h4 className="text-base font-bold text-zinc-800 dark:text-zinc-200">Administraci├│n de Personal</h4>
-                  <p className="text-xs text-zinc-550 dark:text-zinc-400 mt-0.5">Agrega, modifica perfiles, restablece contrase├▒as o elimina miembros de tu equipo.</p>
+                  <h4 className="text-base font-bold text-zinc-800 dark:text-zinc-200">Administración de Personal</h4>
+                  <p className="text-xs text-zinc-550 dark:text-zinc-400 mt-0.5">Agrega, modifica perfiles, restablece contraseñas o elimina miembros de tu equipo.</p>
                 </div>
                 <button
                   onClick={() => {
@@ -1912,7 +1912,7 @@ export default function Dashboard() {
 
                       <div className="border-t border-zinc-100 dark:border-zinc-900 pt-3 flex justify-between items-center text-[10px] text-zinc-500">
                         <div>
-                          <span>├Ültimo acceso: </span>
+                          <span>Último acceso: </span>
                           <span className="text-zinc-650 dark:text-zinc-400 font-medium">
                             {member.last_sign_in ? new Date(member.last_sign_in).toLocaleDateString() : 'Nunca'}
                           </span>
@@ -1983,13 +1983,13 @@ export default function Dashboard() {
                             required
                             value={staffFullName}
                             onChange={(e) => setStaffFullName(e.target.value)}
-                            placeholder="Ej. Mar├¡a Clara G├│mez"
+                            placeholder="Ej. María Clara Gómez"
                             className="w-full bg-zinc-900/40 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all placeholder:text-zinc-600"
                           />
                         </div>
 
                         <div className="space-y-1.5 text-sm">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1">Correo Electr├│nico</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1">Correo Electrónico</label>
                           <input
                             type="email"
                             required
@@ -2004,14 +2004,14 @@ export default function Dashboard() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-1.5 text-sm">
                           <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
-                            Contrase├▒a Inicial
+                            Contraseña Inicial
                           </label>
                           <input
                             type="password"
                             required
                             value={staffPassword}
                             onChange={(e) => setStaffPassword(e.target.value)}
-                            placeholder="M├¡nimo 6 caracteres"
+                            placeholder="Mínimo 6 caracteres"
                             className="w-full bg-zinc-900/40 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all placeholder:text-zinc-600"
                           />
                         </div>
@@ -2096,7 +2096,7 @@ export default function Dashboard() {
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-zinc-150">Modificar Miembro</h4>
-                        <p className="text-xs text-zinc-500">Actualiza la informaci├│n de {editingStaffMember.email}.</p>
+                        <p className="text-xs text-zinc-500">Actualiza la información de {editingStaffMember.email}.</p>
                       </div>
                       <button 
                         onClick={() => {
@@ -2183,7 +2183,7 @@ export default function Dashboard() {
                       <div className="border-t border-zinc-900/65 pt-4 space-y-3">
                         <div className="space-y-1">
                           <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                            <Key className="h-3 w-3 text-amber-500" /> Restablecer Contrase├▒a (Opcional)
+                            <Key className="h-3 w-3 text-amber-500" /> Restablecer Contraseña (Opcional)
                           </label>
                           <input
                             type="password"
@@ -2193,7 +2193,7 @@ export default function Dashboard() {
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
                           />
                         </div>
-                        <p className="text-[10px] text-zinc-500">Si ingresas una contrase├▒a aqu├¡, se forzar├í la actualizaci├│n de la contrase├▒a del usuario en el sistema.</p>
+                        <p className="text-[10px] text-zinc-500">Si ingresas una contraseña aquí, se forzará la actualización de la contraseña del usuario en el sistema.</p>
                       </div>
 
                       <button
@@ -2219,7 +2219,7 @@ export default function Dashboard() {
               <div className="bg-zinc-950/40 border border-zinc-800/80 p-4.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                   <h4 className="text-sm font-semibold text-zinc-200">Seguimiento de Actividades</h4>
-                  <p className="text-xs text-zinc-500">Log de auditor├¡a de las acciones realizadas por el personal.</p>
+                  <p className="text-xs text-zinc-500">Log de auditoría de las acciones realizadas por el personal.</p>
                 </div>
                 
                 <div className="flex items-center gap-2.5">
@@ -2232,9 +2232,9 @@ export default function Dashboard() {
                     <option value="order_status_update">Cambios de Pedido</option>
                     <option value="payment_confirmed">Pagos Confirmados</option>
                     <option value="payment_revoked">Pagos Revocados</option>
-                    <option value="staff_created">Creaci├│n de Usuarios</option>
-                    <option value="staff_updated">Actualizaci├│n de Usuarios</option>
-                    <option value="staff_deleted">Eliminaci├│n de Usuarios</option>
+                    <option value="staff_created">Creación de Usuarios</option>
+                    <option value="staff_updated">Actualización de Usuarios</option>
+                    <option value="staff_deleted">Eliminación de Usuarios</option>
                     <option value="profile_updated">Cambios de Perfil</option>
                   </select>
                   
@@ -2250,7 +2250,7 @@ export default function Dashboard() {
 
               {auditLoading ? (
                 <div className="text-center py-20 text-zinc-500 text-xs flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-500" /> Cargando logs de auditor├¡a...
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-500" /> Cargando logs de auditoría...
                 </div>
               ) : auditError ? (
                 <div className="bg-rose-950/10 border border-rose-950/45 p-4 rounded-xl text-rose-400 text-xs">
@@ -2267,7 +2267,7 @@ export default function Dashboard() {
                       <thead>
                         <tr className="border-b border-zinc-900 bg-zinc-950/80 text-zinc-400 font-bold uppercase tracking-wider text-[9px]">
                           <th className="p-4">Usuario</th>
-                          <th className="p-4">Acci├│n</th>
+                          <th className="p-4">Acción</th>
                           <th className="p-4">Detalles</th>
                           <th className="p-4 text-right">Fecha & Hora</th>
                         </tr>
@@ -2353,7 +2353,7 @@ export default function Dashboard() {
 
                 <form onSubmit={handleUpdateProfile} className="space-y-4">
                   <div className="space-y-1 text-xs">
-                    <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electr├│nico (Solo Lectura)</label>
+                    <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico (Solo Lectura)</label>
                     <input 
                       type="text" 
                       readOnly 
@@ -2392,15 +2392,15 @@ export default function Dashboard() {
                     disabled={profileLoading || activePermissions.settings === 'read'}
                     className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-850 disabled:text-zinc-555 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition-all cursor-pointer text-xs"
                   >
-                    {profileLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Informaci├│n'}
+                    {profileLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Información'}
                   </button>
                 </form>
 
                 {/* Password Change Form */}
                 <div className="border-t border-zinc-900 pt-6 space-y-6">
                   <div>
-                    <h4 className="text-sm font-semibold text-zinc-200 font-bold">Cambiar Contrase├▒a</h4>
-                    <p className="text-xs text-zinc-500">Restablece tu contrase├▒a de seguridad para entrar al panel.</p>
+                    <h4 className="text-sm font-semibold text-zinc-200 font-bold">Cambiar Contraseña</h4>
+                    <p className="text-xs text-zinc-500">Restablece tu contraseña de seguridad para entrar al panel.</p>
                   </div>
 
                   {passwordMessage && (
@@ -2415,7 +2415,7 @@ export default function Dashboard() {
                   <form onSubmit={handleUpdatePassword} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1 text-xs">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Nueva Contrase├▒a</label>
+                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Nueva Contraseña</label>
                         <div className="relative">
                           <input 
                             type={showPassword ? "text" : "password"} 
@@ -2423,7 +2423,7 @@ export default function Dashboard() {
                             disabled={activePermissions.settings === 'read'}
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="M├¡nimo 6 caracteres"
+                            placeholder="Mínimo 6 caracteres"
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 pr-10 rounded-xl text-zinc-200 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                           <button
@@ -2437,14 +2437,14 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="space-y-1 text-xs">
-                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Confirmar Nueva Contrase├▒a</label>
+                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Confirmar Nueva Contraseña</label>
                         <input 
                           type={showPassword ? "text" : "password"} 
                           required
                           disabled={activePermissions.settings === 'read'}
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Repite la contrase├▒a"
+                          placeholder="Repite la contraseña"
                           className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </div>
@@ -2455,7 +2455,7 @@ export default function Dashboard() {
                       disabled={passwordLoading || activePermissions.settings === 'read'}
                       className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-850 disabled:text-zinc-555 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition-all cursor-pointer text-xs"
                     >
-                      {passwordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Modificar Contrase├▒a'}
+                      {passwordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Modificar Contraseña'}
                     </button>
                   </form>
                 </div>
@@ -2467,7 +2467,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
                     <div>
                       <h4 className="text-sm font-semibold text-zinc-200 font-bold">Sucursales de la Empresa</h4>
-                      <p className="text-xs text-zinc-500">Configura y gestiona las sucursales f├¡sicas de tu restaurante.</p>
+                      <p className="text-xs text-zinc-500">Configura y gestiona las sucursales físicas de tu restaurante.</p>
                     </div>
                     {!showAddBranch && !editingBranch && (
                       <button
@@ -2506,7 +2506,7 @@ export default function Dashboard() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1 text-xs">
-                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Tel├®fono</label>
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Teléfono</label>
                             <input
                               type="text"
                               placeholder="Ej. +593999999999"
@@ -2516,10 +2516,10 @@ export default function Dashboard() {
                             />
                           </div>
                           <div className="space-y-1 text-xs">
-                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Direcci├│n</label>
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Dirección</label>
                             <input
                               type="text"
-                              placeholder="Ej. Av. de la Rep├║blica"
+                              placeholder="Ej. Av. de la República"
                               value={branchAddress}
                               onChange={(e) => setBranchAddress(e.target.value)}
                               className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
@@ -2535,7 +2535,7 @@ export default function Dashboard() {
                             className="rounded border-zinc-800 text-emerald-600 focus:ring-emerald-500 bg-zinc-900 h-4 w-4 cursor-pointer"
                           />
                           <label htmlFor="branch_is_active" className="text-zinc-350 cursor-pointer font-semibold">
-                            Sucursal Activa (Se mostrar├í en la toma de pedidos)
+                            Sucursal Activa (Se mostrará en la toma de pedidos)
                           </label>
                         </div>
                       </div>
@@ -2625,25 +2625,25 @@ export default function Dashboard() {
                   ) : (
                     <div className="text-center py-8 border border-dashed border-zinc-900 rounded-xl space-y-2">
                       <MapPin className="h-8 w-8 text-zinc-700 mx-auto" />
-                      <p className="text-xs text-zinc-500">No hay sucursales registradas a├║n.</p>
+                      <p className="text-xs text-zinc-500">No hay sucursales registradas aún.</p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Facturaci├│n Electr├│nica SRI (Ecuador) */}
+              {/* Facturación Electrónica SRI (Ecuador) */}
               {role === 'admin_general' && (
                 <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 lg:col-span-2">
                   <div className="border-b border-zinc-900 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
                       <h4 className="text-sm font-semibold text-zinc-200 font-bold flex items-center gap-2">
-                        <Utensils className="h-4 w-4 text-emerald-500" /> Facturaci├│n Electr├│nica SRI (Ecuador)
+                        <Utensils className="h-4 w-4 text-emerald-500" /> Facturación Electrónica SRI (Ecuador)
                       </h4>
-                      <p className="text-xs text-zinc-500">Configura los par├ímetros para la emisi├│n de facturas electr├│nicas v├ílidas ante el SRI.</p>
+                      <p className="text-xs text-zinc-500">Configura los parámetros para la emisión de facturas electrónicas válidas ante el SRI.</p>
                     </div>
                     {sriFirmaExpira && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Firma V├ílida hasta: {new Date(sriFirmaExpira).toLocaleDateString()}
+                        Firma Válida hasta: {new Date(sriFirmaExpira).toLocaleDateString()}
                       </span>
                     )}
                   </div>
@@ -2658,7 +2658,7 @@ export default function Dashboard() {
                   )}
 
                   <form onSubmit={handleUpdateSriSettings} className="space-y-6">
-                    {/* Secci├│n 1: Datos Emisor */}
+                    {/* Sección 1: Datos Emisor */}
                     <div className="space-y-4">
                       <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">1. Datos del Emisor</h5>
                       
@@ -2677,7 +2677,7 @@ export default function Dashboard() {
                           />
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">C├│digo Establecimiento</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Código Establecimiento</label>
                           <input
                             type="text"
                             required
@@ -2690,7 +2690,7 @@ export default function Dashboard() {
                           />
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Punto de Emisi├│n</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Punto de Emisión</label>
                           <input
                             type="text"
                             required
@@ -2702,23 +2702,38 @@ export default function Dashboard() {
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs font-mono"
                           />
                         </div>
+                        <div className="space-y-1 text-xs">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">
+                            Secuencial Desde
+                            <span className="ml-1 text-zinc-600 normal-case font-normal">(próximo número a emitir)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            disabled={activePermissions.settings === 'read' || sriLoading}
+                            placeholder="1"
+                            value={sriSecuencialInicio}
+                            onChange={(e) => setSriSecuencialInicio(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs font-mono"
+                          />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Direcci├│n Matriz</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Dirección Matriz</label>
                           <input
                             type="text"
                             required
                             disabled={activePermissions.settings === 'read' || sriLoading}
-                            placeholder="Ej. Av. Amazonas 123 y Col├│n"
+                            placeholder="Ej. Av. Amazonas 123 y Colón"
                             value={sriDirMatriz}
                             onChange={(e) => setSriDirMatriz(e.target.value)}
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
                           />
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Direcci├│n Establecimiento (Opcional)</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Dirección Establecimiento (Opcional)</label>
                           <input
                             type="text"
                             disabled={activePermissions.settings === 'read' || sriLoading}
@@ -2745,21 +2760,21 @@ export default function Dashboard() {
                           </label>
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">R├®gimen RIMPE (Opcional)</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Régimen RIMPE (Opcional)</label>
                           <select
                             value={sriRimpe}
                             disabled={activePermissions.settings === 'read' || sriLoading}
                             onChange={(e) => setSriRimpe(e.target.value)}
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
                           >
-                            <option value="">Ninguno / R├®gimen General</option>
-                            <option value="CONTRIBUYENTE R├ëGIMEN RIMPE">RIMPE Emprendedor/Popular</option>
+                            <option value="">Ninguno / Régimen General</option>
+                            <option value="CONTRIBUYENTE RÉGIMEN RIMPE">RIMPE Emprendedor/Popular</option>
                             <option value="RIMPE EMPRENDEDOR">RIMPE Emprendedor (Detallado)</option>
                             <option value="RIMPE POPULAR">RIMPE Popular (Detallado)</option>
                           </select>
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Resoluci├│n Agente Retenci├│n (Opcional)</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Resolución Agente Retención (Opcional)</label>
                           <input
                             type="text"
                             disabled={activePermissions.settings === 'read' || sriLoading}
@@ -2783,9 +2798,9 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* Secci├│n 2: Configuraci├│n del IVA */}
+                    {/* Sección 2: Configuración del IVA */}
                     <div className="space-y-4">
-                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">2. Configuraci├│n de IVA (Ecuador)</h5>
+                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">2. Configuración de IVA (Ecuador)</h5>
                       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="space-y-1 text-xs">
                           <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Porcentaje IVA General (%)</label>
@@ -2837,13 +2852,13 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <p className="text-[10px] text-zinc-500">
-                        El IVA temporal anular├í el IVA General ├║nicamente durante el rango de fechas indicado (inclusive).
+                        El IVA temporal anulará el IVA General únicamente durante el rango de fechas indicado (inclusive).
                       </p>
                     </div>
 
-                    {/* Secci├│n 3: Firma Electr├│nica y Ambiente */}
+                    {/* Sección 3: Firma Electrónica y Ambiente */}
                     <div className="space-y-4">
-                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">3. Firma Electr├│nica (.p12) y Ambiente</h5>
+                      <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider border-b border-zinc-900 pb-1">3. Firma Electrónica (.p12) y Ambiente</h5>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-1 text-xs">
@@ -2856,14 +2871,14 @@ export default function Dashboard() {
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
                           >
                             <option value={1}>PRUEBAS (Test)</option>
-                            <option value={2}>PRODUCCI├ôN (Real)</option>
+                            <option value={2}>PRODUCCIÓN (Real)</option>
                           </select>
                         </div>
                         <div className="space-y-1 text-xs">
                           <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] flex items-center justify-between">
-                            <span>Archivo Firma Digital (.p12) {sriP12B64 ? 'Ô£ô Cargado' : ''}</span>
+                            <span>Archivo Firma Digital (.p12) {sriP12B64 ? '✓ Cargado' : ''}</span>
                             <a href="/guardar_firma.html" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400 underline font-normal normal-case text-[10px]">
-                              ┬┐Problemas al guardar? Usar herramienta directa
+                              ¿Problemas al guardar? Usar herramienta directa
                             </a>
                           </label>
                           <input
@@ -2886,11 +2901,11 @@ export default function Dashboard() {
                           />
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Contrase├▒a de la Firma</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Contraseña de la Firma</label>
                           <input
                             type="password"
                             disabled={activePermissions.settings === 'read' || sriLoading}
-                            placeholder={sriP12Pwd ? "ÔÇóÔÇóÔÇóÔÇóÔÇóÔÇóÔÇóÔÇóÔÇóÔÇóÔÇóÔÇó" : "Ingresar contrase├▒a"}
+                            placeholder={sriP12Pwd ? "••••••••••••" : "Ingresar contraseña"}
                             value={sriP12Pwd}
                             onChange={(e) => setSriP12Pwd(e.target.value)}
                             className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
@@ -2900,7 +2915,7 @@ export default function Dashboard() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electr├│nico de Env├¡o (Notificaciones SMTP)</label>
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico de Envío (Notificaciones SMTP)</label>
                           <input
                             type="email"
                             disabled={activePermissions.settings === 'read' || sriLoading}
@@ -2912,7 +2927,7 @@ export default function Dashboard() {
                         </div>
                         {sriFirmaRazon && (
                           <div className="space-y-1 text-xs">
-                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Firmante / Raz├│n Social Firma</label>
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Firmante / Razón Social Firma</label>
                             <input
                               type="text"
                               readOnly
@@ -2928,7 +2943,7 @@ export default function Dashboard() {
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-zinc-900/60 border-b border-zinc-800 text-[10px] text-zinc-400">
-                              <th className="p-2">Raz├│n Social</th>
+                              <th className="p-2">Razón Social</th>
                               <th className="p-2">Expira</th>
                               <th className="p-2">Activa</th>
                               <th className="p-2">Acciones</th>
@@ -2939,7 +2954,7 @@ export default function Dashboard() {
                               <tr key={firma.id} className="border-b border-zinc-800 hover:bg-zinc-900/30">
                                 <td className="p-2">{firma.razon_social}</td>
                                 <td className="p-2">{firma.expiracion ? new Date(firma.expiracion).toLocaleDateString() : '-'}</td>
-                                <td className="p-2">{firma.esta_activa ? 'S├¡' : 'No'}</td>
+                                <td className="p-2">{firma.esta_activa ? 'Sí' : 'No'}</td>
                                 <td className="p-2 flex gap-2">
                                   <button onClick={() => handleActivateSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded">Activar</button>
                                   <button onClick={() => handleDeleteSignature(firma.id)} disabled={sriLoading || activePermissions.settings === 'read'} className="bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded">Eliminar</button>
@@ -2957,7 +2972,7 @@ export default function Dashboard() {
                         disabled={sriLoading || activePermissions.settings === 'read'}
                         className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-850 disabled:text-zinc-555 text-white font-semibold py-2.5 px-6 rounded-xl shadow-lg transition-all cursor-pointer text-xs w-full sm:w-auto"
                       >
-                        {sriLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Ajustes Facturaci├│n'}
+                        {sriLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Ajustes Facturación'}
                       </button>
                       <button
                         type="button"
@@ -2965,7 +2980,7 @@ export default function Dashboard() {
                         disabled={sriTesting || !sriP12B64 || !sriP12Pwd}
                         className="flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 border border-zinc-800 font-semibold py-2.5 px-6 rounded-xl transition-all cursor-pointer text-xs w-full sm:w-auto"
                       >
-                        {sriTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" /> : 'Probar Firma y Conexi├│n SRI'}
+                        {sriTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" /> : 'Probar Firma y Conexión SRI'}
                       </button>
                     </div>
                   </form>
@@ -2976,7 +2991,7 @@ export default function Dashboard() {
               <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 delay-100">
                 <div className="border-b border-zinc-900 pb-4">
                   <h4 className="text-sm font-semibold text-zinc-200 font-bold">Personalidad de la Inteligencia Artificial</h4>
-                  <p className="text-xs text-zinc-500">Define c├│mo debe hablar el asistente virtual en este restaurante (Prompt del Sistema).</p>
+                  <p className="text-xs text-zinc-500">Define cómo debe hablar el asistente virtual en este restaurante (Prompt del Sistema).</p>
                 </div>
 
                 {aiMessage && (
@@ -2990,17 +3005,17 @@ export default function Dashboard() {
 
                 <form onSubmit={handleUpdateAiInstruction} className="space-y-4">
                   <div className="space-y-1">
-                    <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Instrucci├│n del Sistema (Prompt)</label>
+                    <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Instrucción del Sistema (Prompt)</label>
                     <textarea 
                       required
                       disabled={activePermissions.settings === 'read'}
                       value={aiSystemInstruction}
                       onChange={(e) => setAiSystemInstruction(e.target.value)}
-                      placeholder="Ej: Eres Appy, un asistente amable para un restaurante de comida r├ípida..."
+                      placeholder="Ej: Eres Appy, un asistente amable para un restaurante de comida rápida..."
                       className="w-full h-48 bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-3 rounded-xl text-zinc-200 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed resize-y text-sm font-mono"
                     />
                     <p className="text-[10px] text-zinc-500 mt-1">
-                      Esta instrucci├│n reemplazar├í el comportamiento por defecto de la IA. Usa variables como el men├║ y las ├│rdenes se inyectan autom├íticamente.
+                      Esta instrucción reemplazará el comportamiento por defecto de la IA. Usa variables como el menú y las órdenes se inyectan automáticamente.
                     </p>
                   </div>
 
@@ -3057,7 +3072,7 @@ export default function Dashboard() {
                     <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl flex items-start gap-3 text-amber-550 leading-relaxed">
                       <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                       <div>
-                        <h5 className="font-bold text-xs uppercase tracking-wider text-amber-500">Entorno de Producci├│n</h5>
+                        <h5 className="font-bold text-xs uppercase tracking-wider text-amber-500">Entorno de Producción</h5>
                         <p className="text-[11px] mt-1 text-zinc-400">
                           Los valores de API Key, tokens y llaves privadas se configuran localmente en el archivo <code className="text-amber-400 bg-zinc-900 px-1 py-0.5 rounded">.env.local</code>. El panel administrativo lee de estas variables de manera segura en el backend para evitar filtraciones en el cliente.
                         </p>
@@ -3070,7 +3085,7 @@ export default function Dashboard() {
                   <AlertCircle className="h-8 w-8 text-zinc-600" />
                   <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Restricciones de Rol</h5>
                   <p className="text-[11px] text-zinc-500 max-w-xs">
-                    Los ajustes avanzados del sistema e integraciones con WhatsApp API y Gemini AI solo est├ín disponibles para el Administrador General.
+                    Los ajustes avanzados del sistema e integraciones con WhatsApp API y Gemini AI solo están disponibles para el Administrador General.
                   </p>
                 </div>
               )}
