@@ -970,24 +970,28 @@ export default function Dashboard() {
   const handleUpdateSriSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restaurant?.id) return;
-    
+
     setSriLoading(true);
     setSriMessage(null);
     try {
       let metadata: any = {};
-      
-      // 1. If a new signature has been uploaded or password changed with a file present
+
+      // Si se subio nueva firma: guardar p12 directamente en restaurants (mismo cliente que funciona para todo)
+      // Nota: no usamos sri_firmas, guardamos directo en restaurants.sri_p12_b64
       if (newP12Uploaded && sriP12B64 && sriP12Pwd) {
-        const sessData = await supabase.auth.getSession();
-        const tok = sessData.data.session?.access_token;
-        const p12Res = await fetch('/api/sri/upload-p12', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(tok ? { 'Authorization': 'Bearer ' + tok } : {}) },
-          body: JSON.stringify({ restaurantId: restaurant.id, p12B64: sriP12B64, p12Pwd: sriP12Pwd })
-        });
-        const p12Json = await p12Res.json();
-        if (!p12Res.ok) throw new Error(p12Json.error || 'Error al guardar la firma');
+        const { error: p12Err } = await supabase
+          .from('restaurants')
+          .update({
+            sri_p12_b64: sriP12B64,
+            sri_p12_pwd: sriP12Pwd,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', restaurant.id);
+
+        if (p12Err) throw new Error('Error al guardar la firma: ' + p12Err.message);
         setNewP12Uploaded(false);
+
+        // Extraer metadatos del certificado (opcional - si falla, la firma ya esta guardada)
         try {
           const metaRes = await fetch('/api/sri/metadata', {
             method: 'POST',
@@ -1002,10 +1006,11 @@ export default function Dashboard() {
             setSriFirmaExpira(metaJson.expira);
           }
         } catch (_e) {
-          // metadata es opcional
+          // Metadata es informativa, la firma ya quedo guardada
         }
       }
 
+      // Guardar el resto de la configuracion SRI directamente con el cliente anon
       const updates: any = {
         ruc: sriRuc.trim() || null,
         sri_dir_matriz: sriDirMatriz.trim() || null,
@@ -1017,8 +1022,6 @@ export default function Dashboard() {
         sri_agente_retencion: sriAgenteRetencion.trim() || null,
         sri_contrib_especial: sriContribEspecial.trim() || null,
         sri_ambiente: Number(sriAmbiente),
-        sri_p12_b64: sriP12B64 || null,
-        sri_p12_pwd: sriP12Pwd || null,
         sri_email_envio: sriEmailEnvio.trim() || null,
         sri_iva_rate: Number(sriIvaRate),
         sri_iva_temporal: sriIvaTemporal ? Number(sriIvaTemporal) : null,
@@ -1028,21 +1031,19 @@ export default function Dashboard() {
         updated_at: new Date().toISOString()
       };
 
-      const sessData2 = await supabase.auth.getSession();
-      const tok2 = sessData2.data.session?.access_token;
-      const apiRes = await fetch('/api/sri/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(tok2 ? { 'Authorization': 'Bearer ' + tok2 } : {}) },
-        body: JSON.stringify({ restaurantId: restaurant.id, updates })
-      });
-      const apiJson = await apiRes.json();
-      if (!apiRes.ok) throw new Error(apiJson.error || 'Error al guardar');
-      setSriMessage({ type: 'success', text: 'Configuracion guardada con exito.' });
+      const { error } = await supabase
+        .from('restaurants')
+        .update(updates)
+        .eq('id', restaurant.id);
+
+      if (error) throw error;
+
+      setSriMessage({ type: 'success', text: 'Configuracion de facturacion SRI guardada con exito.' });
       setRestaurant(prev => prev ? { ...prev, ...updates } : null);
       setTimeout(() => setSriMessage(null), 3000);
     } catch (err: any) {
       console.error('Error updating SRI settings:', err);
-      setSriMessage({ type: 'error', text: err.message || 'Error al guardar la configuración.' });
+      setSriMessage({ type: 'error', text: err.message || 'Error al guardar la configuracion.' });
     } finally {
       setSriLoading(false);
     }
