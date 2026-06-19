@@ -3,8 +3,6 @@
 // Algoritmos: RSA-SHA1, digest SHA1, canonicalización c14n 2001.
 
 import forge from 'node-forge';
-import { readFileSync } from 'fs';
-import path from 'path';
 
 const XMLNS = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
 
@@ -114,6 +112,13 @@ function extractP12Info(p12: forge.pkcs12.Pkcs12Pfx): P12Info {
 }
 
 export function loadP12(): P12Info {
+  // Imports dinámicos para evitar side effects a nivel de módulo
+  // que rompen el build de Vercel cuando se analiza el bundle para Edge.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { readFileSync } = require('fs') as typeof import('fs');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('path') as typeof import('path');
+
   const p12Path  = process.env.SRI_P12_PATH;
   const password = process.env.SRI_P12_PASSWORD;
   if (!p12Path || !password) {

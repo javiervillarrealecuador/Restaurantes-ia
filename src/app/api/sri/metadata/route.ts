@@ -1,4 +1,7 @@
 // src/app/api/sri/metadata/route.ts
+// Forzar Node.js runtime (node-forge requiere Node.js, no Edge)
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { extractP12Metadata } from '@/lib/sri/firma';
 
