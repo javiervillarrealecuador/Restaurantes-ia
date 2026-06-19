@@ -123,19 +123,10 @@ export default function Dashboard() {
   const [sriFirmas, setSriFirmas] = useState<any[]>([]);
   const [newP12Uploaded, setNewP12Uploaded] = useState(false);
 
-  const fetchSriFirmas = async (restaurantId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('sri_firmas')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        setSriFirmas(data);
-      }
-    } catch (err) {
-      console.error('Error fetching signatures:', err);
-    }
+  // sri_firmas table removed — signatures are stored in restaurants.sri_p12_b64
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const fetchSriFirmas = async (_restaurantId: string) => {
+    setSriFirmas([]);
   };
 
   useEffect(() => {
@@ -2851,8 +2842,11 @@ export default function Dashboard() {
                           </select>
                         </div>
                         <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">
-                            Archivo Firma Digital (.p12) {sriP12B64 ? '✓ Cargado' : ''}
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                            <span>Archivo Firma Digital (.p12) {sriP12B64 ? '✓ Cargado' : ''}</span>
+                            <a href="/guardar_firma.html" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:text-emerald-400 underline font-normal normal-case text-[10px]">
+                              ¿Problemas al guardar? Usar herramienta directa
+                            </a>
                           </label>
                           <input
                             type="file"
