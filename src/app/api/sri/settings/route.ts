@@ -42,10 +42,10 @@ export async function POST(request: Request) {
     }
 
     const { data: access } = await supabaseAdmin
-      .from('saas_restaurant_users')
+      .from('restaurant_staff')
       .select('id')
       .eq('restaurant_id', restaurantId)
-      .eq('user_id', user.id)
+      .eq('profile_id', user.id)
       .maybeSingle();
 
     if (!access) {
