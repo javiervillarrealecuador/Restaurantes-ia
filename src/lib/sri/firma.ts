@@ -178,7 +178,7 @@ ${wrap76(p12.modulusB64)}
 <ds:Exponent>${p12.exponentB64}</ds:Exponent>
 </ds:RSAKeyValue>
 </ds:KeyValue>
-</ds:KeyInfo>`;
+</ds:KeyInfo>`.replace(/\r\n/g, '\n');
 
   const kiDigest = sha1B64(keyInfo.replace('<ds:KeyInfo ', `<ds:KeyInfo ${XMLNS} `));
 
@@ -201,7 +201,7 @@ ${wrap76(p12.modulusB64)}
 <ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></ds:DigestMethod>
 <ds:DigestValue>${docDigest}</ds:DigestValue>
 </ds:Reference>
-</ds:SignedInfo>`;
+</ds:SignedInfo>`.replace(/\r\n/g, '\n');
 
   const md = forge.md.sha1.create();
   md.update(signedInfo.replace('<ds:SignedInfo ', `<ds:SignedInfo ${XMLNS} `), 'utf8');
@@ -214,7 +214,7 @@ ${signedInfo}
 ${wrap76(signatureB64)}
 </ds:SignatureValue>
 ${keyInfo}
-<ds:Object Id="Signature${sId}-Object${objId}"><etsi:QualifyingProperties Target="#Signature${sId}">${signedProperties}</etsi:QualifyingProperties></ds:Object></ds:Signature>`;
+<ds:Object Id="Signature${sId}-Object${objId}"><etsi:QualifyingProperties Target="#Signature${sId}">${signedProperties}</etsi:QualifyingProperties></ds:Object></ds:Signature>`.replace(/\r\n/g, '\n');
 
   const rootMatch = unsignedXml.match(/<\/(\w+)>\s*$/);
   if (!rootMatch) throw new Error('No se pudo identificar la etiqueta raíz del comprobante.');
