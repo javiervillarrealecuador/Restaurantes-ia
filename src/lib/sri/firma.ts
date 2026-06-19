@@ -103,9 +103,34 @@ function extractP12Info(p12: forge.pkcs12.Pkcs12Pfx): P12Info {
   let eHex = pub.e.toString(16);
   if (eHex.length % 2) eHex = '0' + eHex;
   const exponentB64 = forge.util.encode64(forge.util.hexToBytes(eHex));
+  const OID_NAMES: Record<string, string> = {
+    '2.5.4.3': 'CN',
+    '2.5.4.7': 'L',
+    '2.5.4.8': 'ST',
+    '2.5.4.10': 'O',
+    '2.5.4.11': 'OU',
+    '2.5.4.6': 'C',
+    '2.5.4.9': 'STREET'
+  };
 
-  const issuerName = cert.issuer.attributes
-    .map((a: any) => `${a.shortName || a.name || '?'}=${a.value}`).join(',');
+  const reversedAttrs = [...cert.issuer.attributes].reverse();
+  const issuerName = reversedAttrs.map((a: any) => {
+    const key = OID_NAMES[a.type] || a.type;
+    if (OID_NAMES[a.type]) {
+      return `${key}=${a.value}`;
+    } else {
+      // Non-standard directory string, format as # + DER hex
+      const valTag = a.valueTag || forge.asn1.Type.PRINTABLESTRING;
+      const asn1Val = forge.asn1.create(
+        forge.asn1.Class.UNIVERSAL,
+        valTag,
+        false,
+        a.value
+      );
+      const derHex = forge.asn1.toDer(asn1Val).toHex();
+      return `${key}=#${derHex}`;
+    }
+  }).join(',');
 
   return {
     privateKey, certDerB64, certHashB64, modulusB64, exponentB64,
