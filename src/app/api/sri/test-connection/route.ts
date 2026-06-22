@@ -7,11 +7,23 @@ import { NextResponse } from 'next/server';
 import { signXml } from '@/lib/sri/firma';
 import { enviarComprobante, consultarAutorizacion } from '@/lib/sri/soap';
 import forge from 'node-forge';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    // Verificar autenticacion
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+    const token = authHeader.slice(7);
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) {
+      return NextResponse.json({ error: 'Sesion invalida' }, { status: 401 });
+    }
+
     const { p12B64, pwd, ambiente } = await request.json();
 
     if (!p12B64 || !pwd) {
