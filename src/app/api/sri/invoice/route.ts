@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { generateFacturaForOrder, getSignatureForRestaurant } from '@/lib/sri/db';
 import { signXml } from '@/lib/sri/firma';
 import { enviarComprobante, consultarAutorizacion } from '@/lib/sri/soap';
+import { buildRideFactura } from '@/lib/sri/ride';
 import nodemailer from 'nodemailer';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -352,12 +353,12 @@ export async function POST(request: Request) {
           });
 
           const asunto = ambiente === 1
-            ? `[PRUEBAS] Factura Electrónica ${od.invoice_ref || ''} - ${od.restaurants?.name}`
-            : `Factura Electrónica ${od.invoice_ref || ''} - ${od.restaurants?.name}`;
+            ? `[PRUEBAS] Factura Electronica ${od.invoice_ref || ''} - ${od.restaurants?.name}`
+            : `Factura Electronica ${od.invoice_ref || ''} - ${od.restaurants?.name}`;
 
-          // Construir XML autorizado completo (formato estándar SRI con envoltorio)
+          // XML autorizado completo (envoltorio estandar SRI)
           const _ecFecha = aut?.fechaAutorizacion
-            ? String(aut.fechaAutorizacion)  // SRI devuelve hora Ecuador, usarla directamente
+            ? String(aut.fechaAutorizacion)
             : new Date(Date.now() - 5 * 3600000).toISOString().replace('Z', '-05:00');
           const authorizedXmlFull =
             `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -369,27 +370,77 @@ export async function POST(request: Request) {
             `  <mensajes/>\n` +
             `</autorizacion>`;
 
+          // Generar RIDE PDF en servidor (sin codigo de barras — canvas no disponible en SSR)
+          let ridePdfBuffer: Buffer | null = null;
+          try {
+            const rideDoc = buildRideFactura({
+              emisor: {
+                razonSocial: od.restaurants?.name || '',
+                ruc: od.restaurants?.ruc || '',
+                dirMatriz: od.restaurants?.sri_dir_matriz || od.restaurants?.address || 'S/D',
+                dirEstablecimiento: od.restaurants?.sri_dir_estab || null,
+                obligadoContabilidad: od.restaurants?.sri_obligado_contab !== false,
+                contribuyenteRimpe: od.restaurants?.sri_rimpe || null,
+                agenteRetencion: od.restaurants?.sri_agente_retencion || null,
+              },
+              comprobante: {
+                tipo: 'FACTURA',
+                numero: od.invoice_ref || facturaResult.numeroFactura,
+                claveAcceso: aut?.numeroAutorizacion || facturaResult.claveAcceso,
+                fechaEmision: new Date(od.created_at).toLocaleDateString('es-EC'),
+                ambiente: ambiente as 1 | 2,
+                fechaAutorizacion: aut?.fechaAutorizacion ? String(aut.fechaAutorizacion) : null,
+              },
+              comprador: {
+                razonSocial: od.billing_name || 'CONSUMIDOR FINAL',
+                identificacion: od.billing_vat || '9999999999999',
+                direccion: od.billing_address || 'S/D',
+              },
+              lineas: lineasMail,
+              subtotal15: Math.round(subtotal15 * 100) / 100,
+              subtotal5:  Math.round(subtotal5  * 100) / 100,
+              subtotal0:  Math.round(subtotal0  * 100) / 100,
+              descuento: 0,
+              iva: Number(od.tax) || 0,
+              total: Number(od.total_price) || 0,
+              formaPago: od.forma_pago || formaPago || '01',
+            });
+            const pdfAb = rideDoc.output('arraybuffer');
+            ridePdfBuffer = Buffer.from(pdfAb);
+          } catch (pdfErr: any) {
+            console.warn('[EMAIL] No se pudo generar RIDE PDF adjunto:', pdfErr.message);
+          }
+
+          const attachments: any[] = [
+            {
+              filename: `FAC_${od.invoice_ref}.xml`,
+              content: authorizedXmlFull,
+              contentType: 'application/xml'
+            }
+          ];
+          if (ridePdfBuffer) {
+            attachments.push({
+              filename: `RIDE_${od.invoice_ref}.pdf`,
+              content: ridePdfBuffer,
+              contentType: 'application/pdf'
+            });
+          }
+
           await transporter.sendMail({
             from: smtpFromAddr,
             to: billingEmail,
             subject: asunto,
             html: mailHtml,
-            attachments: [
-              {
-                filename: `FAC_${od.invoice_ref}.xml`,
-                content: authorizedXmlFull,
-                contentType: 'application/xml'
-              }
-            ]
+            attachments
           });
 
           emailSent = true;
         } else {
-          emailWarning = 'SMTP no configurado en servidor (.env.local).';
+          emailWarning = 'SMTP no configurado en este restaurante.';
         }
       } catch (mailErr: any) {
         console.error('Error sending SMTP email:', mailErr);
-        emailWarning = `Fallo en el envío: ${mailErr.message}`;
+        emailWarning = `Fallo en el envio: ${mailErr.message}`;
       }
     }
 
@@ -408,6 +459,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Invoice execution crash:', error);
-    return NextResponse.json({ error: error.message || 'Error crítico en el proceso de facturación' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Error critico en el proceso de facturacion' }, { status: 500 });
   }
 }
