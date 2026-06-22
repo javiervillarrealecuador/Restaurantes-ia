@@ -133,7 +133,15 @@ export function signXml(
   const sId = rand(), siId = rand(), spId = rand(), spRefId = rand();
   const cId = rand(), refId = rand(), objId = rand();
 
-  const docCanonical = unsignedXml.replace(/<\?xml[^?]*\?>\s*/, '').trim();
+  // C14N: el SRI expande referencias de entidades antes de calcular el digest.
+  // &apos; → '   &quot; → "   &gt; → >   (solo en contenido de elementos)
+  // Nuestro XML usa esc() que produce &apos;, &quot;, &gt; en contenido, no en atributos.
+  const docCanonical = unsignedXml
+    .replace(/<\?xml[^?]*\?>\s*/, '')
+    .trim()
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, '>');
   const docDigest    = sha256B64(docCanonical);
 
   const signedProperties =

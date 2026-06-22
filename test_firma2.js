@@ -56,7 +56,12 @@ console.log('\nclaveAcceso:', claveAcceso);
 const sId=rand(), siId=rand(), spId=rand(), spRefId=rand();
 const cId=rand(), refId=rand(), objId=rand();
 
-const docCanonical = unsignedXml.replace(/<\?xml[^?]*\?>\s*/, '').trim();
+const docCanonical = unsignedXml
+  .replace(/<\?xml[^?]*\?>\s*/, '')
+  .trim()
+  .replace(/&apos;/g, "'")
+  .replace(/&quot;/g, '"')
+  .replace(/&gt;/g, '>');
 const docDigest    = sha256B64(docCanonical);
 
 const now = new Date(Date.now() - 5 * 3600 * 1000);
