@@ -32,6 +32,11 @@ export interface Restaurant {
   sri_iva_temporal?: number | null;
   sri_iva_temporal_inicio?: string | null;
   sri_iva_temporal_fin?: string | null;
+  smtp_host?: string | null;
+  smtp_port?: string | null;
+  smtp_user?: string | null;
+  smtp_pass?: string | null;
+  smtp_from?: string | null;
 }
 
 export interface SriFirma {
@@ -124,12 +129,12 @@ export interface Order {
 
 export interface WebhookLog {
   id: string;
-  whatsapp_message_id: string | null;
+  whatsapp_message_id?: string | null;
   restaurant_id: string | null;
   sender_phone: string;
   message_body: string | null;
-  raw_payload: unknown;
-  ai_parsed_response: unknown;
+  raw_payload?: unknown;
+  ai_parsed_response?: unknown;
   status: string;
   error_message: string | null;
   created_at: string;
@@ -246,3 +251,4 @@ export interface RestaurantTable {
   y_pos: number;
   created_at?: string;
 }
+
