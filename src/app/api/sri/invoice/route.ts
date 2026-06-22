@@ -174,14 +174,22 @@ export async function POST(request: Request) {
     const messagesList = [...recepcion.mensajes];
 
     if (recepcion.estado !== 'RECIBIDA') {
-      // Update order state as DEVUELTA/RECHAZADA
+      // Si el error es [45] SECUENCIAL REGISTRADO, limpiar invoice_ref e invoice_auth
+      // para que el siguiente intento genere un número nuevo
+      const es45 = messagesList.some(m => m.includes('45') || m.toLowerCase().includes('secuencial registrado'));
+      const orderStateUpdate: any = {
+        sri_estado: recepcion.estado || 'DEVUELTA',
+        sri_ambiente: ambiente,
+        sri_mensajes: messagesList.join('\n') || 'Comprobante devuelto por el SRI'
+      };
+      if (es45) {
+        orderStateUpdate.invoice_ref  = null;
+        orderStateUpdate.invoice_auth = null;
+        console.warn('[SRI][45] Secuencial ya registrado — limpiando invoice_ref para reasignar en próximo intento');
+      }
       await supabaseAdmin
         .from('orders')
-        .update({
-          sri_estado: recepcion.estado || 'DEVUELTA',
-          sri_ambiente: ambiente,
-          sri_mensajes: messagesList.join('\n') || 'Comprobante devuelto por el SRI'
-        })
+        .update(orderStateUpdate)
         .eq('id', orderId);
 
       return NextResponse.json({
@@ -248,17 +256,12 @@ export async function POST(request: Request) {
 
     if (finalEstado === 'AUTORIZADO' && billingEmail) {
       try {
-        // Re-fetch order con SMTP del restaurante incluido
-        const { data: orderDetails } = await supabaseAdmin
+        // Re-fetch order con todos los datos del restaurante (smtp_* incluidos si existen)
+        const { data: orderDetails, error: odErr } = await supabaseAdmin
           .from('orders')
           .select(`
             *,
-            restaurants (
-              id, name, ruc, address,
-              sri_dir_matriz, sri_dir_estab,
-              sri_obligado_contab, sri_rimpe,
-              smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from
-            ),
+            restaurants (*),
             order_items (
               quantity,
               unit_price,
@@ -271,6 +274,11 @@ export async function POST(request: Request) {
           `)
           .eq('id', orderId)
           .single();
+
+        if (odErr || !orderDetails) {
+          emailWarning = `Error al obtener datos del pedido: ${odErr?.message || 'desconocido'}`;
+          throw new Error(emailWarning);
+        }
 
         const od = orderDetails as any;
 

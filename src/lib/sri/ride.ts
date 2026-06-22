@@ -71,7 +71,8 @@ function drawHeader(doc: jsPDF, emisor: RideEmisor, comp: RideComprobante): numb
   const finIzq = y;
 
   let yd = 12;
-  doc.rect(colDer - 2, yd - 4, anchoCol + 4, 58);
+  const rectAlto = comp.fechaAutorizacion ? 63 : 58;
+  doc.rect(colDer - 2, yd - 4, anchoCol + 4, rectAlto);
   doc.setFont('helvetica', 'bold').setFontSize(11);
   doc.text(comp.tipo, colDer, yd + 2); yd += 8;
   doc.setFontSize(9);
@@ -82,6 +83,9 @@ function drawHeader(doc: jsPDF, emisor: RideEmisor, comp: RideComprobante): numb
   doc.text(comp.claveAcceso, colDer, yd); yd += 5;
   doc.setFontSize(7.5);
   doc.text(`FECHA EMISIÓN: ${comp.fechaEmision}`, colDer, yd); yd += 4.5;
+  if (comp.fechaAutorizacion) {
+    doc.text(`FECHA Y HORA AUTORIZACIÓN: ${comp.fechaAutorizacion}`, colDer, yd); yd += 4.5;
+  }
   doc.text(`AMBIENTE: ${comp.ambiente === 2 ? 'PRODUCCIÓN' : 'PRUEBAS'}   EMISIÓN: NORMAL`, colDer, yd); yd += 4.5;
   doc.text('CLAVE DE ACCESO:', colDer, yd); yd += 2;
   
