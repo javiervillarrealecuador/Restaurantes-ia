@@ -1520,17 +1520,6 @@ export default function Dashboard() {
                 <span>Gestión Personal</span>
               </button>
 
-              <button
-                onClick={() => setActiveTab('audit')}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                  activeTab === 'audit'
-                    ? 'bg-zinc-900 text-emerald-400 border border-zinc-800'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
-                }`}
-              >
-                <History className="h-4.5 w-4.5" />
-                <span>Seguimiento</span>
-              </button>
             </>
           )}
 
@@ -3151,6 +3140,24 @@ export default function Dashboard() {
                   </p>
                 </div>
               )}
+              {/* Seguimiento de Actividades — acceso desde Configuración */}
+              <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-4 animate-in fade-in-50 duration-200">
+                <div className="border-b border-zinc-900 pb-4">
+                  <h4 className="text-sm font-semibold text-zinc-200 font-bold">Seguimiento de Actividades</h4>
+                  <p className="text-xs text-zinc-500">Consulta el historial de acciones y eventos registrados en el sistema.</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className="w-full flex items-center justify-between gap-3 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-4 py-3.5 rounded-xl text-xs font-semibold text-zinc-300 hover:text-emerald-400 transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <History className="h-4 w-4 text-emerald-400" />
+                    <span>Ver registro de actividades</span>
+                  </div>
+                  <span className="text-zinc-500">→</span>
+                </button>
+              </div>
+
             </div>
           )}
         </section>
