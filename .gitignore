@@ -70,3 +70,13 @@ Vercel
 
 # Documentación técnica SRI local
 BASE XML SRI/
+
+# Archivos temporales de Google Drive
+.tmp.driveupload/
+
+# Backups locales
+*.bak
+
+# Archivos de auditoría y prueba local
+nextjs-audit-skill-main.zip
+AUDIT-REPORT.md
