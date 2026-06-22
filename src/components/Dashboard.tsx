@@ -335,7 +335,7 @@ export default function Dashboard() {
       try {
         const { data, error } = await supabase
           .from('restaurants')
-          .select('*')
+          .select('id, name, slug, address, phone, email, logo_url, ruc, sri_dir_matriz, sri_dir_estab, sri_estab, sri_pto_emi, sri_obligado_contab, sri_rimpe, sri_agente_retencion, sri_contrib_especial, sri_ambiente, sri_firma_expira, sri_firma_razon, sri_iva_rate, sri_iva_temporal, sri_iva_temporal_inicio, sri_iva_temporal_fin, sri_email_envio, smtp_host, smtp_port, smtp_user, smtp_from, smtp_secure, status, cost_per_order, prepaid_credits, created_at, updated_at')
           .eq('id', activeRestaurantId)
           .single();
 
@@ -889,7 +889,7 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('whatsapp_webhook_logs')
-        .select('*')
+        .select('id, sender_phone, message_body, status, error_message, created_at, restaurant_id')
         .eq('restaurant_id', restaurant?.id || activeRestaurantId)
         .order('created_at', { ascending: false })
         .limit(20);
