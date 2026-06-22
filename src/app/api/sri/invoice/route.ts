@@ -91,6 +91,17 @@ function buildMailHtml(data: any): string {
 
 export async function POST(request: Request) {
   try {
+    // Verificar autenticación
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+    const token = authHeader.slice(7);
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) {
+      return NextResponse.json({ error: 'Sesión inválida' }, { status: 401 });
+    }
+
     const { orderId, formaPago, billingName, billingVat, billingAddress, billingEmail, secuencialOverride } = await request.json();
 
     if (!orderId) {
