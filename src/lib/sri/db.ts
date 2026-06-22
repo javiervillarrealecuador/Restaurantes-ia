@@ -3,6 +3,7 @@
 
 import { supabaseAdmin } from '../supabaseAdmin';
 import { buildFacturaXml, type FacturaInput, type FacturaResult } from './factura';
+import { decryptValue } from '../crypto';
 
 export interface DBRestaurant {
   id: string;
@@ -254,8 +255,8 @@ export async function getSignatureForRestaurant(restaurantId: string): Promise<S
 
     if (!error && signature && signature.archivo_base64 && signature.clave) {
       return {
-        p12B64: signature.archivo_base64,
-        pwd: signature.clave,
+        p12B64: decryptValue(signature.archivo_base64),
+        pwd: decryptValue(signature.clave),
         razon: signature.razon_social,
         expira: signature.expiracion
        };
@@ -274,8 +275,8 @@ export async function getSignatureForRestaurant(restaurantId: string): Promise<S
 
     if (!error && restaurant && restaurant.sri_p12_b64 && restaurant.sri_p12_pwd) {
       return {
-        p12B64: restaurant.sri_p12_b64,
-        pwd: restaurant.sri_p12_pwd,
+        p12B64: decryptValue(restaurant.sri_p12_b64),
+        pwd: decryptValue(restaurant.sri_p12_pwd),
         razon: restaurant.sri_firma_razon,
         expira: restaurant.sri_firma_expira
       };

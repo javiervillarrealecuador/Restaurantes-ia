@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createClient } from '@supabase/supabase-js';
+import { encryptValue } from '@/lib/crypto';
 
 // Forzar Node.js runtime (supabaseAdmin requiere Node.js, no Edge)
 export const runtime = 'nodejs';
@@ -56,8 +57,8 @@ export async function POST(request: Request) {
     const { error: updateErr } = await supabaseAdmin
       .from('restaurants')
       .update({
-        sri_p12_b64: p12B64,
-        sri_p12_pwd: p12Pwd,
+        sri_p12_b64: encryptValue(p12B64),
+        sri_p12_pwd: encryptValue(p12Pwd),
         updated_at: new Date().toISOString()
       })
       .eq('id', restaurantId);
