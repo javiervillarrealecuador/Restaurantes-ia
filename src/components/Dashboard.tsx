@@ -111,6 +111,11 @@ export default function Dashboard() {
   const [sriP12B64, setSriP12B64] = useState('');
   const [sriP12Pwd, setSriP12Pwd] = useState('');
   const [sriEmailEnvio, setSriEmailEnvio] = useState('');
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFrom, setSmtpFrom] = useState('');
   const [sriIvaRate, setSriIvaRate] = useState<number>(15.00);
   const [sriIvaTemporal, setSriIvaTemporal] = useState<string>('');
   const [sriIvaTemporalInicio, setSriIvaTemporalInicio] = useState('');
@@ -145,6 +150,11 @@ export default function Dashboard() {
       setSriP12B64(restaurant.sri_p12_b64 || '');
       setSriP12Pwd(restaurant.sri_p12_pwd || '');
       setSriEmailEnvio(restaurant.sri_email_envio || '');
+      setSmtpHost(restaurant.smtp_host || '');
+      setSmtpPort(restaurant.smtp_port ? String(restaurant.smtp_port) : '587');
+      setSmtpUser(restaurant.smtp_user || '');
+      setSmtpPass(restaurant.smtp_pass || '');
+      setSmtpFrom(restaurant.smtp_from || '');
       setSriIvaRate(restaurant.sri_iva_rate !== undefined ? Number(restaurant.sri_iva_rate) : 15.00);
       setSriIvaTemporal(restaurant.sri_iva_temporal !== null && restaurant.sri_iva_temporal !== undefined ? String(restaurant.sri_iva_temporal) : '');
       setSriIvaTemporalInicio(restaurant.sri_iva_temporal_inicio || '');
@@ -1014,6 +1024,11 @@ export default function Dashboard() {
         sri_p12_b64: sriP12B64 || null,
         sri_p12_pwd: sriP12Pwd || null,
         sri_email_envio: sriEmailEnvio.trim() || null,
+        smtp_host: smtpHost.trim() || null,
+        smtp_port: smtpPort ? parseInt(smtpPort) : 587,
+        smtp_user: smtpUser.trim() || null,
+        smtp_pass: smtpPass || null,
+        smtp_from: smtpFrom.trim() || null,
         sri_iva_rate: Number(sriIvaRate),
         sri_iva_temporal: sriIvaTemporal ? Number(sriIvaTemporal) : null,
         sri_iva_temporal_inicio: sriIvaTemporalInicio || null,
@@ -2913,17 +2928,64 @@ export default function Dashboard() {
                         </div>
                       </div>
 
+                      {/* ── Configuración SMTP por restaurante ── */}
+                      <div className="mt-2 border border-zinc-800 rounded-xl p-4 space-y-3">
+                        <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Configuración de Correo (SMTP)</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="space-y-1 text-xs md:col-span-2">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Servidor SMTP (Host)</label>
+                            <input
+                              type="text"
+                              disabled={activePermissions.settings === 'read' || sriLoading}
+                              placeholder="smtp.gmail.com"
+                              value={smtpHost}
+                              onChange={(e) => setSmtpHost(e.target.value)}
+                              className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Puerto</label>
+                            <input
+                              type="number"
+                              disabled={activePermissions.settings === 'read' || sriLoading}
+                              placeholder="587"
+                              value={smtpPort}
+                              onChange={(e) => setSmtpPort(e.target.value)}
+                              className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Usuario / Correo remitente</label>
+                            <input
+                              type="email"
+                              disabled={activePermissions.settings === 'read' || sriLoading}
+                              placeholder="facturas@restaurante.com"
+                              value={smtpUser}
+                              onChange={(e) => { setSmtpUser(e.target.value); if (!smtpFrom) setSmtpFrom(e.target.value); }}
+                              className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Contraseña / App Password</label>
+                            <input
+                              type="password"
+                              disabled={activePermissions.settings === 'read' || sriLoading}
+                              placeholder="contraseña o app password de 16 dígitos"
+                              value={smtpPass}
+                              onChange={(e) => setSmtpPass(e.target.value)}
+                              className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-zinc-500">Para Gmail: activa verificación en 2 pasos → Cuenta Google → Seguridad → Contraseñas de aplicaciones → genera una de 16 dígitos.</div>
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1 text-xs">
-                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Correo Electrónico de Envío (Notificaciones SMTP)</label>
-                          <input
-                            type="email"
-                            disabled={activePermissions.settings === 'read' || sriLoading}
-                            placeholder="facturas@turestaurante.com"
-                            value={sriEmailEnvio}
-                            onChange={(e) => setSriEmailEnvio(e.target.value)}
-                            className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
-                          />
+                        <div className="space-y-1 text-xs" style={{display:'none'}}>
+                          {/* sri_email_envio legacy — ya no se muestra */}
+                          <input type="hidden" value={sriEmailEnvio} onChange={(e) => setSriEmailEnvio(e.target.value)} />
                         </div>
                         {sriFirmaRazon && (
                           <div className="space-y-1 text-xs">

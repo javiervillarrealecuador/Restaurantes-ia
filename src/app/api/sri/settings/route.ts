@@ -65,7 +65,9 @@ export async function POST(request: Request) {
       'sri_dir_matriz', 'sri_dir_estab', 'sri_estab', 'sri_pto_emi',
       'sri_obligado_contab', 'sri_rimpe', 'sri_agente_retencion', 'sri_contrib_especial',
       'sri_ambiente', 'sri_p12_b64', 'sri_p12_pwd',
-      'sri_email_envio', 'sri_iva_rate', 'sri_iva_temporal',
+      'sri_email_envio',
+      'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_secure', 'smtp_from',
+      'sri_iva_rate', 'sri_iva_temporal',
       'sri_iva_temporal_inicio', 'sri_iva_temporal_fin',
       'sri_firma_razon', 'sri_firma_expira',
       'updated_at'

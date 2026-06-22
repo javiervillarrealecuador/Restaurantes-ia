@@ -45,7 +45,8 @@ function buildMailHtml(data: any): string {
       <div style="font-weight:600;margin:4px 0">Nº ${data.numeroFactura}</div>
       <div style="font-size:10px;color:#64748b">NÚMERO DE AUTORIZACIÓN:</div>
       <div style="font-size:9px;word-break:break-all;font-family:monospace">${data.claveAcceso}</div>
-      <div style="margin-top:6px;font-size:11px">Fecha: <strong>${data.fechaEmision}</strong></div>
+      <div style="margin-top:6px;font-size:11px">Fecha emisión: <strong>${data.fechaEmision}</strong></div>
+      ${data.fechaAutorizacion ? `<div style="font-size:11px">Fecha autorización: <strong>${data.fechaAutorizacion}</strong></div>` : ''}
       <span style="font-size:11px;padding:2px 8px;border-radius:12px;font-weight:600;background:${ambBg};color:${ambColor}">${ambLabel}</span>
     </div>
   </div>
@@ -247,32 +248,41 @@ export async function POST(request: Request) {
 
     if (finalEstado === 'AUTORIZADO' && billingEmail) {
       try {
-        const smtpHost = process.env.SMTP_HOST;
-        const smtpPort = process.env.SMTP_PORT;
-        const smtpUser = process.env.SMTP_USER;
-        const smtpPass = process.env.SMTP_PASS;
+        // Re-fetch order con SMTP del restaurante incluido
+        const { data: orderDetails } = await supabaseAdmin
+          .from('orders')
+          .select(`
+            *,
+            restaurants (
+              id, name, ruc, address,
+              sri_dir_matriz, sri_dir_estab,
+              sri_obligado_contab, sri_rimpe,
+              smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure, smtp_from
+            ),
+            order_items (
+              quantity,
+              unit_price,
+              iva_rate,
+              menu_items (
+                name,
+                code
+              )
+            )
+          `)
+          .eq('id', orderId)
+          .single();
+
+        const od = orderDetails as any;
+
+        // SMTP: usar config del restaurante; fallback a variables de entorno globales
+        const smtpHost = od.restaurants?.smtp_host || process.env.SMTP_HOST;
+        const smtpPort = od.restaurants?.smtp_port?.toString() || process.env.SMTP_PORT;
+        const smtpUser = od.restaurants?.smtp_user || process.env.SMTP_USER;
+        const smtpPass = od.restaurants?.smtp_pass || process.env.SMTP_PASS;
+        const smtpSecure = od.restaurants?.smtp_secure ?? (process.env.SMTP_SECURE === 'true');
+        const smtpFromAddr = od.restaurants?.smtp_from || smtpUser || process.env.SMTP_FROM;
 
         if (smtpHost && smtpUser && smtpPass) {
-          // Re-fetch order with items to populate HTML template
-          const { data: orderDetails } = await supabaseAdmin
-            .from('orders')
-            .select(`
-              *,
-              restaurants (*),
-              order_items (
-                quantity,
-                unit_price,
-                iva_rate,
-                menu_items (
-                  name,
-                  code
-                )
-              )
-            `)
-            .eq('id', orderId)
-            .single();
-
-          const od = orderDetails as any;
           
           let subtotal15 = 0, subtotal5 = 0, subtotal0 = 0;
           const lineasMail: any[] = [];
@@ -313,6 +323,7 @@ export async function POST(request: Request) {
             numeroFactura: od.invoice_ref || od.order_code || '',
             claveAcceso: facturaResult.claveAcceso,
             fechaEmision: new Date(od.created_at).toLocaleDateString('es-EC'),
+            fechaAutorizacion: aut?.fechaAutorizacion || null,
             ambiente,
             compradorNombre: od.billing_name || 'CONSUMIDOR FINAL',
             compradorId: od.billing_vat || '9999999999999',
@@ -328,7 +339,7 @@ export async function POST(request: Request) {
           const transporter = nodemailer.createTransport({
             host: smtpHost,
             port: parseInt(smtpPort || '587'),
-            secure: process.env.SMTP_SECURE === 'true',
+            secure: smtpSecure,
             auth: { user: smtpUser, pass: smtpPass }
           });
 
@@ -351,7 +362,7 @@ export async function POST(request: Request) {
             `</autorizacion>`;
 
           await transporter.sendMail({
-            from: process.env.SMTP_FROM || smtpUser,
+            from: smtpFromAddr,
             to: billingEmail,
             subject: asunto,
             html: mailHtml,

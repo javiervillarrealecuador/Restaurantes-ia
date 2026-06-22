@@ -23,7 +23,14 @@ ALTER TABLE public.restaurants
   ADD COLUMN IF NOT EXISTS sri_firma_expira       DATE,
   ADD COLUMN IF NOT EXISTS sri_firma_razon        TEXT,
   ADD COLUMN IF NOT EXISTS sri_logo_b64           TEXT,
-  ADD COLUMN IF NOT EXISTS sri_email_envio        TEXT,
+  ADD COLUMN IF NOT EXISTS sri_email_envio        TEXT,        -- (legacy) email de notificación
+  -- Configuración SMTP propia de cada restaurante
+  ADD COLUMN IF NOT EXISTS smtp_host              VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS smtp_port              INTEGER      DEFAULT 587,
+  ADD COLUMN IF NOT EXISTS smtp_user              VARCHAR(255),
+  ADD COLUMN IF NOT EXISTS smtp_pass              TEXT,
+  ADD COLUMN IF NOT EXISTS smtp_secure            BOOLEAN      DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS smtp_from              VARCHAR(255),
   -- Configuración de IVA flexible
   ADD COLUMN IF NOT EXISTS sri_iva_rate           NUMERIC(5,2) DEFAULT 15.00,
   ADD COLUMN IF NOT EXISTS sri_iva_temporal       NUMERIC(5,2),
