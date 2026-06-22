@@ -87,6 +87,13 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [formaPago, setFormaPago] = useState('01');
   const [sriSubmitting, setSriSubmitting] = useState(false);
   const [sriError, setSriError] = useState<string | null>(null);
+  // Secuencial override
+  const [nextSeq, setNextSeq] = useState<number | null>(null);
+  const [seqEstab, setSeqEstab] = useState('001');
+  const [seqPtoEmi, setSeqPtoEmi] = useState('001');
+  const [seqOverride, setSeqOverride] = useState('');
+  const [seqEdited, setSeqEdited] = useState(false);
+  const [seqLoading, setSeqLoading] = useState(false);
 
   const handleOpenSriModal = (e: React.MouseEvent, order: Order) => {
     e.stopPropagation();
@@ -98,6 +105,23 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     setBillingPhone(order.customer_phone || '');
     setFormaPago(order.forma_pago || '01');
     setSriError(null);
+    // Resetear campos de secuencial
+    setNextSeq(null);
+    setSeqOverride('');
+    setSeqEdited(false);
+    setSeqLoading(true);
+    fetch(`/api/sri/next-seq?restaurantId=${order.restaurant_id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.nextNumber) {
+          setNextSeq(d.nextNumber);
+          setSeqEstab(d.estab || '001');
+          setSeqPtoEmi(d.ptoEmi || '001');
+          setSeqOverride(String(d.nextNumber));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSeqLoading(false));
   };
 
   const handleIssueInvoice = async (e: React.FormEvent) => {
@@ -118,7 +142,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
           billingVat,
           billingAddress,
           billingEmail,
-          billingPhone
+          billingPhone,
+          secuencialOverride: (seqEdited && seqOverride) ? parseInt(seqOverride, 10) : null
         })
       });
 
@@ -1196,6 +1221,45 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                   placeholder="Quito"
                   className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-100 outline-none text-xs"
                 />
+              </div>
+
+              {/* ── Número Secuencial ── */}
+              <div className="space-y-1.5 text-xs">
+                <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                  Número Secuencial
+                  {seqLoading && <Loader2 className="h-3 w-3 animate-spin text-zinc-500" />}
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={seqOverride}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSeqOverride(val);
+                    setSeqEdited(val !== String(nextSeq));
+                  }}
+                  placeholder={seqLoading ? 'Cargando...' : '--'}
+                  className={
+                    'w-full bg-zinc-950 border p-2.5 rounded-xl text-zinc-100 outline-none text-xs transition-colors ' +
+                    (seqEdited
+                      ? 'border-amber-500/60 focus:border-amber-400 focus:ring-1 focus:ring-amber-400'
+                      : 'border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500')
+                  }
+                />
+                {seqOverride && !seqLoading && (
+                  <p className="text-zinc-500 text-[10px] font-mono">
+                    {seqEstab + '-' + seqPtoEmi + '-' + String(parseInt(seqOverride, 10) || 1).padStart(9, '0')}
+                  </p>
+                )}
+                {seqEdited && (
+                  <div className="flex items-start gap-1.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] leading-relaxed">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>ADVERTENCIA:</strong> Cambiar el secuencial puede afectar la continuidad de la numeracion del SRI.
+                      Hagalo unicamente si esta seguro de que el numero automatico ya fue utilizado o registrado en el SRI.
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="bg-zinc-950 p-4 border border-zinc-850 rounded-xl space-y-1 text-[11px] text-zinc-400 leading-relaxed font-mono">

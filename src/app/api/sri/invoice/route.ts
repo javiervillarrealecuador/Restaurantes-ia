@@ -90,7 +90,7 @@ function buildMailHtml(data: any): string {
 
 export async function POST(request: Request) {
   try {
-    const { orderId, formaPago, billingName, billingVat, billingAddress, billingEmail } = await request.json();
+    const { orderId, formaPago, billingName, billingVat, billingAddress, billingEmail, secuencialOverride } = await request.json();
 
     if (!orderId) {
       return NextResponse.json({ error: 'Falta el ID del pedido (orderId)' }, { status: 400 });
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     // 2. Fetch order data, company settings and build pure XML
     let facturaResult;
     try {
-      facturaResult = await generateFacturaForOrder(orderId);
+      facturaResult = await generateFacturaForOrder(orderId, secuencialOverride ?? null);
     } catch (dbErr: any) {
       console.error('Error generating XML data input:', dbErr);
       return NextResponse.json({ error: dbErr.message || 'Error construyendo XML de la factura' }, { status: 422 });

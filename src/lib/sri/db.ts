@@ -46,7 +46,7 @@ export function getActiveIvaRate(restaurant: DBRestaurant): number {
   return Number(restaurant.sri_iva_rate ?? 15.00);
 }
 
-export async function generateFacturaForOrder(orderId: string): Promise<FacturaResult> {
+export async function generateFacturaForOrder(orderId: string, secuencialOverride?: number | null): Promise<FacturaResult> {
   // 1. Fetch Order and Line Items
   const { data: order, error: oErr } = await supabaseAdmin
     .from('orders')
@@ -129,14 +129,29 @@ export async function generateFacturaForOrder(orderId: string): Promise<FacturaR
   let claveAcceso = orderAny.invoice_auth;
 
   if (numeroFactura) {
+    // Pedido ya tenía un número reservado de un intento previo — reutilizarlo
     const parts = numeroFactura.split('-');
     if (parts.length === 3) {
       secuencial = parseInt(parts[2]);
     } else {
       secuencial = orderAny.order_number;
     }
+  } else if (secuencialOverride != null && !isNaN(Number(secuencialOverride))) {
+    // El usuario especificó manualmente el número secuencial desde el modal
+    secuencial = Number(secuencialOverride);
+    numeroFactura = `${estab}-${ptoEmi}-${String(secuencial).padStart(9, '0')}`;
+    // Actualizar el contador para que el próximo número automático sea el siguiente
+    await supabaseAdmin
+      .from('sri_document_sequence')
+      .upsert({
+        restaurant_id: orderAny.restaurant_id,
+        doc_type: 'factura',
+        estab,
+        pto_emi: ptoEmi,
+        next_number: secuencial + 1
+      }, { onConflict: 'restaurant_id,doc_type,estab,pto_emi' });
   } else {
-    // Generate new sequence atomically calling the PG function
+    // Generar número atómicamente con la función PG
     const { data: nextSec, error: seqErr } = await supabaseAdmin
       .rpc('sri_next_secuencial', {
         p_restaurant_id: orderAny.restaurant_id,
@@ -243,7 +258,7 @@ export async function getSignatureForRestaurant(restaurantId: string): Promise<S
         pwd: signature.clave,
         razon: signature.razon_social,
         expira: signature.expiracion
-      };
+       };
     }
   } catch (err) {
     console.warn('Error querying sri_firmas table, falling back to legacy:', err);
