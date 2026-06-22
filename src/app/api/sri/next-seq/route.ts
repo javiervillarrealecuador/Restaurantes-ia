@@ -9,6 +9,17 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  // Verificar autenticacion
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+  const token = authHeader.slice(7);
+  const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+  if (authErr || !user) {
+    return NextResponse.json({ error: 'Sesion invalida' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const restaurantId = searchParams.get('restaurantId');
 
