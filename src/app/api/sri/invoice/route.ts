@@ -146,13 +146,16 @@ export async function POST(request: Request) {
 
     const ambiente = restaurant.sri_ambiente === 2 ? 2 : 1;
 
-    // 4. Sign XML using XAdES-BES
+    // 4. Sign XML using XAdES-BES (SHA-256 — v2)
     let signedXml: string;
     try {
       signedXml = signXml(facturaResult.xml, {
         p12B64: signatureDetails.p12B64,
         pwd: signatureDetails.pwd
       });
+      // Verificar que el XML firmado usa SHA-256
+      const usaSha256 = signedXml.includes('xmlenc#sha256');
+      console.log('[FIRMA] Algoritmo SHA-256:', usaSha256, '| XML length:', signedXml.length);
     } catch (signErr: any) {
       console.error('Error signing XML:', signErr);
       return NextResponse.json({ error: `Fallo en la firma digital: ${signErr.message}` }, { status: 500 });
@@ -366,7 +369,8 @@ export async function POST(request: Request) {
       invoiceRef: facturaResult.numeroFactura,
       invoiceAuth: facturaResult.claveAcceso,
       emailSent,
-      emailWarning
+      emailWarning,
+      _debug_sigAlgo: signedXml.includes('xmlenc#sha256') ? 'SHA-256' : 'SHA-1'
     });
 
   } catch (error: any) {
