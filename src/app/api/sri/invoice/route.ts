@@ -336,6 +336,20 @@ export async function POST(request: Request) {
             ? `[PRUEBAS] Factura Electrónica ${od.invoice_ref || ''} - ${od.restaurants?.name}`
             : `Factura Electrónica ${od.invoice_ref || ''} - ${od.restaurants?.name}`;
 
+          // Construir XML autorizado completo (formato estándar SRI con envoltorio)
+          const _ecFecha = aut?.fechaAutorizacion
+            ? String(aut.fechaAutorizacion)  // SRI devuelve hora Ecuador, usarla directamente
+            : new Date(Date.now() - 5 * 3600000).toISOString().replace('Z', '-05:00');
+          const authorizedXmlFull =
+            `<?xml version="1.0" encoding="UTF-8"?>\n` +
+            `<autorizacion>\n` +
+            `  <estado>AUTORIZADO</estado>\n` +
+            `  <numeroAutorizacion>${aut?.numeroAutorizacion || facturaResult.claveAcceso}</numeroAutorizacion>\n` +
+            `  <fechaAutorizacion class="fechaAutorizacion">${_ecFecha}</fechaAutorizacion>\n` +
+            `  <comprobante><![CDATA[${signedXml}]]></comprobante>\n` +
+            `  <mensajes/>\n` +
+            `</autorizacion>`;
+
           await transporter.sendMail({
             from: process.env.SMTP_FROM || smtpUser,
             to: billingEmail,
@@ -344,7 +358,7 @@ export async function POST(request: Request) {
             attachments: [
               {
                 filename: `FAC_${od.invoice_ref}.xml`,
-                content: signedXml,
+                content: authorizedXmlFull,
                 contentType: 'application/xml'
               }
             ]

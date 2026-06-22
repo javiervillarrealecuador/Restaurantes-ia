@@ -39,3 +39,34 @@ credentials.md
 scratch/
 datos_pruebas_whatsapp_api.md
 token pruebas whattaspp 1 junio.txt
+
+# Scripts de prueba locales (contienen credenciales)
+test_cert.js
+test_invoice_full.js
+test_invoice_real.js
+test_pwd.js
+test_sb_p12.js
+test_sb_p12.js.txt
+test_autorizar.js
+guardar_firma.js
+fix_final.js
+fix_issuername.js
+fix_sb.js
+patch.js
+
+# XMLs generados localmente
+signed_test.xml
+signed_real.xml
+unsigned_real.xml
+sri_response_real.xml
+
+# Archivos auxiliares locales
+copiar_a_C.bat
+deploy_firma_rpc.bat
+hacer_deploy.bat
+push_now.bat
+deploy.bat
+Vercel
+
+# Documentación técnica SRI local
+BASE XML SRI/

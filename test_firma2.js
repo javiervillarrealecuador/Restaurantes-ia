@@ -11,8 +11,15 @@ function wrap76(b64) { return b64.match(/.{1,76}/g)?.join('\n') || b64; }
 function rand(max=999000) { return Math.floor(Math.random()*max)+990; }
 
 // ─── Cargar certificado ───────────────────────────────────────────────────────
-const p12B64 = fs.readFileSync('C:\\DESCARGAS NUEVAS\\997515524593512350360116819.p12', 'base64');
-const password = 'Fiama97324582@@';
+// Uso: node test_firma2.js <ruta_p12> <contraseña>
+// Ejemplo: node test_firma2.js "C:\certs\firma.p12" "mipassword"
+const p12Path  = process.argv[2] || process.env.SRI_P12_PATH;
+const password = process.argv[3] || process.env.SRI_P12_PASSWORD;
+if (!p12Path || !password) {
+  console.error('Uso: node test_firma2.js <ruta_p12> <contraseña>');
+  process.exit(1);
+}
+const p12B64 = fs.readFileSync(p12Path, 'base64');
 
 const der = forge.util.decode64(p12B64);
 const p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(der), password);

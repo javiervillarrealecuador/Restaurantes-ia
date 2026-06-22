@@ -50,7 +50,13 @@ export async function GET(request: Request) {
     });
 
     // 5. Wrap in SRI Authorization structure
-    const fechaAutFormatted = order.sri_fecha_aut ? new Date(order.sri_fecha_aut).toISOString() : new Date().toISOString();
+    // Formatear fecha en hora Ecuador (UTC-5) con offset explícito, igual que el SRI
+    const toEcuadorIso = (iso: string) => {
+      const d = new Date(iso);
+      const ec = new Date(d.getTime() - 5 * 3600 * 1000);
+      return ec.toISOString().replace('Z', '-05:00');
+    };
+    const fechaAutFormatted = toEcuadorIso(order.sri_fecha_aut || new Date().toISOString());
     const authorizedXml = `<?xml version="1.0" encoding="UTF-8"?>
 <autorizacion>
   <estado>${order.sri_estado}</estado>
