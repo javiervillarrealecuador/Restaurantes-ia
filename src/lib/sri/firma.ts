@@ -1,6 +1,6 @@
 // src/lib/sri/firma.ts
 // FASE 2 — Firma XAdES-BES para comprobantes electrónicos SRI.
-// Algoritmos: RSA-SHA1, digest SHA1, canonicalización c14n 2001.
+// Algoritmos: RSA-SHA256, digest SHA256, canonicalización c14n 2001.
 
 import forge from 'node-forge';
 import { readFileSync } from 'fs';
@@ -8,8 +8,8 @@ import path from 'path';
 
 const XMLNS = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
 
-function sha1B64(input: string): string {
-  const md = forge.md.sha1.create();
+function sha256B64(input: string): string {
+  const md = forge.md.sha256.create();
   md.update(input, 'utf8');
   return forge.util.encode64(md.digest().getBytes());
 }
@@ -92,7 +92,7 @@ function extractP12Info(p12: forge.pkcs12.Pkcs12Pfx): P12Info {
   const certDer   = forge.asn1.toDer(certAsn1).getBytes();
   const certDerB64 = forge.util.encode64(certDer);
 
-  const mdCert = forge.md.sha1.create();
+  const mdCert = forge.md.sha256.create();
   mdCert.update(certDer);
   const certHashB64 = forge.util.encode64(mdCert.digest().getBytes());
 
@@ -134,7 +134,7 @@ export function signXml(
   const cId = rand(), refId = rand(), objId = rand();
 
   const docCanonical = unsignedXml.replace(/<\?xml[^?]*\?>\s*/, '').trim();
-  const docDigest    = sha1B64(docCanonical);
+  const docDigest    = sha256B64(docCanonical);
 
   const signedProperties =
     `<etsi:SignedProperties Id="Signature${sId}-SignedProperties${spId}">` +
@@ -142,7 +142,7 @@ export function signXml(
     `<etsi:SigningTime>${signingTimeEcuador()}</etsi:SigningTime>` +
     `<etsi:SigningCertificate><etsi:Cert>` +
     `<etsi:CertDigest>` +
-    `<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></ds:DigestMethod>` +
+    `<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod>` +
     `<ds:DigestValue>${p12.certHashB64}</ds:DigestValue>` +
     `</etsi:CertDigest>` +
     `<etsi:IssuerSerial>` +
@@ -159,7 +159,7 @@ export function signXml(
     `</etsi:SignedDataObjectProperties>` +
     `</etsi:SignedProperties>`;
 
-  const spDigest = sha1B64(signedProperties.replace(
+  const spDigest = sha256B64(signedProperties.replace(
     '<etsi:SignedProperties ', `<etsi:SignedProperties ${XMLNS} `,
   ));
 
@@ -180,30 +180,30 @@ ${wrap76(p12.modulusB64)}
 </ds:KeyValue>
 </ds:KeyInfo>`.replace(/\r\n/g, '\n');
 
-  const kiDigest = sha1B64(keyInfo.replace('<ds:KeyInfo ', `<ds:KeyInfo ${XMLNS} `));
+  const kiDigest = sha256B64(keyInfo.replace('<ds:KeyInfo ', `<ds:KeyInfo ${XMLNS} `));
 
   const signedInfo =
 `<ds:SignedInfo Id="Signature-SignedInfo${siId}">
 <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></ds:CanonicalizationMethod>
-<ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></ds:SignatureMethod>
+<ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"></ds:SignatureMethod>
 <ds:Reference Id="SignedPropertiesID${spRefId}" Type="http://uri.etsi.org/01903#SignedProperties" URI="#Signature${sId}-SignedProperties${spId}">
-<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></ds:DigestMethod>
+<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod>
 <ds:DigestValue>${spDigest}</ds:DigestValue>
 </ds:Reference>
 <ds:Reference URI="#Certificate${cId}">
-<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></ds:DigestMethod>
+<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod>
 <ds:DigestValue>${kiDigest}</ds:DigestValue>
 </ds:Reference>
 <ds:Reference Id="Reference-ID-${refId}" URI="#comprobante">
 <ds:Transforms>
 <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></ds:Transform>
 </ds:Transforms>
-<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></ds:DigestMethod>
+<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod>
 <ds:DigestValue>${docDigest}</ds:DigestValue>
 </ds:Reference>
 </ds:SignedInfo>`.replace(/\r\n/g, '\n');
 
-  const md = forge.md.sha1.create();
+  const md = forge.md.sha256.create();
   md.update(signedInfo.replace('<ds:SignedInfo ', `<ds:SignedInfo ${XMLNS} `), 'utf8');
   const signatureB64 = forge.util.encode64(p12.privateKey.sign(md));
 
