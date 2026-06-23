@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MenuItem, MenuCategory, Branch, MenuModifier, RestaurantTable } from '@/types';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { 
   Search, 
   Utensils, 
@@ -18,7 +19,8 @@ import {
   MapPin,
   Clipboard,
   User,
-  Hash
+  Hash,
+  Settings
 } from 'lucide-react';
 
 interface TakeOrderPanelProps {
@@ -67,6 +69,11 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [seeding, setSeeding] = useState(false);
   const [loadingActiveOrder, setLoadingActiveOrder] = useState(false);
 
+  const { role } = useAuth();
+  const isAdmin = role === 'admin_general';
+  const [showTableManager, setShowTableManager] = useState(false);
+  const [targetTableQty, setTargetTableQty] = useState(12);
+
   // Audio synthesizer for ding-dong notification
   const playReadyChime = () => {
     try {
@@ -114,6 +121,9 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       if (error) throw error;
       
       setTables(data || []);
+      if (data && data.length > 0) {
+        setTargetTableQty(data.length);
+      }
 
       // If the currently selected table has changed status to free, reset the active order selection
       if (tableNumber) {
@@ -323,6 +333,83 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     } catch (err: any) {
       console.error('Error seeding tables:', err);
       toast.error('Error al inicializar mesas: ' + err.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  // Adjust Tables Handler
+  const handleAdjustTables = async () => {
+    if (!selectedBranchId || !restaurantId) return;
+    if (targetTableQty < 1) {
+      toast.error('La cantidad de mesas debe ser al menos 1');
+      return;
+    }
+    setSeeding(true);
+    try {
+      // Fetch current tables
+      const { data: currentTables, error: fetchErr } = await supabase
+        .from('restaurant_tables')
+        .select('*')
+        .eq('branch_id', selectedBranchId);
+      
+      if (fetchErr) throw fetchErr;
+
+      const existingNumbers = new Set(currentTables?.map(t => t.table_number) || []);
+      const newTables = [];
+
+      for (let i = 1; i <= targetTableQty; i++) {
+        const numStr = `${i}`;
+        if (!existingNumbers.has(numStr)) {
+          newTables.push({
+            restaurant_id: restaurantId,
+            branch_id: selectedBranchId,
+            table_number: numStr,
+            status: 'free',
+            x_pos: ((i - 1) % 4) + 1,
+            y_pos: Math.floor((i - 1) / 4) + 1,
+          });
+        }
+      }
+
+      if (newTables.length > 0) {
+        const { error: insertErr } = await supabase.from('restaurant_tables').insert(newTables);
+        if (insertErr) throw insertErr;
+        toast.success(`Se crearon ${newTables.length} mesas nuevas con éxito.`);
+      } else {
+        toast.info('Las mesas ya están creadas.');
+      }
+      
+      fetchTables();
+      setShowTableManager(false);
+    } catch (err: any) {
+      console.error('Error adjusting tables:', err);
+      toast.error('Error al configurar mesas: ' + err.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  // Delete Free Tables Handler
+  const handleDeleteFreeTables = async () => {
+    if (!selectedBranchId) return;
+    if (!confirm('¿Estás seguro de que deseas eliminar todas las mesas que estén libres? Esta acción no se puede deshacer.')) return;
+    setSeeding(true);
+    try {
+      const { error } = await supabase
+        .from('restaurant_tables')
+        .delete()
+        .eq('branch_id', selectedBranchId)
+        .eq('status', 'free');
+      if (error) throw error;
+      toast.success('Se eliminaron las mesas libres con éxito.');
+      fetchTables();
+      setTableNumber('');
+      setActiveOrder(null);
+      setCart([]);
+    } catch (err: any) {
+      console.error('Error deleting free tables:', err);
+      toast.error('Error al eliminar mesas: ' + err.message);
     } finally {
       setSeeding(false);
     }
@@ -684,23 +771,80 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
               <h4 className="text-sm font-bold text-zinc-150 flex items-center gap-1.5">🍽️ Plano de Mesas</h4>
               <p className="text-xs text-zinc-550">Selecciona una mesa para tomar o modificar pedidos</p>
             </div>
-            {tables.length === 0 && selectedBranchId && (
-              <button
-                type="button"
-                onClick={handleSeedTables}
-                disabled={seeding}
-                className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:bg-zinc-900 disabled:text-zinc-650 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                {seeding ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" /> Inicializando...
-                  </>
-                ) : (
-                  'Inicializar 12 Mesas'
-                )}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {isAdmin && selectedBranchId && (
+                <button
+                  type="button"
+                  onClick={() => setShowTableManager(!showTableManager)}
+                  className={`px-3 py-1.5 border rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    showTableManager
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+                  }`}
+                >
+                  <Settings className="h-3 w-3" />
+                  Configurar Cantidad
+                </button>
+              )}
+              {tables.length === 0 && selectedBranchId && (
+                <button
+                  type="button"
+                  onClick={handleSeedTables}
+                  disabled={seeding}
+                  className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:bg-zinc-900 disabled:text-zinc-650 rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  {seeding ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" /> Inicializando...
+                    </>
+                  ) : (
+                    'Inicializar 12 Mesas'
+                  )}
+                </button>
+              )}
+            </div>
           </div>
+
+          {showTableManager && isAdmin && (
+            <div className="bg-zinc-900/40 border border-zinc-850/60 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-4 duration-200">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs font-bold text-zinc-300">Configuración rápida de mesas</span>
+                <p className="text-[10px] text-zinc-500">
+                  Define el número total de mesas. Si aumentas la cantidad, se generarán automáticamente las mesas faltantes en la cuadrícula.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400">Total de mesas:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={targetTableQty}
+                    onChange={(e) => setTargetTableQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-1.5 rounded-lg text-zinc-150 outline-none text-xs text-center font-bold"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAdjustTables}
+                  disabled={seeding}
+                  className="px-3.5 py-1.5 bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:bg-zinc-800 disabled:text-zinc-600 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                >
+                  {seeding && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Guardar Cantidad
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteFreeTables}
+                  disabled={seeding || tables.length === 0}
+                  className="px-3 py-1.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 disabled:bg-zinc-900 disabled:text-zinc-650 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                >
+                  Eliminar Libres
+                </button>
+              </div>
+            </div>
+          )}
 
           {tables.length > 0 ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
