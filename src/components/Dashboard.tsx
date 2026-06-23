@@ -67,6 +67,7 @@ const formatOrderCode = (code: string | null): string => {
 
 export default function Dashboard() {
   const { user, profile, role, isSuperAdmin, permissions, logout, loading: authLoading, restaurantAccess, activeRestaurantId, setActiveRestaurantId, branchId } = useAuth();
+  const isUserAdmin = role === 'admin_general' || role === 'admin' || isSuperAdmin;
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator' | 'saas' | 'take_order'>('orders');
@@ -598,13 +599,13 @@ export default function Dashboard() {
   }, [restaurant?.id]);
 
   useEffect(() => {
-    if (activeTab === 'staff' && role === 'admin_general') {
+    if (activeTab === 'staff' && isUserAdmin) {
       fetchStaff();
     }
-    if (activeTab === 'audit' && role === 'admin_general') {
+    if (activeTab === 'audit' && isUserAdmin) {
       fetchAuditLogs();
     }
-  }, [activeTab, role, fetchStaff, fetchAuditLogs]);
+  }, [activeTab, isUserAdmin, fetchStaff, fetchAuditLogs]);
 
   // Profile forms submit handlers
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -1676,7 +1677,7 @@ export default function Dashboard() {
           >
 
         {/* Statistical Summary Cards */}
-        {activeTab === 'orders' && (role === 'admin_general' || role === 'vendedor_cajero') && (
+        {activeTab === 'orders' && (isUserAdmin || role === 'vendedor_cajero') && (
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 px-6 pt-6">
             {/* Revenue card */}
             <div className="bg-white dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
@@ -1874,7 +1875,7 @@ export default function Dashboard() {
             </div>
           )}
           
-          {activeTab === 'staff' && role === 'admin_general' && (
+          {activeTab === 'staff' && isUserAdmin && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-zinc-200 dark:border-zinc-900/60 mb-6 gap-4">
                 <div>
@@ -2311,7 +2312,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {activeTab === 'audit' && role === 'admin_general' && (
+          {activeTab === 'audit' && isUserAdmin && (
             <div className="space-y-6">
               <div className="bg-zinc-950/40 border border-zinc-800/80 p-4.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -2559,7 +2560,7 @@ export default function Dashboard() {
               </div>
 
               {/* Branch Management Section */}
-              {role === 'admin_general' && (
+              {isUserAdmin && (
                 <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200">
                   <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
                     <div>
@@ -2759,7 +2760,7 @@ export default function Dashboard() {
               )}
 
               {/* Facturación Electrónica SRI (Ecuador) */}
-              {role === 'admin_general' && (
+              {isUserAdmin && (
                 <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 lg:col-span-2">
                   <div className="border-b border-zinc-900 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
@@ -3204,7 +3205,7 @@ export default function Dashboard() {
               </div>
 
               {/* API and Integration settings for Admin General only */}
-              {role === 'admin_general' ? (
+              {isUserAdmin ? (
                 <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200">
                   <div className="border-b border-zinc-900 pb-4">
                     <h4 className="text-sm font-semibold text-zinc-200">Ajustes de API & Integraciones</h4>

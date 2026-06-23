@@ -69,8 +69,8 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [seeding, setSeeding] = useState(false);
   const [loadingActiveOrder, setLoadingActiveOrder] = useState(false);
 
-  const { role } = useAuth();
-  const isAdmin = role === 'admin_general';
+  const { role, isSuperAdmin } = useAuth();
+  const isAdmin = role === 'admin_general' || role === 'admin' || isSuperAdmin;
   const [showTableManager, setShowTableManager] = useState(false);
   const [targetTableQty, setTargetTableQty] = useState(12);
 
@@ -366,7 +366,6 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     }
   };
 
-  // Adjust Tables Handler
   const handleAdjustTables = async () => {
     if (!selectedBranchId || !restaurantId) return;
     if (targetTableQty < 1) {
@@ -386,6 +385,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       const existingNumbers = new Set(currentTables?.map(t => t.table_number) || []);
       const newTables = [];
 
+      // Add tables if target exceeds current
       for (let i = 1; i <= targetTableQty; i++) {
         const numStr = `${i}`;
         if (!existingNumbers.has(numStr)) {
@@ -400,12 +400,41 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         }
       }
 
+      // Identify tables to delete if target is less than current
+      const tablesToDelete = (currentTables || []).filter(t => {
+        const num = parseInt(t.table_number, 10);
+        return !isNaN(num) && num > targetTableQty;
+      });
+
+      const occupiedTablesToDelete = tablesToDelete.filter(t => t.status !== 'free');
+      if (occupiedTablesToDelete.length > 0) {
+        const tableNums = occupiedTablesToDelete.map(t => t.table_number).join(', ');
+        toast.error(`No se pueden eliminar las siguientes mesas porque están ocupadas: Mesa ${tableNums}. Libéralas o finaliza sus pedidos antes de reducir la cantidad.`);
+        setSeeding(false);
+        return;
+      }
+
+      let message = '';
       if (newTables.length > 0) {
         const { error: insertErr } = await supabase.from('restaurant_tables').insert(newTables);
         if (insertErr) throw insertErr;
-        toast.success(`Se crearon ${newTables.length} mesas nuevas con éxito.`);
+        message += `Se crearon ${newTables.length} mesas nuevas. `;
+      }
+
+      if (tablesToDelete.length > 0) {
+        const idsToDelete = tablesToDelete.map(t => t.id);
+        const { error: deleteErr } = await supabase
+          .from('restaurant_tables')
+          .delete()
+          .in('id', idsToDelete);
+        if (deleteErr) throw deleteErr;
+        message += `Se eliminaron ${tablesToDelete.length} mesas sobrantes.`;
+      }
+
+      if (message) {
+        toast.success(message.trim());
       } else {
-        toast.info('Las mesas ya están creadas.');
+        toast.info('La cantidad de mesas ya es la solicitada.');
       }
       
       fetchTables();
