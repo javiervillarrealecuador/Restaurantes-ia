@@ -338,6 +338,34 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     }
   };
 
+  // Create Default Branch Handler (Fallback UX if no branches exist)
+  const handleCreateDefaultBranch = async () => {
+    if (!restaurantId) return;
+    setSeeding(true);
+    try {
+      const { data, error } = await supabase
+        .from('branches')
+        .insert({
+          restaurant_id: restaurantId,
+          name: 'Sucursal Principal',
+          address: 'Matriz',
+          phone: '',
+          is_active: true
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      toast.success('¡Sucursal Principal creada con éxito!');
+      // Reload page to refresh context
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Error creating default branch:', err);
+      toast.error('Error al crear sucursal: ' + err.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   // Adjust Tables Handler
   const handleAdjustTables = async () => {
     if (!selectedBranchId || !restaurantId) return;
@@ -728,7 +756,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       {/* LEFT: Menu Selection & Tables (8 cols) */}
       <div className="lg:col-span-7 space-y-5">
         {/* Branch Selector (Only if branches exist) */}
-        {branches.length > 0 && (
+        {branches.length > 0 ? (
           <div className="bg-zinc-950 p-4 border border-zinc-900 rounded-3xl flex items-center justify-between gap-4 animate-in fade-in duration-200">
             <div className="flex items-center gap-2.5">
               <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
@@ -762,11 +790,42 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
               </span>
             )}
           </div>
+        ) : (
+          <div className="bg-amber-500/10 p-5 border border-amber-500/20 rounded-3xl space-y-4 animate-in fade-in duration-200">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h5 className="text-sm font-bold text-amber-400">No hay sucursales registradas</h5>
+                <p className="text-xs text-zinc-400">
+                  Para poder crear y gestionar mesas, primero debes registrar al menos una sucursal para tu restaurante.
+                </p>
+              </div>
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleCreateDefaultBranch}
+                disabled={seeding}
+                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                {seeding ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Creando sucursal...
+                  </>
+                ) : (
+                  'Crear Sucursal Principal'
+                )}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Floor Plan (Tables Grid) */}
-        <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
-          <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+        {branches.length > 0 && (
+          <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
+            <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
             <div>
               <h4 className="text-sm font-bold text-zinc-150 flex items-center gap-1.5">🍽️ Plano de Mesas</h4>
               <p className="text-xs text-zinc-550">Selecciona una mesa para tomar o modificar pedidos</p>
@@ -881,6 +940,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             </div>
           )}
         </div>
+      )}
 
         {/* Search & Categories */}
         <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-5 space-y-4 shadow-xl">
