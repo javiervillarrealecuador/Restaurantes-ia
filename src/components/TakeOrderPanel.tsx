@@ -525,6 +525,13 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         .eq('branch_id', selectedBranchId)
         .eq('table_number', tableNumber);
       if (error) throw error;
+      
+      // Update the order status so it reflects in the admin queue
+      await supabase
+        .from('orders')
+        .update({ status: 'payment_requested', updated_at: new Date().toISOString() })
+        .eq('id', activeOrder.id);
+
       toast.success(`¡Cuenta solicitada para Mesa ${tableNumber}!`);
       fetchTables();
       setActiveOrder((prev: any) => prev ? { ...prev, status: 'payment_requested' } : null);
@@ -716,6 +723,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         const { data: order, error: orderErr } = await supabase
           .from('orders')
           .insert({
+            order_code: orderCode,
             restaurant_id: restaurantId,
             branch_id: selectedBranchId,
             status: 'pending',
@@ -751,6 +759,12 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           .insert(orderItemsToInsert);
 
         if (itemsErr) throw itemsErr;
+
+        // Force an update on the orders table to trigger a realtime refresh with the new items
+        await supabase
+          .from('orders')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', order.id);
 
         // Update table relation
         await supabase
