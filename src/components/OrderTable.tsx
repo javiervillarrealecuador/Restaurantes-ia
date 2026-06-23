@@ -1127,12 +1127,12 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                                     const fileName = `receipts/${order.restaurant_id}/${order.id}_${Date.now()}.${fileExt}`;
                                                     
                                                     supabase.storage
-                                                      .from('payment-receipts')
+                                                      .from('receipts')
                                                       .upload(fileName, file, { upsert: true })
                                                       .then(({ error }) => {
                                                         if (error) throw error;
                                                         const { data: publicUrlData } = supabase.storage
-                                                          .from('payment-receipts')
+                                                          .from('receipts')
                                                           .getPublicUrl(fileName);
                                                         
                                                         setTempReceiptUrls(prev => ({ ...prev, [order.id]: publicUrlData.publicUrl }));

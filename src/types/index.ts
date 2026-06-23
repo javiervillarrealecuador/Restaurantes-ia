@@ -105,6 +105,7 @@ export interface Order {
   total_price: number;
   payment_method: string;
   is_paid: boolean;
+  payment_reference: string | null;
   payment_receipt_url: string | null;
   created_at: string;
   updated_at: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Order, OrderStatus } from '@/types';
 
@@ -8,6 +8,11 @@ export function useOrders(restaurantId: string | null) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Track the latest data version to detect staleness
+  const versionRef = useRef<number>(0);
+  // Track if component is mounted
+  const mountedRef = useRef(true);
 
   // Helper function to fetch a single detailed order (with items and menu item details)
   const fetchDetailedOrder = useCallback(async (orderId: string): Promise<Order | null> => {
@@ -51,7 +56,7 @@ export function useOrders(restaurantId: string | null) {
     
     // Safety fallback to prevent infinite loading
     const safetyTimer = setTimeout(() => {
-      if (!silent) setLoading(false);
+      if (!silent && mountedRef.current) setLoading(false);
     }, 12000);
 
     try {
@@ -81,19 +86,18 @@ export function useOrders(restaurantId: string | null) {
 
       if (fetchErr) throw fetchErr;
       
-      setOrders((prev) => {
-        // Prevent state updates and re-renders if the fetched data is identical to the current local state
-        if (JSON.stringify(prev) === JSON.stringify(data)) {
-          return prev;
-        }
-        return (data as unknown as Order[]) || [];
-      });
+      if (mountedRef.current) {
+        versionRef.current += 1;
+        setOrders((data as unknown as Order[]) || []);
+      }
     } catch (err: unknown) {
       console.error('Error fetching orders:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error fetching orders');
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Unknown error fetching orders');
+      }
     } finally {
       clearTimeout(safetyTimer);
-      if (!silent) setLoading(false);
+      if (!silent && mountedRef.current) setLoading(false);
     }
   }, [restaurantId]);
 
@@ -201,14 +205,16 @@ export function useOrders(restaurantId: string | null) {
     }
   }, []);
 
-  // Set up real-time listener and polling fallback
+  // Set up real-time listeners (orders + order_items) and polling fallback
   useEffect(() => {
     if (!restaurantId) return;
 
+    mountedRef.current = true;
+
     fetchOrders(false);
 
-    // Subscribe to changes on the orders table for this restaurant
-    const channel = supabase
+    // ── Channel 1: Subscribe to changes on the ORDERS table ──
+    const ordersChannel = supabase
       .channel(`restaurant-orders-${restaurantId}`)
       .on(
         'postgres_changes',
@@ -219,12 +225,14 @@ export function useOrders(restaurantId: string | null) {
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         async (payload) => {
+          if (!mountedRef.current) return;
+
           const { eventType, new: newRecord, old: oldRecord } = payload;
 
           if (eventType === 'INSERT') {
             // Fetch detailed order with items and update state
             const detailed = await fetchDetailedOrder(newRecord.id);
-            if (detailed) {
+            if (detailed && mountedRef.current) {
               setOrders((prev) => {
                 // Prevent duplicate insertions
                 if (prev.some((o) => o.id === detailed.id)) return prev;
@@ -234,11 +242,11 @@ export function useOrders(restaurantId: string | null) {
           } else if (eventType === 'UPDATE') {
             // Fetch detailed order to ensure everything matches
             const detailed = await fetchDetailedOrder(newRecord.id);
-            if (detailed) {
+            if (detailed && mountedRef.current) {
               setOrders((prev) =>
                 prev.map((order) => (order.id === detailed.id ? detailed : order))
               );
-            } else {
+            } else if (mountedRef.current) {
               // Fallback to updating just the basic order fields in state
               setOrders((prev) =>
                 prev.map((order) =>
@@ -247,22 +255,92 @@ export function useOrders(restaurantId: string | null) {
               );
             }
           } else if (eventType === 'DELETE') {
-            setOrders((prev) => prev.filter((order) => order.id !== oldRecord.id));
+            if (mountedRef.current) {
+              setOrders((prev) => prev.filter((order) => order.id !== oldRecord.id));
+            }
           }
         }
       )
       .subscribe((status) => {
         console.log(`Supabase Realtime subscription status for orders (${restaurantId}): ${status}`);
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+          // Force a full refetch when the channel encounters errors
+          console.warn('Orders realtime channel error, forcing full refetch...');
+          setTimeout(() => {
+            if (mountedRef.current) fetchOrders(true);
+          }, 1000);
+        }
       });
 
-    // Polling fallback every 8 seconds to guarantee updates if Realtime fails
+    // ── Channel 2: Subscribe to changes on the ORDER_ITEMS table ──
+    // When items are added/updated/removed on any order for this restaurant,
+    // we re-fetch the affected order so the UI reflects the change immediately.
+    const orderItemsChannel = supabase
+      .channel(`restaurant-order-items-${restaurantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_items',
+        },
+        async (payload) => {
+          if (!mountedRef.current) return;
+
+          const record = (payload.new || payload.old) as any;
+          const orderId: string | undefined = record?.order_id;
+          if (!orderId) return;
+
+          // Only process if this order belongs to the current restaurant
+          setOrders((prev) => {
+            const exists = prev.some((o) => o.id === orderId);
+            if (!exists) return prev; // Not our order, ignore
+            // Trigger a detailed refetch for this specific order
+            fetchDetailedOrder(orderId).then((detailed) => {
+              if (detailed && mountedRef.current) {
+                setOrders((current) =>
+                  current.map((o) => (o.id === detailed.id ? detailed : o))
+                );
+              }
+            });
+            return prev;
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log(`Supabase Realtime subscription status for order_items (${restaurantId}): ${status}`);
+      });
+
+    // ── Polling fallback every 5 seconds to guarantee updates if Realtime fails ──
     const intervalId = setInterval(() => {
-      fetchOrders(true);
-    }, 8000);
+      if (mountedRef.current) fetchOrders(true);
+    }, 5000);
+
+    // ── Visibility change handler: refetch when user returns to the tab ──
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        console.log('Tab became visible, refreshing orders...');
+        fetchOrders(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // ── Online handler: refetch when network reconnects ──
+    const handleOnline = () => {
+      if (mountedRef.current) {
+        console.log('Network reconnected, refreshing orders...');
+        fetchOrders(true);
+      }
+    };
+    window.addEventListener('online', handleOnline);
 
     return () => {
-      supabase.removeChannel(channel);
+      mountedRef.current = false;
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(orderItemsChannel);
       clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
     };
   }, [restaurantId, fetchOrders, fetchDetailedOrder]);
 

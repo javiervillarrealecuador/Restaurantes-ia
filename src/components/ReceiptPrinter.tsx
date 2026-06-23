@@ -74,7 +74,7 @@ export const ReceiptPrinter = forwardRef<HTMLDivElement, ReceiptPrinterProps>(
           </div>
 
           <div className="text-center border-t border-black border-dashed pt-4">
-            <p><strong>Pago:</strong> {order.payment_method === 'cash' ? 'Efectivo' : order.payment_method === 'transfer' ? 'Transferencia' : 'Pendiente'}</p>
+            <p><strong>Pago:</strong> {order.payment_method === 'cash' ? 'Efectivo' : order.payment_method === 'transfer' ? 'Transferencia' : order.payment_method === 'card' ? 'Tarjeta' : 'Pendiente'}</p>
             <p className="mt-4 italic font-bold">¡Gracias por su preferencia, síganos en redes!</p>
           </div>
         </div>
