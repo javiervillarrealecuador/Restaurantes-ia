@@ -289,9 +289,15 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       )
       .subscribe();
 
+    // Polling fallback to keep tables synced even if realtime subscription is disabled or fails
+    const pollingInterval = setInterval(() => {
+      fetchTables();
+    }, 10000);
+
     return () => {
       supabase.removeChannel(orderChannel);
       supabase.removeChannel(tableChannel);
+      clearInterval(pollingInterval);
     };
   }, [selectedBranchId]);
 

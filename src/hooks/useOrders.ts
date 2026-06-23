@@ -44,14 +44,14 @@ export function useOrders(restaurantId: string | null) {
   }, []);
 
   // Fetch all orders for the restaurant
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (silent = false) => {
     if (!restaurantId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     
     // Safety fallback to prevent infinite loading
     const safetyTimer = setTimeout(() => {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }, 12000);
 
     try {
@@ -80,13 +80,20 @@ export function useOrders(restaurantId: string | null) {
         .limit(100);
 
       if (fetchErr) throw fetchErr;
-      setOrders((data as unknown as Order[]) || []);
+      
+      setOrders((prev) => {
+        // Prevent state updates and re-renders if the fetched data is identical to the current local state
+        if (JSON.stringify(prev) === JSON.stringify(data)) {
+          return prev;
+        }
+        return (data as unknown as Order[]) || [];
+      });
     } catch (err: unknown) {
       console.error('Error fetching orders:', err);
       setError(err instanceof Error ? err.message : 'Unknown error fetching orders');
     } finally {
       clearTimeout(safetyTimer);
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [restaurantId]);
 
@@ -184,11 +191,11 @@ export function useOrders(restaurantId: string | null) {
     }
   }, []);
 
-  // Set up real-time listener
+  // Set up real-time listener and polling fallback
   useEffect(() => {
     if (!restaurantId) return;
 
-    fetchOrders();
+    fetchOrders(false);
 
     // Subscribe to changes on the orders table for this restaurant
     const channel = supabase
@@ -234,10 +241,18 @@ export function useOrders(restaurantId: string | null) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Supabase Realtime subscription status for orders (${restaurantId}): ${status}`);
+      });
+
+    // Polling fallback every 8 seconds to guarantee updates if Realtime fails
+    const intervalId = setInterval(() => {
+      fetchOrders(true);
+    }, 8000);
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(intervalId);
     };
   }, [restaurantId, fetchOrders, fetchDetailedOrder]);
 
@@ -247,6 +262,7 @@ export function useOrders(restaurantId: string | null) {
     error,
     updateOrderStatus,
     updateOrderPaymentStatus,
+    freeTableForOrder,
     refreshOrders: fetchOrders,
   };
 }
