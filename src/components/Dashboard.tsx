@@ -203,6 +203,9 @@ export default function Dashboard() {
   const [editStaffPermissions, setEditStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
   const [editStaffLoading, setEditStaffLoading] = useState(false);
   const [editStaffError, setEditStaffError] = useState<string | null>(null);
+  const [staffBranchIds, setStaffBranchIds] = useState<string[]>([]);
+  const [editStaffBranchIds, setEditStaffBranchIds] = useState<string[]>([]);
+  const [branchInitialTablesQty, setBranchInitialTablesQty] = useState<number>(12);
 
   // Audit logs states
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -696,7 +699,8 @@ export default function Dashboard() {
           password: staffPassword,
           fullName: staffFullName.trim(),
           role: staffRole,
-          permissions: staffPermissions
+          permissions: staffPermissions,
+          branchIds: staffBranchIds
         })
       });
       const data = await res.json();
@@ -707,6 +711,7 @@ export default function Dashboard() {
       setStaffFullName('');
       setStaffRole('vendedor_cajero');
       setStaffPermissions(getDefaultPermissions('vendedor_cajero'));
+      setStaffBranchIds([]);
       setShowAddStaffModal(false);
       
       fetchStaff();
@@ -731,7 +736,8 @@ export default function Dashboard() {
         restaurantId: activeRestaurantId,
         fullName: editStaffFullName.trim(),
         role: editStaffRole,
-        permissions: editStaffPermissions
+        permissions: editStaffPermissions,
+        branchIds: editStaffBranchIds
       };
       if (editStaffPassword) {
         payload.password = editStaffPassword;
@@ -779,6 +785,7 @@ export default function Dashboard() {
       settings: currentPermissions.settings || defaultPerms.settings
     });
     
+    setEditStaffBranchIds(member.branchIds || []);
     setEditStaffError(null);
     setShowEditStaffModal(true);
   };
@@ -1221,7 +1228,7 @@ export default function Dashboard() {
         if (error) throw error;
         toast.success('Sucursal actualizada con éxito.');
       } else {
-        const { error } = await supabase
+        const { data: newBranch, error } = await supabase
           .from('branches')
           .insert({
             restaurant_id: restaurant.id,
@@ -1229,9 +1236,31 @@ export default function Dashboard() {
             address: branchAddress.trim() || null,
             phone: branchPhone.trim() || null,
             is_active: branchIsActive
-          });
+          })
+          .select()
+          .single();
         if (error) throw error;
-        toast.success('Sucursal creada con éxito.');
+
+        // Auto-create initial tables if specified
+        if (newBranch && branchInitialTablesQty > 0) {
+          const defaultTables = Array.from({ length: branchInitialTablesQty }, (_, i) => ({
+            restaurant_id: restaurant.id,
+            branch_id: newBranch.id,
+            table_number: `${i + 1}`,
+            status: 'free',
+            x_pos: (i % 4) + 1,
+            y_pos: Math.floor(i / 4) + 1,
+          }));
+          const { error: tablesErr } = await supabase.from('restaurant_tables').insert(defaultTables);
+          if (tablesErr) {
+            console.error('Error creating initial tables:', tablesErr);
+            toast.error('La sucursal se creó, pero hubo un error al inicializar las mesas.');
+          } else {
+            toast.success(`Sucursal creada con ${branchInitialTablesQty} mesas.`);
+          }
+        } else {
+          toast.success('Sucursal creada con éxito.');
+        }
       }
 
       setBranchName('');
@@ -2038,6 +2067,38 @@ export default function Dashboard() {
                         </div>
                       </div>
 
+                      <div className="space-y-2 pt-2">
+                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
+                          Sucursales Autorizadas
+                        </label>
+                        {branches.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-2 bg-zinc-900/20 border border-zinc-900 p-3 rounded-xl max-h-[15vh] overflow-y-auto custom-scrollbar">
+                            {branches.map((b) => {
+                              const isChecked = staffBranchIds.includes(b.id);
+                              return (
+                                <label key={b.id} className="flex items-center gap-2 text-xs text-zinc-300 font-medium cursor-pointer p-1 hover:bg-zinc-900/40 rounded-lg">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        setStaffBranchIds(prev => prev.filter(id => id !== b.id));
+                                      } else {
+                                        setStaffBranchIds(prev => [...prev, b.id]);
+                                      }
+                                    }}
+                                    className="rounded border-zinc-800 text-emerald-600 focus:ring-emerald-500 bg-zinc-950 h-3.5 w-3.5 cursor-pointer"
+                                  />
+                                  <span className="truncate">{b.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-zinc-550 italic">No hay sucursales registradas para este restaurante.</p>
+                        )}
+                      </div>
+
                       <div className="space-y-3.5 border-t border-zinc-900/65 pt-5 mt-2">
                         <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
                           <ShieldCheck className="h-4 w-4 text-amber-500" /> Permisos del Sistema
@@ -2145,6 +2206,38 @@ export default function Dashboard() {
                           <option value="repartidor">Repartidor</option>
                           <option value="camarero">Camarero / Mesero</option>
                         </select>
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block mb-1">
+                          Sucursales Autorizadas
+                        </label>
+                        {branches.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-2 bg-zinc-900/20 border border-zinc-900 p-2.5 rounded-xl max-h-[15vh] overflow-y-auto custom-scrollbar">
+                            {branches.map((b) => {
+                              const isChecked = editStaffBranchIds.includes(b.id);
+                              return (
+                                <label key={b.id} className="flex items-center gap-2 text-xs text-zinc-300 font-medium cursor-pointer p-1 hover:bg-zinc-900/40 rounded-lg">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      if (isChecked) {
+                                        setEditStaffBranchIds(prev => prev.filter(id => id !== b.id));
+                                      } else {
+                                        setEditStaffBranchIds(prev => [...prev, b.id]);
+                                      }
+                                    }}
+                                    className="rounded border-zinc-800 text-emerald-600 focus:ring-emerald-500 bg-zinc-950 h-3.5 w-3.5 cursor-pointer"
+                                  />
+                                  <span className="truncate">{b.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-zinc-550 italic">No hay sucursales registradas para este restaurante.</p>
+                        )}
                       </div>
 
                       <div className="space-y-3.5 border-t border-zinc-900/65 pt-4">
@@ -2508,6 +2601,20 @@ export default function Dashboard() {
                             className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
                           />
                         </div>
+                        {!editingBranch && (
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Cantidad de Mesas Iniciales a Crear</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="Ej. 12"
+                              value={branchInitialTablesQty}
+                              onChange={(e) => setBranchInitialTablesQty(Math.max(0, parseInt(e.target.value) || 0))}
+                              className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="space-y-1 text-xs">
                             <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Teléfono</label>
@@ -2601,6 +2708,22 @@ export default function Dashboard() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => {
+                                setStaffEmail('');
+                                setStaffPassword('');
+                                setStaffFullName('');
+                                setStaffRole('vendedor_cajero');
+                                setStaffPermissions(getDefaultPermissions('vendedor_cajero'));
+                                setStaffBranchIds([b.id]);
+                                setShowAddStaffModal(true);
+                              }}
+                              className="px-2 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/15 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                              title="Agregar Empleado a esta Sucursal"
+                            >
+                              <UserPlus className="h-3 w-3" />
+                              <span>+ Empleado</span>
+                            </button>
                             <button
                               onClick={() => {
                                 setEditingBranch(b);

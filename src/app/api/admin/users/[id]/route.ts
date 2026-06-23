@@ -42,7 +42,7 @@ export async function PATCH(
   try {
     const targetUserId = params.id;
     const body = await req.json();
-    const { fullName, role, password, permissions, restaurantId: targetRestaurantId } = body;
+    const { fullName, role, password, permissions, restaurantId: targetRestaurantId, branchIds } = body;
 
     if (!targetRestaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
@@ -118,6 +118,34 @@ export async function PATCH(
         .eq('restaurant_id', restaurantId);
 
       if (roleErr) throw roleErr;
+    }
+
+    // 3.5. Update Staff Branches in restaurant_staff_branches
+    if (branchIds && Array.isArray(branchIds)) {
+      // Get staff ID
+      const { data: rsData } = await supabaseAdmin
+        .from('restaurant_staff')
+        .select('id')
+        .eq('profile_id', targetUserId)
+        .eq('restaurant_id', restaurantId)
+        .single();
+      
+      if (rsData) {
+        // Delete existing relations
+        await supabaseAdmin
+          .from('restaurant_staff_branches')
+          .delete()
+          .eq('staff_id', rsData.id);
+        
+        // Insert new relations
+        if (branchIds.length > 0) {
+          const staffBranches = branchIds.map((bId: string) => ({
+            staff_id: rsData.id,
+            branch_id: bId,
+          }));
+          await supabaseAdmin.from('restaurant_staff_branches').insert(staffBranches);
+        }
+      }
     }
 
     // 4. Log action

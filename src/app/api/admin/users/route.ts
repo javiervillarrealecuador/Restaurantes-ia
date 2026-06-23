@@ -63,6 +63,9 @@ export async function GET(req: NextRequest) {
           first_name,
           last_name,
           avatar_url
+        ),
+        restaurant_staff_branches (
+          branch_id
         )
       `)
       .eq('restaurant_id', restaurantId);
@@ -76,10 +79,12 @@ export async function GET(req: NextRequest) {
     // Map emails to staff list
     const staffWithEmails = staffList.map((staff: any) => {
       const authUser = authUsers.find((u) => u.id === staff.profiles?.id);
+      const branchIds = staff.restaurant_staff_branches?.map((sb: any) => sb.branch_id) || [];
       return {
         ...staff,
         email: authUser?.email || 'N/D',
         last_sign_in: authUser?.last_sign_in_at || null,
+        branchIds,
       };
     });
 
@@ -133,14 +138,30 @@ export async function POST(req: NextRequest) {
 
     // 2. The database trigger automatically creates the profiles row. Let's verify or wait a brief second if needed.
     // Insert into restaurant_staff
-    const { error: staffErr } = await supabaseAdmin
+    const { data: staffData, error: staffErr } = await supabaseAdmin
       .from('restaurant_staff')
       .insert({
         restaurant_id: restaurantId,
         profile_id: userId,
         role: role,
         permissions: permissions || {},
-      });
+      })
+      .select('id')
+      .single();
+
+    // Insert staff branches relation if provided
+    const { branchIds } = body;
+    if (!staffErr && staffData && branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+      const staffBranches = branchIds.map((bId: string) => ({
+        staff_id: staffData.id,
+        branch_id: bId,
+      }));
+      try {
+        await supabaseAdmin.from('restaurant_staff_branches').insert(staffBranches);
+      } catch (err) {
+        console.error('Error inserting staff branches:', err);
+      }
+    }
 
     if (staffErr) {
       // Try to clean up the orphaned auth user. If cleanup also fails, log both errors.
