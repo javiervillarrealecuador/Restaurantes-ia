@@ -20,7 +20,8 @@ import {
   Printer,
   FileText,
   Download,
-  AlertTriangle
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { ReceiptPrinter } from './ReceiptPrinter';
@@ -1066,10 +1067,39 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                       )}
                                     </div>
                                   </div>
-                                ) : (
+                                ) : (order.source || 'whatsapp') === 'whatsapp' ? (
                                   <div className="bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900/30 p-2 rounded-lg text-amber-600 dark:text-amber-505 text-[10px] flex items-start gap-1">
                                     <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                                     <span>Esperando captura de transferencia por WhatsApp...</span>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <div className="bg-blue-50 dark:bg-blue-955/20 border border-blue-200/50 dark:border-blue-900/30 p-2 rounded-lg text-blue-600 dark:text-blue-400 text-[10px] flex items-start gap-1">
+                                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-500" />
+                                      <span>Transferencia local / recibida en restaurante (verificación manual).</span>
+                                    </div>
+                                    {!order.is_paid && role !== 'cocinero' && role !== 'repartidor' && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handlePaymentToggle(order.id, order.is_paid);
+                                        }}
+                                        disabled={updatingId === order.id + '-payment'}
+                                        className={`inline-flex items-center justify-center gap-1 text-[10px] text-white px-3 py-1.5 rounded-lg transition-all font-semibold max-w-[200px] ${
+                                          updatingId === order.id + '-payment' ? 'bg-emerald-600/50 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'
+                                        }`}
+                                      >
+                                        {updatingId === order.id + '-payment' ? (
+                                          <>
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Procesando...
+                                          </>
+                                        ) : (
+                                          'Confirmar Pago Recibido'
+                                        )}
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
