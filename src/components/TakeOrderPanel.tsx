@@ -70,7 +70,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [loadingActiveOrder, setLoadingActiveOrder] = useState(false);
 
   const { role, isSuperAdmin } = useAuth();
-  const isAdmin = role === 'admin_general' || role === 'admin' || isSuperAdmin;
+  const isAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
   const [showTableManager, setShowTableManager] = useState(false);
   const [targetTableQty, setTargetTableQty] = useState(12);
 

@@ -67,7 +67,7 @@ const formatOrderCode = (code: string | null): string => {
 
 export default function Dashboard() {
   const { user, profile, role, isSuperAdmin, permissions, logout, loading: authLoading, restaurantAccess, activeRestaurantId, setActiveRestaurantId, branchId } = useAuth();
-  const isUserAdmin = role === 'admin_general' || role === 'admin' || isSuperAdmin;
+  const isUserAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator' | 'saas' | 'take_order'>('orders');

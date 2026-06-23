@@ -1129,7 +1129,8 @@ REGLAS CRÍTICAS:
    - Si el cliente solicita opciones adicionales, términos de carne, o extras (ej. "con extra de papas", "término medio"), y estas opciones están listadas en los "Opciones/Modificadores disponibles" del plato correspondiente, DEBES extraerlos e incluirlos en el arreglo "modifiers" con su nombre y precio exactos.
    - Si el cliente menciona personalizaciones que NO están en la lista oficial de modificadores del plato (ej. "sin cebolla" cuando no existe esa opción con precio), colócalo en el campo "notes" del item (como nota de texto libre), en lugar de "modifiers".
    - NUNCA inventes modificadores en el arreglo "modifiers" que no existan en la lista oficial del plato.
- 
+   - Si el cliente pide bebidas (como "coca cola", "cocacola", "fanta", "bebidas personales", "refrescos", etc.), debes identificar cuál bebida del menú corresponde (ej. "Coca-Cola Original" o "Fanta Orange") y agregarla como un elemento (item) en el arreglo "items" de la orden, con su cantidad correspondiente. NUNCA las dejes en las notas generales ("notes") ni en las notas del item; deben cobrarse registrándose como productos del menú.
+
 8. Siempre usa los IDs exactos del menú y sé conversacional.`;
 
   const url = 'https://api.deepseek.com/chat/completions';
@@ -1289,7 +1290,8 @@ function runFallbackParser(message: string, menuItems: DBMenuItem[]): ParsedOrde
     if (isMatched) {
       // Basic quantity extraction matching common spanish word representations
       let quantity = 1;
-      const match = msgLower.match(new RegExp(`(\\d+|un|una|dos|tres|cuatro|cinco)\\s+${itemName.substring(0, 5)}`));
+      const cleanTerm = itemName.includes('coca-cola') ? 'coca' : (itemName.includes('fanta') ? 'fanta' : itemName.substring(0, 5));
+      const match = msgLower.match(new RegExp(`(\\d+|un|una|dos|tres|cuatro|cinco)\\s+(?:[a-zA-Záéíóúñ]+\\s+){0,3}${cleanTerm}`));
       if (match) {
         const qtyStr = match[1];
         if (qtyStr === 'dos') quantity = 2;
@@ -1300,7 +1302,7 @@ function runFallbackParser(message: string, menuItems: DBMenuItem[]): ParsedOrde
         else quantity = parseInt(qtyStr, 10) || 1;
       } else {
         // Look for digit after name (e.g. "cazuela x2")
-        const matchAfter = msgLower.match(new RegExp(`${itemName.substring(0, 5)}[^\\d]*(\\d+)`));
+        const matchAfter = msgLower.match(new RegExp(`${cleanTerm}[^\\d]*(\\d+)`));
         if (matchAfter) {
           quantity = parseInt(matchAfter[1], 10) || 1;
         }
