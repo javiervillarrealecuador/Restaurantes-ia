@@ -86,7 +86,25 @@ export async function PATCH(
     
     if (status !== undefined) updatePayload.status = status;
     if (is_paid !== undefined) updatePayload.is_paid = is_paid;
-    if (payment_reference !== undefined) updatePayload.payment_reference = payment_reference;
+    
+    // Validate uniqueness of payment_reference if it's being updated
+    if (payment_reference !== undefined) {
+      if (payment_reference) {
+        const { data: existingOrder } = await supabaseAdmin
+          .from('orders')
+          .select('id')
+          .eq('restaurant_id', order.restaurant_id)
+          .eq('payment_reference', payment_reference)
+          .neq('id', orderId)
+          .limit(1);
+        
+        if (existingOrder && existingOrder.length > 0) {
+          return NextResponse.json({ error: 'El número de comprobante/transferencia ya ha sido utilizado en otro pedido.' }, { status: 400 });
+        }
+      }
+      updatePayload.payment_reference = payment_reference;
+    }
+    
     if (payment_receipt_url !== undefined) updatePayload.payment_receipt_url = payment_receipt_url;
 
     // 2. Update order status in database

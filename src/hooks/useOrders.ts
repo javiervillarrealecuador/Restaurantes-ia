@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Order, OrderStatus } from '@/types';
+import { toast } from 'sonner';
 
 export function useOrders(restaurantId: string | null) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -181,7 +182,8 @@ export function useOrders(restaurantId: string | null) {
         })
       });
       if (!response.ok) {
-        throw new Error('Failed to update payment status');
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to update payment status');
       }
 
       // Optimistically update local state
@@ -201,6 +203,11 @@ export function useOrders(restaurantId: string | null) {
       return true;
     } catch (err: unknown) {
       console.error(`Error updating payment status for order ${orderId}:`, err);
+      if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error('Error al actualizar el estado de pago');
+      }
       return false;
     }
   }, []);
