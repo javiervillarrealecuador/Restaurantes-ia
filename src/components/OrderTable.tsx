@@ -1123,19 +1123,20 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                                     if (!file || !order.restaurant_id) return;
                                                     
                                                     setUploadingReceiptId(order.id);
-                                                    const fileExt = file.name.split('.').pop();
-                                                    const fileName = `receipts/${order.restaurant_id}/${order.id}_${Date.now()}.${fileExt}`;
                                                     
-                                                    supabase.storage
-                                                      .from('receipts')
-                                                      .upload(fileName, file, { upsert: true })
-                                                      .then(({ error }) => {
-                                                        if (error) throw error;
-                                                        const { data: publicUrlData } = supabase.storage
-                                                          .from('receipts')
-                                                          .getPublicUrl(fileName);
-                                                        
-                                                        setTempReceiptUrls(prev => ({ ...prev, [order.id]: publicUrlData.publicUrl }));
+                                                    const formData = new FormData();
+                                                    formData.append('file', file);
+                                                    formData.append('restaurant_id', order.restaurant_id);
+                                                    formData.append('order_id', order.id);
+
+                                                    fetch('/api/upload-receipt', {
+                                                      method: 'POST',
+                                                      body: formData,
+                                                    })
+                                                      .then(res => res.json())
+                                                      .then(data => {
+                                                        if (data.error) throw new Error(data.error);
+                                                        setTempReceiptUrls(prev => ({ ...prev, [order.id]: data.url }));
                                                         toast.success('Evidencia de comprobante subida con éxito.');
                                                       })
                                                       .catch(err => {
