@@ -120,9 +120,17 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         .order('table_number', { ascending: true });
       if (error) throw error;
       
-      setTables(data || []);
-      if (data && data.length > 0) {
-        setTargetTableQty(data.length);
+      const sorted = (data || []).sort((a, b) => {
+        const numA = parseInt(a.table_number, 10);
+        const numB = parseInt(b.table_number, 10);
+        if (isNaN(numA) || isNaN(numB)) {
+          return a.table_number.localeCompare(b.table_number);
+        }
+        return numA - numB;
+      });
+      setTables(sorted);
+      if (sorted && sorted.length > 0) {
+        setTargetTableQty(sorted.length);
       }
 
       // If the currently selected table has changed status to free, reset the active order selection

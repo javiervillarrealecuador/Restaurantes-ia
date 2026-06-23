@@ -207,6 +207,8 @@ export default function Dashboard() {
   const [staffBranchIds, setStaffBranchIds] = useState<string[]>([]);
   const [editStaffBranchIds, setEditStaffBranchIds] = useState<string[]>([]);
   const [branchInitialTablesQty, setBranchInitialTablesQty] = useState<number>(12);
+  const [branchTablesCount, setBranchTablesCount] = useState<number>(0);
+  const [branchStaffIds, setBranchStaffIds] = useState<string[]>([]);
 
   // Audit logs states
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -959,8 +961,9 @@ export default function Dashboard() {
     if (activeTab === 'settings' && restaurant?.id) {
       fetchSettings();
       fetchBranches();
+      fetchStaff();
     }
-  }, [activeTab, restaurant?.id, fetchSettings, fetchBranches]);
+  }, [activeTab, restaurant?.id, fetchSettings, fetchBranches, fetchStaff]);
 
   const handleUpdateAiInstruction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1227,6 +1230,70 @@ export default function Dashboard() {
           })
           .eq('id', editingBranch.id);
         if (error) throw error;
+
+        // Adjust tables for this branch
+        const { data: currentTables, error: tablesFetchErr } = await supabase
+          .from('restaurant_tables')
+          .select('*')
+          .eq('branch_id', editingBranch.id);
+        if (tablesFetchErr) throw tablesFetchErr;
+
+        const currentCount = currentTables ? currentTables.length : 0;
+        const newTablesCount = branchTablesCount - currentCount;
+        if (newTablesCount > 0) {
+          const newTables = Array.from({ length: newTablesCount }, (_, i) => {
+            const tableNum = currentCount + i + 1;
+            return {
+              restaurant_id: restaurant.id,
+              branch_id: editingBranch.id,
+              table_number: `${tableNum}`,
+              status: 'free',
+              x_pos: ((tableNum - 1) % 4) + 1,
+              y_pos: Math.floor((tableNum - 1) / 4) + 1,
+            };
+          });
+          const { error: insertErr } = await supabase.from('restaurant_tables').insert(newTables);
+          if (insertErr) throw insertErr;
+        } else if (branchTablesCount < currentCount) {
+          const tablesToDelete = (currentTables || []).filter(t => {
+            const num = parseInt(t.table_number, 10);
+            return !isNaN(num) && num > branchTablesCount;
+          });
+          const occupiedTablesToDelete = tablesToDelete.filter(t => t.status !== 'free');
+          if (occupiedTablesToDelete.length > 0) {
+            const tableNums = occupiedTablesToDelete.map(t => t.table_number).join(', ');
+            toast.error(`No se pueden eliminar las siguientes mesas porque están ocupadas: Mesa ${tableNums}. Libéralas o finaliza sus pedidos antes de reducir la cantidad.`);
+            throw new Error('Occupied tables cannot be deleted');
+          }
+          if (tablesToDelete.length > 0) {
+            const idsToDelete = tablesToDelete.map(t => t.id);
+            const { error: deleteErr } = await supabase
+              .from('restaurant_tables')
+              .delete()
+              .in('id', idsToDelete);
+            if (deleteErr) throw deleteErr;
+          }
+        }
+
+        // Update staff branches relations
+        const { error: deleteStaffErr } = await supabase
+          .from('restaurant_staff_branches')
+          .delete()
+          .eq('branch_id', editingBranch.id);
+        if (deleteStaffErr) throw deleteStaffErr;
+
+        if (branchStaffIds.length > 0) {
+          const newAssignments = branchStaffIds.map(staffId => ({
+            staff_id: staffId,
+            branch_id: editingBranch.id
+          }));
+          const { error: insertStaffErr } = await supabase
+            .from('restaurant_staff_branches')
+            .insert(newAssignments);
+          if (insertStaffErr) throw insertStaffErr;
+        }
+        await fetchStaff();
+
         toast.success('Sucursal actualizada con éxito.');
       } else {
         const { data: newBranch, error } = await supabase
@@ -2602,7 +2669,20 @@ export default function Dashboard() {
                             className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
                           />
                         </div>
-                        {!editingBranch && (
+                        {editingBranch ? (
+                          <div className="space-y-1 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Cantidad de Mesas</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="Ej. 12"
+                              value={branchTablesCount}
+                              onChange={(e) => setBranchTablesCount(Math.max(0, parseInt(e.target.value) || 0))}
+                              className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
+                            />
+                          </div>
+                        ) : (
                           <div className="space-y-1 text-xs">
                             <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Cantidad de Mesas Iniciales a Crear</label>
                             <input
@@ -2614,6 +2694,42 @@ export default function Dashboard() {
                               onChange={(e) => setBranchInitialTablesQty(Math.max(0, parseInt(e.target.value) || 0))}
                               className="w-full bg-zinc-900/60 border border-zinc-805 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
                             />
+                          </div>
+                        )}
+
+                        {editingBranch && (
+                          <div className="space-y-2 text-xs">
+                            <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Empleados de esta Sucursal</label>
+                            {staffLoading ? (
+                              <p className="text-zinc-500 italic text-[11px]">Cargando empleados...</p>
+                            ) : staffList.length === 0 ? (
+                              <p className="text-zinc-500 italic text-[11px]">No hay empleados registrados en el restaurante.</p>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2.5 bg-zinc-900/60 border border-zinc-805 rounded-xl">
+                                {staffList.map((staff) => {
+                                  const isChecked = branchStaffIds.includes(staff.id);
+                                  const name = staff.profiles ? `${staff.profiles.first_name || ''} ${staff.profiles.last_name || ''}`.trim() : staff.email;
+                                  const roleLabel = staff.role === 'admin_general' ? 'Admin' : staff.role === 'vendedor_cajero' ? 'Cajero' : staff.role === 'cocinero' ? 'Cocinero' : staff.role === 'repartidor' ? 'Repartidor' : 'Camarero';
+                                  return (
+                                    <label key={staff.id} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer p-1 rounded hover:bg-zinc-850 transition-colors">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setBranchStaffIds([...branchStaffIds, staff.id]);
+                                          } else {
+                                            setBranchStaffIds(branchStaffIds.filter(id => id !== staff.id));
+                                          }
+                                        }}
+                                        className="rounded border-zinc-800 text-emerald-650 focus:ring-emerald-500 bg-zinc-900 h-4 w-4 cursor-pointer"
+                                      />
+                                      <span className="truncate">{name || staff.email} <span className="text-[10px] text-zinc-500 font-bold">({roleLabel})</span></span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2726,13 +2842,27 @@ export default function Dashboard() {
                               <span>+ Empleado</span>
                             </button>
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 setEditingBranch(b);
                                 setBranchName(b.name);
                                 setBranchAddress(b.address || '');
                                 setBranchPhone(b.phone || '');
                                 setBranchIsActive(b.is_active);
                                 setShowAddBranch(false);
+
+                                // Fetch count of tables
+                                setBranchTablesCount(0);
+                                const { count, error } = await supabase
+                                  .from('restaurant_tables')
+                                  .select('*', { count: 'exact', head: true })
+                                  .eq('branch_id', b.id);
+                                if (!error && count !== null) {
+                                  setBranchTablesCount(count);
+                                }
+
+                                // Initialize assigned staff ids
+                                const assignedStaff = staffList.filter(s => s.branchIds?.includes(b.id)).map(s => s.id);
+                                setBranchStaffIds(assignedStaff);
                               }}
                               className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-transparent hover:border-zinc-850 cursor-pointer"
                               title="Editar"
