@@ -53,7 +53,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [generalNotes, setGeneralNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
 
   // Cart & Modifiers
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1211,6 +1211,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
               >
                 <option value="cash">Efectivo</option>
                 <option value="transfer">Transferencia</option>
+                <option value="card">Tarjeta de Crédito/Débito</option>
               </select>
             </div>
           </div>

@@ -21,7 +21,9 @@ import {
   FileText,
   Download,
   AlertTriangle,
-  Info
+  Info,
+  CreditCard,
+  Camera
 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { ReceiptPrinter } from './ReceiptPrinter';
@@ -51,7 +53,7 @@ const formatOrderCode = (code: string | null): string => {
 interface OrderTableProps {
   orders: Order[];
   onUpdateStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
-  onUpdatePayment: (orderId: string, isPaid: boolean) => Promise<boolean>;
+  onUpdatePayment: (orderId: string, isPaid: boolean, paymentReference?: string | null, paymentReceiptUrl?: string | null) => Promise<boolean>;
   loading: boolean;
   role: string | null;
   readOnly?: boolean;
@@ -77,6 +79,11 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // States for manual transfer reference verification
+  const [paymentReferences, setPaymentReferences] = useState<Record<string, string>>({});
+  const [uploadingReceiptId, setUploadingReceiptId] = useState<string | null>(null);
+  const [tempReceiptUrls, setTempReceiptUrls] = useState<Record<string, string>>({});
 
   // SRI Invoicing Modal States
   const [sriModalOrder, setSriModalOrder] = useState<Order | null>(null);
@@ -317,13 +324,13 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     }
   };
 
-  const handlePaymentToggle = async (orderId: string, currentPaid: boolean) => {
+  const handlePaymentToggle = async (orderId: string, currentPaid: boolean, reference?: string | null, receiptUrl?: string | null) => {
     if (role === 'cocinero' || role === 'repartidor') {
       console.warn('Unauthorized payment status modification.');
       return;
     }
     setUpdatingId(orderId + '-payment');
-    const success = await onUpdatePayment(orderId, !currentPaid);
+    const success = await onUpdatePayment(orderId, !currentPaid, reference, receiptUrl);
     setUpdatingId(null);
     if (!success) {
       console.error(`Failed to update payment status for order ${orderId}`);
@@ -748,14 +755,17 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                         ) : (
                           <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex items-center gap-1 ${
                             order.payment_method === 'transfer' ? 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-850/40' :
-                            order.payment_method === 'cash' ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-250 dark:border-amber-850/40' :
+                            order.payment_method === 'cash' ? 'bg-amber-50 dark:bg-amber-955/20 text-amber-600 dark:text-amber-400 border border-amber-250 dark:border-amber-850/40' :
+                            order.payment_method === 'card' ? 'bg-teal-50 dark:bg-teal-950/20 text-teal-600 dark:text-teal-400 border border-teal-250 dark:border-teal-850/40' :
                             'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-450 border border-zinc-200 dark:border-zinc-800'
                           }`}>
                             {order.payment_method === 'transfer' ? <Landmark className="h-3 w-3" /> : 
                              order.payment_method === 'cash' ? <Banknote className="h-3 w-3" /> : 
+                             order.payment_method === 'card' ? <CreditCard className="h-3 w-3" /> : 
                              <AlertCircle className="h-3 w-3" />}
                             {order.payment_method === 'transfer' ? 'Transferencia' : 
-                             order.payment_method === 'cash' ? 'Efectivo' : 'Por decidir'}
+                             order.payment_method === 'cash' ? 'Efectivo' : 
+                             order.payment_method === 'card' ? 'Tarjeta' : 'Por decidir'}
                           </span>
                         )}
                       </h4>
@@ -1010,7 +1020,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                             <p className="text-xs text-zinc-600 dark:text-zinc-350">
                               Método: <span className="font-semibold text-zinc-800 dark:text-zinc-200">
                                 {order.payment_method === 'undecided' ? 'Por decidir (Delivery)' : 
-                                 order.payment_method === 'transfer' ? 'Transferencia bancaria' : 'Efectivo'}
+                                 order.payment_method === 'transfer' ? 'Transferencia bancaria' : 
+                                 order.payment_method === 'card' ? 'Tarjeta de Crédito/Débito' : 'Efectivo'}
                               </span>
                             </p>
                             <p className="text-xs text-zinc-650 dark:text-zinc-350">
@@ -1021,13 +1032,18 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                             
                             {order.payment_method === 'transfer' && (
                               <div className="mt-2 space-y-2">
-                                {order.payment_receipt_url ? (
-                                  <div className="space-y-1.5">
+                                {order.is_paid ? (
+                                  <div className="space-y-1.5 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
                                     <span className="text-[10px] block text-emerald-600 dark:text-emerald-450 font-bold uppercase tracking-wider flex items-center gap-1">
-                                      ¡Comprobante Subido! 
+                                      ¡Pago Verificado! 
                                       <Check className="h-3 w-3" />
                                     </span>
-                                    <div className="flex flex-col gap-2">
+                                    {order.payment_reference && (
+                                      <p className="text-xs text-zinc-650 dark:text-zinc-350">
+                                        Comprobante #: <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{order.payment_reference}</span>
+                                      </p>
+                                    )}
+                                    {order.payment_receipt_url && (
                                       <a
                                         href={order.payment_receipt_url}
                                         target="_blank"
@@ -1037,68 +1053,167 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                         <img 
                                           src={order.payment_receipt_url} 
                                           alt="Comprobante de pago" 
-                                          className="w-full h-32 object-cover transition-transform group-hover:scale-105"
+                                          className="w-full h-24 object-cover transition-transform group-hover:scale-105"
                                         />
-                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <span className="text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded">Abrir Completo</span>
-                                        </div>
                                       </a>
-                                      {!order.is_paid && role !== 'cocinero' && role !== 'repartidor' && (
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 p-3 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3 max-w-[320px]">
+                                    {order.payment_receipt_url ? (
+                                      <div className="space-y-1.5">
+                                        <span className="text-[10px] block text-emerald-600 dark:text-emerald-450 font-bold uppercase tracking-wider flex items-center gap-1">
+                                          ¡Comprobante Subido! 
+                                          <Check className="h-3 w-3" />
+                                        </span>
+                                        <a
+                                          href={order.payment_receipt_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="group relative block w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-750"
+                                        >
+                                          <img 
+                                            src={order.payment_receipt_url} 
+                                            alt="Comprobante de pago" 
+                                            className="w-full h-32 object-cover transition-transform group-hover:scale-105"
+                                          />
+                                        </a>
+                                      </div>
+                                    ) : (order.source || 'whatsapp') === 'whatsapp' ? (
+                                      <div className="bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900/30 p-2 rounded-lg text-amber-600 dark:text-amber-505 text-[10px] flex items-start gap-1">
+                                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                        <span>Esperando captura de transferencia por WhatsApp...</span>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-blue-50 dark:bg-blue-955/20 border border-blue-200/50 dark:border-blue-900/30 p-2 rounded-lg text-blue-600 dark:text-blue-400 text-[10px] flex items-start gap-1">
+                                        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-500" />
+                                        <span>Transferencia recibida en restaurante (verificación manual).</span>
+                                      </div>
+                                    )}
+
+                                    {/* Verification Form */}
+                                    {role !== 'cocinero' && role !== 'repartidor' && (
+                                      <div className="space-y-3 pt-1">
+                                        {/* Optional image upload for physical evidence */}
+                                        {!order.payment_receipt_url && (
+                                          <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">
+                                              Foto del Comprobante (Evidencia)
+                                            </label>
+                                            
+                                            {tempReceiptUrls[order.id] ? (
+                                              <div className="relative w-full h-24 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                                                <img src={tempReceiptUrls[order.id]} className="w-full h-full object-cover" />
+                                                <button 
+                                                  type="button"
+                                                  onClick={() => setTempReceiptUrls(prev => { const copy = {...prev}; delete copy[order.id]; return copy; })}
+                                                  className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-500"
+                                                >
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="relative">
+                                                <input 
+                                                  type="file" 
+                                                  accept="image/*" 
+                                                  capture="environment"
+                                                  onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (!file || !order.restaurant_id) return;
+                                                    
+                                                    setUploadingReceiptId(order.id);
+                                                    const fileExt = file.name.split('.').pop();
+                                                    const fileName = `receipts/${order.restaurant_id}/${order.id}_${Date.now()}.${fileExt}`;
+                                                    
+                                                    supabase.storage
+                                                      .from('payment-receipts')
+                                                      .upload(fileName, file, { upsert: true })
+                                                      .then(({ error }) => {
+                                                        if (error) throw error;
+                                                        const { data: publicUrlData } = supabase.storage
+                                                          .from('payment-receipts')
+                                                          .getPublicUrl(fileName);
+                                                        
+                                                        setTempReceiptUrls(prev => ({ ...prev, [order.id]: publicUrlData.publicUrl }));
+                                                        toast.success('Evidencia de comprobante subida con éxito.');
+                                                      })
+                                                      .catch(err => {
+                                                        console.error(err);
+                                                        toast.error('Error al subir la imagen del comprobante.');
+                                                      })
+                                                      .finally(() => {
+                                                        setUploadingReceiptId(null);
+                                                      });
+                                                  }}
+                                                  disabled={uploadingReceiptId === order.id}
+                                                  className="hidden"
+                                                  id={`receipt-upload-${order.id}`}
+                                                />
+                                                <label 
+                                                  htmlFor={`receipt-upload-${order.id}`}
+                                                  className="flex items-center justify-center gap-1.5 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-2 text-xs font-semibold cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                                                >
+                                                  {uploadingReceiptId === order.id ? (
+                                                    <>
+                                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                      Subiendo comprobante...
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <Camera className="h-3.5 w-3.5" />
+                                                      Tomar Foto / Subir Imagen
+                                                    </>
+                                                  )}
+                                                </label>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {/* Mandatory reference number input */}
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">
+                                            Número de Comprobante / Referencia <span className="text-rose-500">*</span>
+                                          </label>
+                                          <input 
+                                            type="text" 
+                                            placeholder="Ej: 12938481" 
+                                            value={paymentReferences[order.id] || ''}
+                                            onChange={(e) => setPaymentReferences(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                            className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg p-2 text-xs text-zinc-800 dark:text-zinc-200 outline-none focus:border-emerald-500"
+                                          />
+                                        </div>
+
+                                        {/* Action Button */}
                                         <button
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            handlePaymentToggle(order.id, order.is_paid);
+                                            const refVal = paymentReferences[order.id]?.trim();
+                                            if (!refVal) {
+                                              toast.error('Por favor ingresa el número de comprobante.');
+                                              return;
+                                            }
+                                            handlePaymentToggle(order.id, order.is_paid, refVal, tempReceiptUrls[order.id] || order.payment_receipt_url);
                                           }}
-                                          disabled={updatingId === order.id + '-payment'}
-                                          className={`inline-flex items-center justify-center gap-1 text-[10px] text-white px-3 py-1.5 rounded-lg transition-all font-semibold max-w-[200px] ${
-                                            updatingId === order.id + '-payment' ? 'bg-emerald-600/50 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'
+                                          disabled={updatingId === order.id + '-payment' || !paymentReferences[order.id]?.trim()}
+                                          className={`w-full inline-flex items-center justify-center gap-1 text-[11px] text-white px-3 py-2 rounded-lg transition-all font-bold ${
+                                            (updatingId === order.id + '-payment' || !paymentReferences[order.id]?.trim()) 
+                                              ? 'bg-emerald-600/50 cursor-not-allowed' 
+                                              : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'
                                           }`}
                                         >
                                           {updatingId === order.id + '-payment' ? (
                                             <>
-                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                               Procesando...
                                             </>
                                           ) : (
                                             'Validar y Confirmar Pago'
                                           )}
                                         </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (order.source || 'whatsapp') === 'whatsapp' ? (
-                                  <div className="bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900/30 p-2 rounded-lg text-amber-600 dark:text-amber-505 text-[10px] flex items-start gap-1">
-                                    <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                    <span>Esperando captura de transferencia por WhatsApp...</span>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    <div className="bg-blue-50 dark:bg-blue-955/20 border border-blue-200/50 dark:border-blue-900/30 p-2 rounded-lg text-blue-600 dark:text-blue-400 text-[10px] flex items-start gap-1">
-                                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-500" />
-                                      <span>Transferencia local / recibida en restaurante (verificación manual).</span>
-                                    </div>
-                                    {!order.is_paid && role !== 'cocinero' && role !== 'repartidor' && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handlePaymentToggle(order.id, order.is_paid);
-                                        }}
-                                        disabled={updatingId === order.id + '-payment'}
-                                        className={`inline-flex items-center justify-center gap-1 text-[10px] text-white px-3 py-1.5 rounded-lg transition-all font-semibold max-w-[200px] ${
-                                          updatingId === order.id + '-payment' ? 'bg-emerald-600/50 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 cursor-pointer'
-                                        }`}
-                                      >
-                                        {updatingId === order.id + '-payment' ? (
-                                          <>
-                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                            Procesando...
-                                          </>
-                                        ) : (
-                                          'Confirmar Pago Recibido'
-                                        )}
-                                      </button>
+                                      </div>
                                     )}
                                   </div>
                                 )}

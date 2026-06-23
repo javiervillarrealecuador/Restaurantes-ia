@@ -525,8 +525,8 @@ export default function Dashboard() {
     return success;
   }
 
-  const handleUpdatePaymentStatus = async (orderId: string, isPaid: boolean): Promise<boolean> => {
-    const success = await updateOrderPaymentStatus(orderId, isPaid);
+  const handleUpdatePaymentStatus = async (orderId: string, isPaid: boolean, paymentReference?: string | null, paymentReceiptUrl?: string | null): Promise<boolean> => {
+    const success = await updateOrderPaymentStatus(orderId, isPaid, paymentReference, paymentReceiptUrl);
     if (success && restaurant?.id && profile?.id) {
       const order = orders.find(o => o.id === orderId);
       const code = formatOrderCode(order?.order_code || orderId.substring(0, 8));

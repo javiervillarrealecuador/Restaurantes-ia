@@ -159,7 +159,7 @@ export function useOrders(restaurantId: string | null) {
 
 
   // Update order payment status
-  const updateOrderPaymentStatus = useCallback(async (orderId: string, isPaid: boolean): Promise<boolean> => {
+  const updateOrderPaymentStatus = useCallback(async (orderId: string, isPaid: boolean, paymentReference?: string | null, paymentReceiptUrl?: string | null): Promise<boolean> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -170,7 +170,11 @@ export function useOrders(restaurantId: string | null) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ is_paid: isPaid })
+        body: JSON.stringify({ 
+          is_paid: isPaid,
+          payment_reference: paymentReference,
+          payment_receipt_url: paymentReceiptUrl
+        })
       });
       if (!response.ok) {
         throw new Error('Failed to update payment status');
@@ -180,7 +184,13 @@ export function useOrders(restaurantId: string | null) {
       setOrders((prevOrders) =>
         prevOrders.map((order) =>
           order.id === orderId
-            ? { ...order, is_paid: isPaid, updated_at: new Date().toISOString() }
+            ? { 
+                ...order, 
+                is_paid: isPaid, 
+                payment_reference: paymentReference !== undefined ? paymentReference : order.payment_reference,
+                payment_receipt_url: paymentReceiptUrl !== undefined ? paymentReceiptUrl : order.payment_receipt_url,
+                updated_at: new Date().toISOString() 
+              }
             : order
         )
       );
