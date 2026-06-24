@@ -91,12 +91,12 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
   };
 };
 
-// Maps a restaurant_id to the user's role and permissions in that restaurant
 export interface RestaurantAccess {
   restaurantId: string;
   role: UserRole;
   permissions: StaffPermissions;
   branchId?: string | null;
+  kitchenId?: string | null;
 }
 
 interface AuthContextType {
@@ -114,6 +114,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: any }>;
   logout: () => Promise<void>;
   branchId: string | null;
+  kitchenId: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -131,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissions] = useState<StaffPermissions | null>(null);
   const [loading, setLoading] = useState(true);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [kitchenId, setKitchenId] = useState<string | null>(null);
 
   const [sessionChecked, setSessionChecked] = useState(false);
 
@@ -154,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPermissions(access.permissions);
       setRestaurantId(id);
       setBranchId(access.branchId || null);
+      setKitchenId(access.kitchenId || null);
     }
   };
 
@@ -175,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .single(),
           supabase
             .from('restaurant_staff')
-            .select('role, restaurant_id, permissions, branch_id')
+            .select('role, restaurant_id, permissions, branch_id, kitchen_id')
             .eq('profile_id', currentUser.id)
             // No .limit(1) — fetch ALL restaurants for this user
         ]);
@@ -214,7 +217,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 restaurant_id: allRest[0].id,
                 role: 'admin_general',
                 permissions: null,
-                branch_id: null
+                branch_id: null,
+                kitchen_id: null
               }];
             }
           }
@@ -238,7 +242,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   staff: customPermissions.staff || defaultPerms.staff,
                   settings: customPermissions.settings || defaultPerms.settings
                 },
-                branchId: s.branch_id || null
+                branchId: s.branch_id || null,
+                kitchenId: s.kitchen_id || null
               };
             });
 
@@ -262,6 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setRole(activeAccess.role);
             setPermissions(activeAccess.permissions);
             setBranchId(activeAccess.branchId || null);
+            setKitchenId(activeAccess.kitchenId || null);
 
             // Persist the active selection
             if (typeof window !== 'undefined') {
@@ -355,6 +361,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveRestaurantIdState(null);
         setIsSuperAdmin(false);
         setPermissions(null);
+        setKitchenId(null);
         if (typeof window !== 'undefined') {
           localStorage.removeItem(ACTIVE_RESTAURANT_KEY);
         }
@@ -459,6 +466,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsSuperAdmin(false);
       setPermissions(null);
       setBranchId(null);
+      setKitchenId(null);
       if (typeof window !== 'undefined') {
         localStorage.removeItem(ACTIVE_RESTAURANT_KEY);
         window.location.href = '/login';
@@ -481,7 +489,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       signUp,
       logout,
-      branchId
+      branchId,
+      kitchenId
     }}>
       {children}
     </AuthContext.Provider>

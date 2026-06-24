@@ -200,6 +200,8 @@ export default function Dashboard() {
   const [staffFullName, setStaffFullName] = useState('');
   const [staffRole, setStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero'>('vendedor_cajero');
   const [staffPermissions, setStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
+  const [staffBranchIds, setStaffBranchIds] = useState<string[]>([]);
+  const [staffKitchenId, setStaffKitchenId] = useState<string>('');
   const [addStaffLoading, setAddStaffLoading] = useState(false);
   const [addStaffError, setAddStaffError] = useState<string | null>(null);
 
@@ -212,8 +214,8 @@ export default function Dashboard() {
   const [editStaffPermissions, setEditStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
   const [editStaffLoading, setEditStaffLoading] = useState(false);
   const [editStaffError, setEditStaffError] = useState<string | null>(null);
-  const [staffBranchIds, setStaffBranchIds] = useState<string[]>([]);
   const [editStaffBranchIds, setEditStaffBranchIds] = useState<string[]>([]);
+  const [editStaffKitchenId, setEditStaffKitchenId] = useState<string>('');
   const [branchInitialTablesQty, setBranchInitialTablesQty] = useState<number>(12);
   const [branchTablesCount, setBranchTablesCount] = useState<number>(0);
   const [branchStaffIds, setBranchStaffIds] = useState<string[]>([]);
@@ -231,6 +233,9 @@ export default function Dashboard() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [showAddBranch, setShowAddBranch] = useState(false);
   const [editingBranch, setEditingBranch] = useState<any | null>(null);
+
+  // Kitchens state for staff form
+  const [dashboardKitchens, setDashboardKitchens] = useState<any[]>([]);
 
   // Form states for branches
   const [branchName, setBranchName] = useState('');
@@ -713,7 +718,8 @@ export default function Dashboard() {
           fullName: staffFullName.trim(),
           role: staffRole,
           permissions: staffPermissions,
-          branchIds: staffBranchIds
+          branchIds: staffBranchIds,
+          kitchenId: staffRole === 'cocinero' ? staffKitchenId : null
         })
       });
       const data = await res.json();
@@ -725,6 +731,7 @@ export default function Dashboard() {
       setStaffRole('vendedor_cajero');
       setStaffPermissions(getDefaultPermissions('vendedor_cajero'));
       setStaffBranchIds([]);
+      setStaffKitchenId('');
       setShowAddStaffModal(false);
       
       fetchStaff();
@@ -750,7 +757,8 @@ export default function Dashboard() {
         fullName: editStaffFullName.trim(),
         role: editStaffRole,
         permissions: editStaffPermissions,
-        branchIds: editStaffBranchIds
+        branchIds: editStaffBranchIds,
+        kitchenId: editStaffRole === 'cocinero' ? editStaffKitchenId : null
       };
       if (editStaffPassword) {
         payload.password = editStaffPassword;
@@ -768,6 +776,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(data.error || 'Error al modificar usuario');
 
       setEditStaffPassword('');
+      setEditStaffKitchenId('');
       setShowEditStaffModal(false);
       setEditingStaffMember(null);
       fetchStaff();
@@ -783,6 +792,8 @@ export default function Dashboard() {
     setEditStaffFullName(`${member.profiles?.first_name || ''} ${member.profiles?.last_name || ''}`.trim());
     setEditStaffRole(member.role);
     setEditStaffPassword('');
+    setEditStaffBranchIds(member.branchIds || []);
+    setEditStaffKitchenId(member.kitchen_id || '');
     
     // Load custom permissions or fall back to defaults
     const currentPermissions = member.permissions || {};
@@ -798,7 +809,6 @@ export default function Dashboard() {
       settings: currentPermissions.settings || defaultPerms.settings
     });
     
-    setEditStaffBranchIds(member.branchIds || []);
     setEditStaffError(null);
     setShowEditStaffModal(true);
   };
@@ -970,13 +980,34 @@ export default function Dashboard() {
     }
   }, [restaurant?.id]);
 
+  const fetchKitchens = React.useCallback(async () => {
+    if (!restaurant?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('kitchens')
+        .select('*')
+        .eq('restaurant_id', restaurant.id)
+        .order('name', { ascending: true });
+      if (!error && data) {
+        setDashboardKitchens(data);
+      }
+    } catch (err) {
+      console.error('Error fetching kitchens:', err);
+    }
+  }, [restaurant?.id]);
+
   useEffect(() => {
     if (activeTab === 'settings' && restaurant?.id) {
       fetchSettings();
       fetchBranches();
       fetchStaff();
     }
-  }, [activeTab, restaurant?.id, fetchSettings, fetchBranches, fetchStaff]);
+    if (activeTab === 'staff' && restaurant?.id) {
+      fetchStaff();
+      fetchBranches();
+      fetchKitchens();
+    }
+  }, [activeTab, restaurant?.id, fetchSettings, fetchBranches, fetchStaff, fetchKitchens]);
 
   const handleUpdateWaSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1687,7 +1718,7 @@ export default function Dashboard() {
             </button>
           )}
 
-          {activePermissions.settings !== 'none' && (
+          {(isUserAdmin || activePermissions.settings !== 'none') && (
             <button
               onClick={() => setActiveTab('simulator')}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
@@ -2210,6 +2241,24 @@ export default function Dashboard() {
                         </div>
                       </div>
 
+                      {staffRole === 'cocinero' && dashboardKitchens.length > 0 && (
+                        <div className="space-y-1.5 text-sm pt-2">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
+                            Cocina Asignada (Opcional)
+                          </label>
+                          <select
+                            value={staffKitchenId}
+                            onChange={(e) => setStaffKitchenId(e.target.value)}
+                            className="w-full bg-zinc-900/80 border border-zinc-800 focus:border-emerald-500 p-3 rounded-xl text-zinc-100 outline-none transition-all cursor-pointer font-medium text-sm"
+                          >
+                            <option value="">Todas las cocinas / Ninguna</option>
+                            {dashboardKitchens.map(k => (
+                              <option key={k.id} value={k.id}>{k.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                       <div className="space-y-2 pt-2">
                         <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
                           Sucursales Autorizadas
@@ -2350,6 +2399,24 @@ export default function Dashboard() {
                           <option value="camarero">Camarero / Mesero</option>
                         </select>
                       </div>
+
+                      {editStaffRole === 'cocinero' && dashboardKitchens.length > 0 && (
+                        <div className="space-y-1.5 text-sm pt-2">
+                          <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block mb-1">
+                            Cocina Asignada (Opcional)
+                          </label>
+                          <select
+                            value={editStaffKitchenId}
+                            onChange={(e) => setEditStaffKitchenId(e.target.value)}
+                            className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all text-sm"
+                          >
+                            <option value="">Todas las cocinas / Ninguna</option>
+                            {dashboardKitchens.map(k => (
+                              <option key={k.id} value={k.id}>{k.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       <div className="space-y-2 pt-2">
                         <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block mb-1">

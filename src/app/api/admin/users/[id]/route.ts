@@ -106,10 +106,11 @@ export async function PATCH(
     }
 
     // 3. Update Role & Permissions in restaurant_staff
-    if (role || permissions) {
+    if (role || permissions || body.hasOwnProperty('kitchenId')) {
       const updateData: any = {};
       if (role) updateData.role = role;
       if (permissions) updateData.permissions = permissions;
+      if (body.hasOwnProperty('kitchenId')) updateData.kitchen_id = body.kitchenId || null;
 
       const { error: roleErr } = await supabaseAdmin
         .from('restaurant_staff')

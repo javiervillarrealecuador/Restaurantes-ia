@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckCircle, ChefHat, AlertTriangle, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 interface KitchenDisplayProps {
   orders: Order[];
@@ -14,10 +15,11 @@ interface KitchenDisplayProps {
 }
 
 export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }: KitchenDisplayProps) {
+  const { kitchenId: userKitchenId } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [kitchens, setKitchens] = useState<Kitchen[]>([]);
-  const [selectedKitchenId, setSelectedKitchenId] = useState<string | 'all'>('all');
+  const [selectedKitchenId, setSelectedKitchenId] = useState<string | 'all'>(userKitchenId || 'all');
 
   // Fetch kitchens
   useEffect(() => {
@@ -108,7 +110,8 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
           <select
             value={selectedKitchenId}
             onChange={(e) => setSelectedKitchenId(e.target.value)}
-            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+            disabled={!!userKitchenId}
+            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 disabled:opacity-50"
           >
             <option value="all">Todas las Cocinas</option>
             {kitchens.map(k => (

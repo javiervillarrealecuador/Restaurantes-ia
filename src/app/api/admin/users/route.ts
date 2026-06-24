@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
         role,
         permissions,
         created_at,
+        kitchen_id,
         profiles (
           id,
           first_name,
@@ -99,7 +100,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, fullName, role, permissions, restaurantId: targetRestaurantId } = body;
+    const { email, password, fullName, role, permissions, restaurantId: targetRestaurantId, branchIds, kitchenId } = body;
 
     if (!targetRestaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest) {
         profile_id: userId,
         role: role,
         permissions: permissions || {},
+        kitchen_id: kitchenId || null
       })
       .select('id')
       .single();

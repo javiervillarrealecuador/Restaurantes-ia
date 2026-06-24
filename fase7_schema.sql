@@ -31,8 +31,12 @@ CREATE POLICY "Staff can manage kitchens" ON kitchens
         )
     );
 
--- 2. Add kitchen_id to menu_items
+-- 2. Add kitchen_id to menu_items and restaurant_staff
 ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS kitchen_id UUID REFERENCES kitchens(id) ON DELETE SET NULL;
+ALTER TABLE restaurant_staff ADD COLUMN IF NOT EXISTS kitchen_id UUID REFERENCES kitchens(id) ON DELETE SET NULL;
 
 -- Index for menu_items kitchen_id
 CREATE INDEX IF NOT EXISTS idx_menu_items_kitchen ON menu_items(kitchen_id);
+
+-- Index for restaurant_staff kitchen_id
+CREATE INDEX IF NOT EXISTS idx_restaurant_staff_kitchen ON restaurant_staff(kitchen_id);
