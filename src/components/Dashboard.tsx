@@ -294,7 +294,7 @@ export default function Dashboard() {
       orders: 'orders',
       customers: 'customers',
       menu: 'menu',
-      kitchens: 'menu', // We tie kitchens access to menu access
+      kitchens: 'kitchens',
       simulator: 'simulator',
       logs: 'logs',
       reports: 'reports',
@@ -393,11 +393,15 @@ export default function Dashboard() {
 
   // Admin alerts audio trigger helper
   const triggerAlarmSound = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav');
-      audioRef.current.loop = true;
+    try {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav');
+        audioRef.current.loop = true;
+      }
+      audioRef.current.play().catch(e => console.warn('Audio play blocked:', e));
+    } catch (e) {
+      console.warn('Audio trigger error:', e);
     }
-    audioRef.current.play().catch(e => console.warn('Audio play blocked:', e));
   };
 
   const stopAlarmSound = () => {
@@ -807,7 +811,8 @@ export default function Dashboard() {
       logs: currentPermissions.logs || defaultPerms.logs,
       reports: currentPermissions.reports || defaultPerms.reports,
       staff: currentPermissions.staff || defaultPerms.staff,
-      settings: currentPermissions.settings || defaultPerms.settings
+      settings: currentPermissions.settings || defaultPerms.settings,
+      kitchens: currentPermissions.kitchens || defaultPerms.kitchens
     });
     
     setEditStaffError(null);
@@ -876,9 +881,9 @@ export default function Dashboard() {
       try {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav');
         audio.volume = 0.3;
-        audio.play();
-      } catch {
-        // browser block audio autoplay
+        audio.play().catch(e => console.warn('Audio autoplay blocked by browser:', e));
+      } catch (e) {
+        console.warn('Audio play error:', e);
       }
     }
     

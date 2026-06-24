@@ -23,6 +23,7 @@ export interface StaffPermissions {
   reports: 'write' | 'read' | 'none';
   staff: 'write' | 'read' | 'none';
   settings: 'write' | 'read' | 'none';
+  kitchens: 'write' | 'read' | 'none';
 }
 
 export const getDefaultPermissions = (role: UserRole | null): StaffPermissions => {
@@ -35,7 +36,8 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
       logs: 'write',
       reports: 'write',
       staff: 'write',
-      settings: 'write'
+      settings: 'write',
+      kitchens: 'write'
     },
     vendedor_cajero: {
       orders: 'write',
@@ -45,7 +47,8 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
       logs: 'none',
       reports: 'none',
       staff: 'none',
-      settings: 'read'
+      settings: 'read',
+      kitchens: 'read'
     },
     cocinero: {
       orders: 'write',
@@ -55,7 +58,8 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
       logs: 'none',
       reports: 'none',
       staff: 'none',
-      settings: 'read'
+      settings: 'read',
+      kitchens: 'read'
     },
     repartidor: {
       orders: 'write',
@@ -65,7 +69,8 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
       logs: 'none',
       reports: 'none',
       staff: 'none',
-      settings: 'read'
+      settings: 'read',
+      kitchens: 'none'
     },
     camarero: {
       orders: 'write',
@@ -75,7 +80,8 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
       logs: 'none',
       reports: 'none',
       staff: 'none',
-      settings: 'read'
+      settings: 'read',
+      kitchens: 'read'
     }
   };
 
@@ -87,7 +93,8 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
     logs: 'none',
     reports: 'none',
     staff: 'none',
-    settings: 'none'
+    settings: 'none',
+    kitchens: 'none'
   };
 };
 
@@ -240,7 +247,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   logs: customPermissions.logs || defaultPerms.logs,
                   reports: customPermissions.reports || defaultPerms.reports,
                   staff: customPermissions.staff || defaultPerms.staff,
-                  settings: customPermissions.settings || defaultPerms.settings
+                  settings: customPermissions.settings || defaultPerms.settings,
+                  kitchens: customPermissions.kitchens || defaultPerms.kitchens
                 },
                 branchId: s.branch_id || null,
                 kitchenId: s.kitchen_id || null

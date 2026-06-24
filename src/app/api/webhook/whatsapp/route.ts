@@ -124,7 +124,8 @@ export async function POST(req: NextRequest) {
         whatsappMsgId,
         customerPhone,
         customerName,
-        whatsappPhoneId
+        whatsappPhoneId,
+        isSimulator
       );
       return simResult || NextResponse.json({ status: 'processing_in_background' }, { status: 200 });
     } else {
@@ -136,7 +137,8 @@ export async function POST(req: NextRequest) {
           whatsappMsgId,
           customerPhone,
           customerName,
-          whatsappPhoneId
+          whatsappPhoneId,
+          isSimulator
         ).catch((err) => {
           console.error('Background Webhook Processing Error:', err);
         })
@@ -158,7 +160,8 @@ async function processMessageInBackground(
   whatsappMsgId: string,
   customerPhone: string,
   customerName: string,
-  whatsappPhoneId: string
+  whatsappPhoneId: string,
+  isSimulator: boolean = false
 ) {
   let webhookLogId: string | null = null;
   let restaurantId: string | null = null;
@@ -233,7 +236,11 @@ async function processMessageInBackground(
           try {
             const mediaId = message.image.id;
             const waToken = customWaToken || process.env.WHATSAPP_ACCESS_TOKEN;
-            if (waToken && mediaId) {
+            
+            if (isSimulator) {
+              // Simulador: no intentar descargar de Meta, usar URL de mock directamente
+              receiptUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600';
+            } else if (waToken && mediaId) {
               // 1. Get media URL from Meta
               const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
                 headers: { Authorization: `Bearer ${waToken}` }
@@ -523,7 +530,7 @@ async function processMessageInBackground(
     }
     let crmContext = 'Este es un cliente nuevo. Dale una cálida bienvenida.';
     if (customerData) {
-      crmContext = `Este es un cliente recurrente llamado ${customerData.name || customerName}. Ha realizado ${customerData.total_orders} pedidos en el pasado y ha gastado un total de $${customerData.total_spent}. ${customerData.preferences ? 'Preferencias: ' + customerData.preferences : ''}. Salúdalo de nuevo calurosamente (ej: "¡Hola de nuevo Juan!").`;
+      crmContext = `Este es un cliente recurrente llamado ${customerData.name || customerName}. Ha realizado ${customerData.total_orders} pedidos en el pasado y ha gastado un total de $${customerData.total_spent}. ${customerData.preferences ? 'Preferencias: ' + customerData.preferences : ''}. Trátalo de forma familiar pero profesional.`;
       if (customerData.vat) {
         crmContext += `\nDATOS DE FACTURACIÓN REGISTRADOS: Cédula/RUC: "${customerData.vat}", Nombre/Razón Social: "${customerData.billing_name || customerData.name}", Email: "${customerData.email || ''}", Dirección: "${customerData.address || ''}". Pregúntale al cliente si desea facturar a estos mismos datos o prefiere Consumidor Final o cambiarlos.`;
       }
@@ -595,17 +602,25 @@ async function processMessageInBackground(
       }
     }
     // --- STRICT BACKEND ENFORCEMENT ---
-    // If the AI hallucinates and tries to confirm the order prematurely, we forcefully intercept it.
+    // Si la IA alucina e intenta confirmar el pedido prematuramente, lo interceptamos.
     if (agentResult.intent === 'confirm_order' && agentResult.order) {
       if (!agentResult.order.order_type) {
         agentResult.intent = 'add_to_order';
-        agentResult.human_response = '¡Casi listo! Pero antes de confirmar... ¿tu pedido es para consumir en la mesa, para retirar en el local, o para envío a domicilio?';
+        agentResult.human_response = '¡Casi listo! Antes de confirmar dime, ¿tu pedido es para: 1️⃣ Consumir aquí en el local (mesa), 2️⃣ Retirar en el local (pickup), o 3️⃣ Entrega a domicilio?';
       } else if (agentResult.order.order_type === 'delivery' && !agentResult.order.delivery_address) {
         agentResult.intent = 'add_to_order';
-        agentResult.human_response = '¡Excelente! Para enviarte el pedido, por favor escríbeme tu dirección exacta o envíame tu Ubicación Compartida por WhatsApp.';
+        agentResult.human_response = '¡Excelente! Para enviarte el pedido, por favor escríbeme tu dirección exacta o comparte tu ubicación por WhatsApp.';
       } else if (!agentResult.order.payment_method) {
         agentResult.intent = 'add_to_order';
-        agentResult.human_response = '¡Entendido! Por último, ¿cómo deseas cancelar tu pedido? ¿En Efectivo o mediante Transferencia Bancaria?';
+        agentResult.human_response = '¡Perfecto! ¿Cómo deseas pagar tu pedido?\n\n1️⃣ Efectivo\n2️⃣ Transferencia bancaria o depósito\n3️⃣ Tarjeta de crédito/débito';
+      } else if (
+        // BLOQUEO EN CÓDIGO: efectivo NO permitido para retiro o domicilio
+        agentResult.order.payment_method === 'cash' &&
+        (agentResult.order.order_type === 'pickup' || agentResult.order.order_type === 'delivery')
+      ) {
+        agentResult.intent = 'add_to_order';
+        agentResult.order.payment_method = null; // Forzar a elegir de nuevo
+        agentResult.human_response = 'Para pedidos de retiro en el local o domicilio necesitamos el pago anticipado. No podemos avanzar con la preparación si no nos envías el pago por transferencia o tarjeta.\n\n¿Cuál prefieres?\n2️⃣ Transferencia bancaria o depósito\n3️⃣ Tarjeta de crédito/débito';
       } else if (!agentResult.order.billing_info || agentResult.order.billing_info.requiere_factura === undefined || agentResult.order.billing_info.requiere_factura === null) {
         agentResult.intent = 'add_to_order';
         agentResult.human_response = 'Perfecto. Una última pregunta, ¿requieres factura con datos (factura electrónica) o prefieres Consumidor Final?';
@@ -1039,46 +1054,46 @@ async function runAIAgent(
   // Categoría names for menu display formatting
   const categoryNames = Object.keys(grouped);
 
-  const basePrompt = `Eres *Appy*, el asistente virtual inteligente de un restaurante latinoamericano. 
-Eres amable, cálido, eficiente y conoces el menú a la perfección.
-Atiendes clientes por WhatsApp en español latinoamericano.
+  const basePrompt = `Eres *Appy*, el asistente virtual inteligente de un restaurante latinoamericano.
+Eres amable, cálido, cercano y hablas como un ser humano real, no como un robot.
+Atiendes clientes por WhatsApp en español latinoamericano natural y coloquial.
 Usas emojis con moderación y formato de WhatsApp (*negrita*, _cursiva_).
-Nunca inventas platos que no estén en el menú.`;
+Evita repetir el saludo (como "¡Hola!", "¡Hola de nuevo María!", etc.) en cada mensaje consecutivo. Saluda SOLAMENTE en la primera interacción o al iniciar la conversación, luego mantén el diálogo fluido y directo sin repetir saludos ni presentarte nuevamente.
+Varias tus saludos y respuestas — nunca repites las mismas frases de forma mecánica.
+Si el cliente bromea, respóndele con gracia antes de retomar el pedido.
+Nunca inventas platos que no estén en el menú.
+Siempre que el cliente inicie la conversación, pregúntale PRIMERO cómo desea recibir su pedido:
+"¿Tu pedido es para: 1️⃣ Consumir aquí en el local (mesa), 2️⃣ Retirar en el local (pickup), o 3️⃣ Entrega a domicilio?" — antes de mostrar el menú o tomar el pedido.`;
 
   const systemPrompt = customPrompt ? customPrompt : basePrompt;
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROMPT ESTÁTICO (se cachea en DeepSeek — no cambia entre clientes)
+  // Contiene: personalidad del bot + menú completo + reglas JSON
+  // ─────────────────────────────────────────────────────────────────────────
   const fullSystemPrompt = `${systemPrompt}
 
 === MENÚ DEL RESTAURANTE ===
 ${menuContext}
 === FIN DEL MENÚ ===
 
-CATEGORÍAS DISPONIBLES: ${categoryNames.join(', ')}
+CATEGORÍAS DISPONIBLES: ${categoryNames.join(', ')}`;
 
-NOMBRE DEL CLIENTE: ${customerName}
+  // ─────────────────────────────────────────────────────────────────────────
+  // REGLAS JSON — también van en el system (parte del bloque cacheado)
+  // ─────────────────────────────────────────────────────────────────────────
+  const jsonRulesPrompt = `
+Responde ÚNICAMENTE con un JSON válido con esta estructura exacta (sin bloques de código, sin texto extra):
 
-=== PERFIL DEL CLIENTE (CRM) ===
-${crmContext}
-
-=== MEMORIA DE LA CONVERSACIÓN ===
-${historyContext}
-
-=== ESTADO DEL CARRITO ACTUAL ===
-${cartContext}`;
-
-  const userPrompt = `MENSAJE DEL CLIENTE: "${message}"
- 
-Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta (sin bloques de código, sin texto extra):
- 
 {
   "intent": "add_to_order" | "confirm_order" | "menu_query" | "full_menu" | "greeting" | "transfer_to_human" | "special_event" | "other",
   "human_response": "Tu respuesta completa y natural para enviar al cliente por WhatsApp",
   "order": {
     "items": [
-      { 
-        "product_id": "UUID exacto del menú", 
-        "quantity": 1, 
-        "notes": null, 
+      {
+        "product_id": "UUID exacto del menú",
+        "quantity": 1,
+        "notes": null,
         "modifiers": [
           { "name": "Nombre del modificador", "price": 0.00 }
         ]
@@ -1098,37 +1113,38 @@ Analiza el mensaje y responde ÚNICAMENTE con un JSON con esta estructura exacta
     } | null
   } | null
 }
- 
+
 REGLAS CRÍTICAS:
- 
-1. INTENTS:
-   - "greeting": Solo saluda.
-   - "full_menu": Pide ver TODO el menú.
-   - "menu_query": Pregunta por UNA categoría específica.
-   - "add_to_order": El cliente está pidiendo comida, PERO AÚN NO HA TERMINADO o simplemente está agregando cosas.
-   - "confirm_order": El cliente explícitamente dice que ya no quiere nada más, que eso es todo, o que procedas a cobrar.
-   - "transfer_to_human": El cliente explícitamente solicita hablar con un humano, persona real, administrador, soporte técnico o agente de servicio.
-   - "special_event": El cliente pregunta sobre buffets, catering, preparación de banquetes, comidas especiales para eventos, contratos grandes, etc.
-   - "other": Otra cosa.
- 
+
+1. INTENTS — LEE ESTO CON ATENCIÓN:
+   - "greeting": SOLO cuando el cliente dice únicamente un saludo ("hola", "buenas", etc.) SIN pedir nada más. Si junto al saludo pide el menú, una categoría o un plato, el intent NO es greeting — es full_menu, menu_query o add_to_order.
+   - "full_menu": Pide ver TODO el menú (ej. "muéstrame todo", "qué tienen", "la carta").
+   - "menu_query": Pregunta o pide ver UNA categoría específica (ej. "solo dame las sopas", "qué bebidas tienen", "dame los postres", "es muy grande, solo las sopas"). CUALQUIER mensaje donde el cliente mencione una categoría del menú y quiera verla, es menu_query.
+   - "add_to_order": El cliente está pidiendo un plato específico para ordenar (no solo ver).
+   - "confirm_order": El cliente explícitamente confirma que ya terminó y quiere proceder.
+   - "transfer_to_human": El cliente quiere hablar con una persona real.
+   - "special_event": Buffets, catering, eventos.
+   - "other": Cualquier otra cosa que no encaje en las anteriores.
+
 2. Para "add_to_order" y "confirm_order":
    - El arreglo "items" dentro de "order" DEBE contener SIEMPRE el pedido completo (es decir, TODOS los items que ya estaban en el ESTADO DEL CARRITO ACTUAL + los nuevos items que haya solicitado el cliente ahora). NUNCA borres los items anteriores.
    - Si es "add_to_order", el human_response debe listar lo que lleva hasta ahora y preguntar explícitamente: "¿Deseas agregar algo más a tu pedido o confirmamos?"
- 
+
 3. Para "confirm_order":
    - ES OBLIGATORIO que el JSON final incluya "order_type", "delivery_address" (si aplica), "payment_method" y la confirmación de "billing_info".
    - NUNCA uses "confirm_order" si aún no conoces la modalidad (order_type), el método de pago (payment_method) o si requiere factura con sus datos correspondientes. Si falta alguno, mantén el intent en "add_to_order" y pregúntaselo.
    - Si el cliente NO ha especificado la modalidad de entrega, es OBLIGATORIO preguntarle: "¿Su pedido es para consumir en la mesa, para retirar en el local, o para envío a domicilio? (También puedes enviarme tu ubicación de WhatsApp si es para domicilio)".
    - EXCEPCIÓN y REGLA DE ORO: Si el cliente ya indica la modalidad (ej. dice "es a domicilio", "para llevar", "en la mesa", o envía una dirección o [Ubicación Compartida]), DEDUCE inmediatamente el "order_type" (delivery, pickup, dine_in). NO VUELVAS a preguntarle si es para mesa/llevar/domicilio. Si es "delivery" y falta la dirección, pídesela. Si ya tienes la modalidad (y dirección si aplica), pasa directo a preguntar el método de pago.
-   - Una vez tengas el tipo de pedido (y la dirección si aplica), pregúntale por su método de pago (Efectivo o Transferencia) manteniendo el intent "add_to_order".
-   - Una vez definido el método de pago, es OBLIGATORIO preguntar al cliente: "¿Requieres factura con datos (factura electrónica) o prefieres Consumidor Final?".
+   - Una vez tengas el tipo de pedido (y la dirección si aplica), pregúntale por su método de pago. Para los tres tipos de pedido (mesa, retiro, domicilio) debes ofrecer siempre las tres opciones: *1) Efectivo, 2) Transferencia bancaria o depósito, 3) Tarjeta de crédito/débito*.
+   - REGLA ESTRICTA DE PAGO ANTICIPADO: Si el order_type es "pickup" (retiro en local) o "delivery" (domicilio), el pago en efectivo NO está permitido. Si el cliente elige efectivo para estas modalidades, respóndele amablemente: "Para pedidos de retiro o domicilio necesitamos el pago anticipado. No podemos avanzar con la preparación si no nos envías el pago por transferencia o tarjeta. ¿Cuál de estas opciones prefieres?". Mantén el intent en "add_to_order" y payment_method en null hasta que elija una opción válida.
+   - Una vez definido el método de pago válido, es OBLIGATORIO preguntar al cliente: "¿Requieres factura con datos (factura electrónica) o prefieres Consumidor Final?".
      - Si responde "Consumidor Final", llena "billing_info" con {"requiere_factura": false, "vat": "9999999999999", "name": "CONSUMIDOR FINAL", "email": null, "address": null}.
-     - Si responde "Factura con datos", busca si tiene datos en === PERFIL DEL CLIENTE (CRM) ===.
+     - Si responde "Factura con datos", busca si tiene datos en el PERFIL CRM del mensaje del usuario.
        - Si están registrados, pídele confirmación: "Veo que tienes registrados estos datos: RUC: ZZZ, Nombre: YYY, Email: XXX. ¿Deseas usarlos o cambiarlos?".
        - Si no los tiene (o desea cambiarlos), pídele su Identificación (Cédula o RUC), Nombres/Razón Social y Correo Electrónico. Llena el objeto "billing_info" con estos datos y pon requiere_factura = true.
-   - SOLO cuando el cliente te confirme todos los campos (incluyendo si requiere factura y sus datos si aplica), puedes cambiar el intent a "confirm_order".
-   - El human_response de "confirm_order" debe ser un mensaje breve y amable despidiéndose, indicando que el pedido está siendo generado.
- 
+   - SOLO cuando el cliente confirme todos los campos (incluyendo si requiere factura y sus datos si aplica), puedes cambiar el intent a "confirm_order".
+   - El human_response de "confirm_order" debe ser un mensaje breve y amable despidiéndose, indicando que el pedido está siendo procesado.
+
 4. Para "full_menu" o "menu_query":
    - ES OBLIGATORIO usar listas verticales. Cada plato debe ir en una nueva línea.
    - Formato exacto esperado:
@@ -1136,18 +1152,44 @@ REGLAS CRÍTICAS:
      - Plato 1 ($X.XX)
      - Plato 2 ($X.XX)
    - NUNCA respondas con los platos separados por comas en un solo párrafo, es ilegible.
- 
-6. GESTIÓN DE CALIFICACIONES (POST-ENTREGA):
-   - Si el cliente envía un número del 1 al 5, estrellas (⭐), o un comentario evaluativo corto (ej. "Todo rico", "Estuvo malo", "5") justo después de que se le entregó su pedido, el intent debe ser "other".
-   - Tu human_response debe ser un agradecimiento muy amable por la calificación. Si la nota es baja (1-3), pide disculpas sinceramente e indica que trabajarán para mejorar. No ofrezcas ni intentes tomar un nuevo pedido en este momento.
- 
-7. GESTIÓN DE MODIFICADORES Y PERSONALIZACIÓN DE PLATOS:
-   - Si el cliente solicita opciones adicionales, términos de carne, o extras (ej. "con extra de papas", "término medio"), y estas opciones están listadas en los "Opciones/Modificadores disponibles" del plato correspondiente, DEBES extraerlos e incluirlos en el arreglo "modifiers" con su nombre y precio exactos.
-   - Si el cliente menciona personalizaciones que NO están en la lista oficial de modificadores del plato (ej. "sin cebolla" cuando no existe esa opción con precio), colócalo en el campo "notes" del item (como nota de texto libre), en lugar de "modifiers".
-   - NUNCA inventes modificadores en el arreglo "modifiers" que no existan en la lista oficial del plato.
-   - Si el cliente pide bebidas (como "coca cola", "cocacola", "fanta", "bebidas personales", "refrescos", etc.), debes identificar cuál bebida del menú corresponde (ej. "Coca-Cola Original" o "Fanta Orange") y agregarla como un elemento (item) en el arreglo "items" de la orden, con su cantidad correspondiente. NUNCA las dejes en las notas generales ("notes") ni en las notas del item; deben cobrarse registrándose como productos del menú.
 
-8. Siempre usa los IDs exactos del menú y sé conversacional.`;
+5. GESTIÓN DE CALIFICACIONES (POST-ENTREGA):
+   - Si el cliente envía un número del 1 al 5, estrellas (⭐), o un comentario evaluativo corto (ej. "Todo rico", "Estuvo malo", "5"), el intent debe ser "other".
+   - Tu human_response debe ser un agradecimiento muy amable. Si la nota es baja (1-3), pide disculpas sinceramente e indica que trabajarán para mejorar.
+
+6. GESTIÓN DE MODIFICADORES Y PERSONALIZACIÓN DE PLATOS:
+   - Si el cliente solicita opciones adicionales, términos de carne, o extras y estas opciones están listadas en los "Opciones/Modificadores disponibles" del plato, DEBES incluirlos en el arreglo "modifiers" con su nombre y precio exactos.
+   - Si el cliente menciona personalizaciones que NO están en la lista oficial de modificadores (ej. "sin cebolla"), colócalo en el campo "notes" del item.
+   - NUNCA inventes modificadores que no existan en la lista oficial del plato.
+   - Si el cliente pide bebidas, identifica cuál bebida del menú corresponde y agrégala como un elemento (item) separado en el arreglo "items". NUNCA las dejes en notas.
+
+7. Siempre usa los IDs exactos del menú, sé conversacional y usa lenguaje natural y humano.`;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PROMPT DINÁMICO — va en el mensaje `user` (cambia por cliente/mensaje)
+  // Contiene: nombre, CRM, historial, carrito y el mensaje actual
+  // ─────────────────────────────────────────────────────────────────────────
+  const userPrompt = `=== CONTEXTO DEL CLIENTE ===
+NOMBRE: ${customerName}
+
+=== PERFIL DEL CLIENTE (CRM) ===
+${crmContext}
+
+=== MEMORIA DE LA CONVERSACIÓN ===
+${historyContext}
+
+=== ESTADO DEL CARRITO ACTUAL ===
+${cartContext}
+
+=== MENSAJE ACTUAL DEL CLIENTE ===
+"${message}"
+
+Analiza el mensaje del cliente y responde en JSON según las reglas del sistema.`;
+
+  // Combinar el system prompt estático con las reglas JSON (todo cacheado)
+  const staticSystemPrompt = `${fullSystemPrompt}
+
+${jsonRulesPrompt}`;
 
   const url = 'https://api.deepseek.com/chat/completions';
   const response = await fetch(url, {
@@ -1159,12 +1201,15 @@ REGLAS CRÍTICAS:
     body: JSON.stringify({
       model: 'deepseek-chat',
       messages: [
-        { role: 'system', content: fullSystemPrompt },
-        { role: 'assistant', content: 'Entendido. Soy Appy y estoy listo para atender al cliente respondiendo estrictamente en formato JSON.' },
+        // BLOQUE ESTÁTICO: personalidad + menú + reglas JSON
+        // DeepSeek cachea este bloque automáticamente cuando es idéntico entre llamadas
+        { role: 'system', content: staticSystemPrompt },
+        { role: 'assistant', content: 'Entendido. Estoy listo para atender al cliente y responderé estrictamente en formato JSON.' },
+        // BLOQUE DINÁMICO: datos del cliente + historial + carrito + mensaje actual
         { role: 'user', content: userPrompt },
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.4,
+      temperature: 0.5, // Ligeramente más alto para respuestas más naturales y variadas
     }),
   });
 
@@ -1197,33 +1242,54 @@ function runFallbackAgent(
 ): AgentResult {
   const msgLow = message.trim().toLowerCase();
 
-  // Detect greeting
+  // Detect greeting — SOLO si el mensaje es un saludo puro sin ningún otro pedido
   const greetWords = ['hola', 'buenos', 'buenas', 'buen día', 'buen dia', 'holi', 'hey', 'hi', 'saludos'];
-  if (greetWords.some((g) => msgLow.startsWith(g)) && msgLow.length < 30) {
-    return {
-      intent: 'greeting',
-      human_response: `¡Hola, ${customerName}! 👋 Bienvenido/a. Escribe *menú* para ver nuestros platos o dinos directamente qué deseas ordenar. ¿En qué te podemos ayudar? 😊`,
-      order: null,
-    };
+  const isOnlyGreeting = greetWords.some((g) => msgLow.startsWith(g)) && msgLow.length < 30;
+  
+  // Detect category mentions — incluye "dame", "muéstrame", "solo", "ver" + nombre de categoría
+  const categories = Array.from(new Set(menuItems.map((m) => m.category_name?.toLowerCase()).filter(Boolean))) as string[];
+  const categoryTriggerWords = ['dame', 'muéstrame', 'muestrame', 'ver', 'solo', 'tienes', 'tienen', 'hay', 'lista', 'qué', 'que', 'mostrar', 'quiero ver'];
+  const menuWords = ['menú', 'menu', 'carta', 'opciones', 'platos', 'qué tienen', 'que tienen'];
+
+  // Check if message mentions a specific category
+  for (const cat of categories) {
+    if (msgLow.includes(cat)) {
+      // Either has a trigger word OR the message is short enough that mentioning the category IS the request
+      const hasTrigger = categoryTriggerWords.some((w) => msgLow.includes(w));
+      const isShortCategoryRequest = msgLow.length < 60; // "solo dame las sopas", "es muy grande solo las sopas"
+      if (hasTrigger || isShortCategoryRequest) {
+        const filtered = menuItems.filter((m) => m.category_name?.toLowerCase() === cat);
+        const greetPart = isOnlyGreeting ? `¡Hola, ${customerName}! 😊 ` : '';
+        const intros = [
+          `Aquí te muestro las ${cat}: 🍽️`,
+          `¡Con gusto! Esto tenemos en ${cat}:`,
+          `Claro que sí, mira nuestra sección de *${cat.toUpperCase()}*:`,
+        ];
+        const intro = greetPart + intros[Math.floor(Math.random() * intros.length)];
+        const lines = [intro + '\n'];
+        filtered.forEach((i) => {
+          const code = i.code ? ` _(Cód: ${i.code})_` : '';
+          lines.push(`  • ${i.name}${code} — *$${Number(i.price).toFixed(2)}*`);
+          if (i.description) lines.push(`    _${i.description}_`);
+        });
+        lines.push('\n¿Cuál te llama la atención? 😋');
+        return { intent: 'menu_query', human_response: lines.join('\n'), order: null };
+      }
+    }
   }
 
-  // Detect full menu or category query
-  const categories = Array.from(new Set(menuItems.map((m) => m.category_name?.toLowerCase()).filter(Boolean))) as string[];
-  const menuWords = ['menú', 'menu', 'carta', 'opciones', 'platos', 'qué tienen', 'que tienen'];
-  const queryWords = ['tienes', 'tienen', 'hay', 'muéstrame', 'muestrame', 'lista', 'qué', 'que', 'ver', 'opciones'];
-
-  for (const cat of categories) {
-    if (msgLow.includes(cat) && queryWords.some((w) => msgLow.includes(w))) {
-      const filtered = menuItems.filter((m) => m.category_name?.toLowerCase() === cat);
-      const lines = [`¡Claro, ${customerName}! Aquí tienes nuestra sección de *${cat.toUpperCase()}*: 🍽️\n`];
-      filtered.forEach((i) => {
-        const code = i.code ? ` _(Cód: ${i.code})_` : '';
-        lines.push(`  • ${i.name}${code} — *$${Number(i.price).toFixed(2)}*`);
-        if (i.description) lines.push(`    _${i.description}_`);
-      });
-      lines.push('\nEscríbenos qué deseas ordenar. 🛒');
-      return { intent: 'menu_query', human_response: lines.join('\n'), order: null };
-    }
+  // Pure greeting (no category/order intent detected)
+  if (isOnlyGreeting) {
+    const greetings = [
+      `¡Hola, ${customerName}! 👋 ¿Qué se te antoja hoy? Puedo mostrarte el menú completo o si ya sabes qué quieres, ¡dime nomás! 😊`,
+      `¡Buenas, ${customerName}! 😄 ¿En qué te ayudo? Puedes pedirme el menú o dime directamente qué deseas ordenar.`,
+      `¡Hola! 😊 ¿Qué te provoca hoy, ${customerName}? Dime si quieres ver el menú o ya tienes algo en mente.`,
+    ];
+    return {
+      intent: 'greeting',
+      human_response: greetings[Math.floor(Math.random() * greetings.length)],
+      order: null,
+    };
   }
 
   if (menuWords.some((w) => msgLow.includes(w)) && !msgLow.includes('quiero') && !msgLow.includes('pedir')) {
