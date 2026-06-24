@@ -51,9 +51,19 @@ export interface SriFirma {
   updated_at?: string;
 }
 
+export interface Kitchen {
+  id: string;
+  restaurant_id: string;
+  name: string;
+  administrator: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface MenuItem {
   id: string;
   category_id: string;
+  kitchen_id?: string | null;
   name: string;
   description: string | null;
   price: number;

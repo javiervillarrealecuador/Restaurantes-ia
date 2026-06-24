@@ -5,8 +5,8 @@ export async function sendWhatsAppMessage(to: string, text: string, phoneId: str
   console.log(text);
   console.log('---------------------------------------------');
 
-  if (!token || token.startsWith('EAAG_reemplazar')) {
-    console.log('Meta WhatsApp credentials are not configured or are test tokens. Skipping actual API request.');
+  if (!token || token.startsWith('EAAG_reemplazar') || to === '593987654322') {
+    console.log('Meta WhatsApp credentials are not configured, test tokens, or simulator number used. Skipping actual API request.');
     return;
   }
 

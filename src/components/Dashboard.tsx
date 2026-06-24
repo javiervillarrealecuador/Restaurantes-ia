@@ -10,6 +10,7 @@ import ReportsPanel from './ReportsPanel';
 import MenuPanel from './MenuPanel';
 import SimulatorPanel from './SimulatorPanel';
 import KitchenDisplay from './KitchenDisplay';
+import KitchensPanel from './KitchensPanel';
 import DeliveryDisplay from './DeliveryDisplay';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import SaaSAdminPanel from './SaaSAdminPanel';
@@ -71,7 +72,7 @@ export default function Dashboard() {
   const isUserAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'simulator' | 'saas' | 'take_order'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'customers' | 'logs' | 'settings' | 'reports' | 'staff' | 'audit' | 'menu' | 'kitchens' | 'simulator' | 'saas' | 'take_order'>('orders');
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState<boolean>(true);
   const [bootstrapping, setBootstrapping] = useState<boolean>(false);
@@ -261,6 +262,7 @@ export default function Dashboard() {
     { key: 'orders', label: 'Pedidos', desc: 'Gestionar pedidos de clientes' },
     { key: 'customers', label: 'Clientes', desc: 'Ver y fidelizar base de clientes' },
     { key: 'menu', label: 'Carta / Menú', desc: 'Configurar platos y categorías' },
+    { key: 'kitchens', label: 'Cocinas', desc: 'Administrar cocinas para enrutamiento' },
     { key: 'simulator', label: 'Simulador WhatsApp', desc: 'Probar pedidos simulados' },
     { key: 'reports', label: 'Reportes', desc: 'Analíticas y descargas Excel/PDF' },
     { key: 'logs', label: 'Historial Webhooks', desc: 'Ver logs técnicos de Meta/Gemini' },
@@ -286,6 +288,7 @@ export default function Dashboard() {
       orders: 'orders',
       customers: 'customers',
       menu: 'menu',
+      kitchens: 'menu', // We tie kitchens access to menu access
       simulator: 'simulator',
       logs: 'logs',
       reports: 'reports',
@@ -1776,6 +1779,7 @@ export default function Dashboard() {
             {activeTab === 'staff' && 'Administración de Personal'}
             {activeTab === 'audit' && 'Seguimiento de Actividades'}
             {activeTab === 'menu' && 'Carta / Menú del Restaurante'}
+            {activeTab === 'kitchens' && 'Cocinas del Restaurante'}
             {activeTab === 'simulator' && 'Simulador de Chat de WhatsApp'}
           </h2>
 
@@ -1873,6 +1877,7 @@ export default function Dashboard() {
             <KitchenDisplay 
               orders={filteredOrdersByRole} 
               onUpdateStatus={handleUpdateOrderStatus} 
+              restaurantId={activeRestaurantId || ''}
             />
           ) : activeTab === 'orders' && role === 'repartidor' ? (
             <DeliveryDisplay
@@ -1912,6 +1917,12 @@ export default function Dashboard() {
             <MenuPanel 
               restaurantId={restaurant?.id || activeRestaurantId || ''} 
               readOnly={activePermissions.menu === 'read'}
+            />
+          )}
+
+          {activeTab === 'kitchens' && (
+            <KitchensPanel 
+              restaurantId={restaurant?.id || activeRestaurantId || ''} 
             />
           )}
 

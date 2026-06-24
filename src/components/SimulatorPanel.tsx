@@ -167,13 +167,23 @@ export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
           type: 'text'
         };
         setMessages(prev => [...prev, botMessage]);
-      } else {
+      } else if (response.ok) {
         // If there was no text but api worked
         const statusMsg = `Mensaje procesado por el servidor. Estado: ${data.status || 'desconocido'}.`;
         const sysMessage: ChatMessage = {
           id: 'SYS_REPLY_' + Math.random().toString(36).substring(2, 10).toUpperCase(),
           sender: 'system',
           text: statusMsg + (data.message ? ` Detalle: ${data.message}` : ''),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'system'
+        };
+        setMessages(prev => [...prev, sysMessage]);
+      } else {
+        // Handle server errors
+        const sysMessage: ChatMessage = {
+          id: 'ERR_REPLY_' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+          sender: 'system',
+          text: `❌ Error del servidor: ${data.error || response.statusText || 'Error desconocido'}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           type: 'system'
         };

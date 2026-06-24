@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MenuItem, MenuCategory } from '@/types';
+import { MenuItem, MenuCategory, Kitchen } from '@/types';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { 
@@ -36,6 +36,8 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
 
+  const [kitchens, setKitchens] = useState<Kitchen[]>([]);
+
   // Modals States
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
@@ -54,6 +56,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrepTime, setItemPrepTime] = useState('15');
   const [itemCategoryId, setItemCategoryId] = useState('');
+  const [itemKitchenId, setItemKitchenId] = useState('');
   const [itemAvailable, setItemAvailable] = useState(true);
   const [itemImageUrl, setItemImageUrl] = useState('');
   const [itemLoading, setItemLoading] = useState(false);
@@ -67,16 +70,29 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     setLoading(true);
     setError(null);
     try {
-      // 1. Fetch Categories
-      const { data: catData, error: catErr } = await supabase
-        .from('menu_categories')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .order('sort_order', { ascending: true });
+      // 1. Fetch Categories & Kitchens
+      const [catRes, kitRes] = await Promise.all([
+        supabase
+          .from('menu_categories')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .order('sort_order', { ascending: true }),
+        supabase
+          .from('kitchens')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .order('name', { ascending: true })
+      ]);
 
-      if (catErr) throw catErr;
-      const fetchedCategories = catData || [];
+      if (catRes.error) throw catRes.error;
+      const fetchedCategories = catRes.data || [];
       setCategories(fetchedCategories);
+
+      if (kitRes.error) {
+        console.error('Error fetching kitchens:', kitRes.error);
+      } else {
+        setKitchens(kitRes.data || []);
+      }
 
       if (fetchedCategories.length > 0) {
         // Fetch Menu Items
@@ -214,6 +230,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
 
     const payload = {
       category_id: itemCategoryId,
+      kitchen_id: itemKitchenId || null,
       name: itemName.trim(),
       description: itemDesc.trim() || null,
       price: parsedPrice,
@@ -248,6 +265,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
       setItemDesc('');
       setItemPrepTime('15');
       setItemCategoryId('');
+      setItemKitchenId('');
       setItemImageUrl('');
       setItemAvailable(true);
       setEditingItem(null);
@@ -271,6 +289,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     setItemDesc(item.description || '');
     setItemPrepTime(String(item.estimated_prep_time));
     setItemCategoryId(item.category_id);
+    setItemKitchenId(item.kitchen_id || '');
     setItemImageUrl(item.image_url || '');
     setItemAvailable(item.is_available);
     setItemError(null);
@@ -287,6 +306,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     setItemPrepTime('15');
     // Set default category to the active one if it is a specific UUID
     setItemCategoryId(activeCategoryId !== 'all' ? activeCategoryId : (categories[0]?.id || ''));
+    setItemKitchenId('');
     setItemImageUrl('');
     setItemAvailable(true);
     setItemError(null);
@@ -686,7 +706,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="space-y-1 text-xs">
                   <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Categoría</label>
                   <select
@@ -698,6 +718,20 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                     <option value="" disabled>Seleccionar...</option>
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Cocina</label>
+                  <select
+                    value={itemKitchenId}
+                    onChange={(e) => setItemKitchenId(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all text-xs"
+                  >
+                    <option value="">General / Ninguna</option>
+                    {kitchens.map((k) => (
+                      <option key={k.id} value={k.id}>{k.name}</option>
                     ))}
                   </select>
                 </div>
@@ -717,7 +751,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                 </div>
 
                 <div className="space-y-1 text-xs">
-                  <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Tiempo Preparación (Min)</label>
+                  <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Tiempo (Min)</label>
                   <input
                     type="number"
                     min="1"
