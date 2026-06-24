@@ -2244,7 +2244,7 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {staffRole === 'cocinero' && dashboardKitchens.length > 0 && (
+                      {staffRole === 'cocinero' && (
                         <div className="space-y-1.5 text-sm pt-2">
                           <label className="font-bold text-zinc-400 uppercase tracking-wider text-[11px] ml-1 flex items-center gap-1.5">
                             Cocina Asignada (Opcional)
@@ -2403,7 +2403,7 @@ export default function Dashboard() {
                         </select>
                       </div>
 
-                      {editStaffRole === 'cocinero' && dashboardKitchens.length > 0 && (
+                      {editStaffRole?.toLowerCase() === 'cocinero' && (
                         <div className="space-y-1.5 text-sm pt-2">
                           <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] block mb-1">
                             Cocina Asignada (Opcional)
