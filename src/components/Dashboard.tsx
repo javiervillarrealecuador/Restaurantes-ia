@@ -50,7 +50,8 @@ import {
   Plus,
   MapPin,
   Phone,
-  LayoutDashboard
+  LayoutDashboard,
+  Terminal
 } from 'lucide-react';
 
 const formatOrderCode = (code: string | null): string => {
@@ -1666,6 +1667,34 @@ export default function Dashboard() {
             >
               <BarChart3 className="h-4.5 w-4.5" />
               <span>Reportes & Analítica</span>
+            </button>
+          )}
+
+          {activePermissions.settings !== 'none' && (
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                activeTab === 'logs'
+                  ? 'bg-zinc-900 text-emerald-400 border border-zinc-800'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+              }`}
+            >
+              <Terminal className="h-4.5 w-4.5" />
+              <span>Registro / Logs API</span>
+            </button>
+          )}
+
+          {activePermissions.settings !== 'none' && (
+            <button
+              onClick={() => setActiveTab('simulator')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                activeTab === 'simulator'
+                  ? 'bg-zinc-900 text-emerald-400 border border-zinc-800'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
+              }`}
+            >
+              <Smartphone className="h-4.5 w-4.5" />
+              <span>Simulador WhatsApp</span>
             </button>
           )}
 
