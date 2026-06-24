@@ -52,7 +52,6 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [tableNumber, setTableNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [generalNotes, setGeneralNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
 
   // Cart & Modifiers
@@ -716,7 +715,6 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         setTableNumber('');
         setCustomerName('');
         setCustomerPhone('');
-        setGeneralNotes('');
         fetchTables();
       } else {
         // Creating a new order
@@ -738,7 +736,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             customer_name: nameFinal,
             customer_phone: phoneFinal,
             table_number: tableNumber,
-            notes: generalNotes.trim() || null,
+            notes: null,
             subtotal,
             tax,
             delivery_fee: 0.00,
@@ -788,7 +786,6 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         setTableNumber('');
         setCustomerName('');
         setCustomerPhone('');
-        setGeneralNotes('');
         fetchTables();
       }
     } catch (err) {
@@ -1311,19 +1308,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             </div>
           </div>
 
-          {/* General Notes */}
-          <div className="space-y-1.5 text-xs">
-            <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1 flex items-center gap-1">
-              <Clipboard className="h-3 w-3 text-emerald-400" /> Notas Generales del Pedido
-            </label>
-            <textarea
-              value={generalNotes}
-              onChange={(e) => setGeneralNotes(e.target.value)}
-              placeholder="Ej. Entregar cubiertos adicionales, servir bebidas al final"
-              rows={2}
-              className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs resize-none"
-            />
-          </div>
+          {/* Notas Generales removed to enforce per-item notes */}
 
           {/* Totals */}
           <div className="border-t border-zinc-900 pt-4 space-y-2 text-xs">

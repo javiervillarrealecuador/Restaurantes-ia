@@ -80,3 +80,4 @@ BASE XML SRI/
 # Archivos de auditoría y prueba local
 nextjs-audit-skill-main.zip
 AUDIT-REPORT.md
+.env*

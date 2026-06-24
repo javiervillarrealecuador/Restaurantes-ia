@@ -109,22 +109,35 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
 
   return (
     <div className="space-y-4">
-      {/* Kitchen Filter */}
-      {kitchens.length > 0 && (
+      {/* Kitchen Filter / Assigned Kitchen Info */}
+      {(kitchens.length > 0 || userKitchenId) && (
         <div className="flex items-center gap-3 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <Filter className="w-5 h-5 text-gray-500" />
-          <span className="font-medium text-gray-700 dark:text-gray-300">Filtrar por Cocina:</span>
-          <select
-            value={selectedKitchenId}
-            onChange={(e) => setSelectedKitchenId(e.target.value)}
-            disabled={!!userKitchenId}
-            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 disabled:opacity-50"
-          >
-            <option value="all">Todas las Cocinas</option>
-            {kitchens.map(k => (
-              <option key={k.id} value={k.id}>{k.name}</option>
-            ))}
-          </select>
+          {userKitchenId ? (
+            <>
+              <ChefHat className="w-5 h-5 text-emerald-500" />
+              <span className="font-bold text-gray-900 dark:text-white">
+                Cocina Asignada: {kitchens.find(k => k.id === userKitchenId)?.name || 'Específica'}
+              </span>
+              <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full dark:bg-emerald-900/30 dark:text-emerald-400">
+                Solo ves los platos de tu área
+              </span>
+            </>
+          ) : (
+            <>
+              <Filter className="w-5 h-5 text-gray-500" />
+              <span className="font-medium text-gray-700 dark:text-gray-300">Filtrar por Cocina:</span>
+              <select
+                value={selectedKitchenId}
+                onChange={(e) => setSelectedKitchenId(e.target.value)}
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+              >
+                <option value="all">Todas las Cocinas</option>
+                {kitchens.map(k => (
+                  <option key={k.id} value={k.id}>{k.name}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       )}
 

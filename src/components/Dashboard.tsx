@@ -763,7 +763,7 @@ export default function Dashboard() {
         role: editStaffRole,
         permissions: editStaffPermissions,
         branchIds: editStaffBranchIds,
-        kitchenId: editStaffRole === 'cocinero' ? editStaffKitchenId : null
+        kitchenId: editStaffRole?.toLowerCase() === 'cocinero' ? editStaffKitchenId : null
       };
       if (editStaffPassword) {
         payload.password = editStaffPassword;

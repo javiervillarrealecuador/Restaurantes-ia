@@ -801,10 +801,21 @@ async function processMessageInBackground(
 
     const isDelivery = parsedOrder.order_type === 'delivery';
 
+    // Generate a unique order code manually to prevent database unique constraint collisions
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const randSeq = String(Math.floor(10000 + Math.random() * 90000)); // 5-digit random sequence
+    const orderTypeLabel = parsedOrder.order_type === 'delivery' 
+      ? 'Domicilio' 
+      : parsedOrder.order_type === 'dine_in' 
+        ? 'Mesa' 
+        : 'Para llevar';
+    const generatedOrderCode = `${orderTypeLabel} ${dateStr}${randSeq}`;
+
     // Insert Order Parent (with undecided payment method for delivery, or cash for dine_in/pickup)
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
+        order_code: generatedOrderCode,
         restaurant_id: restaurantId,
         status: 'pending',
         type: parsedOrder.order_type || 'pickup',
