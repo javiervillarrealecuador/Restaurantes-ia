@@ -23,7 +23,7 @@ interface ChatMessage {
   imageUrl?: string;
 }
 
-export default function SimulatorPanel({}: SimulatorPanelProps) {
+export default function SimulatorPanel({ restaurantId }: SimulatorPanelProps) {
   // Simulator configurations
   const [senderName, setSenderName] = useState('María López');
   const [senderPhone, setSenderPhone] = useState('593987654322');
