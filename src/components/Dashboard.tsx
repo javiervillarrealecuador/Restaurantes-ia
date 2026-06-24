@@ -98,6 +98,12 @@ export default function Dashboard() {
   const [aiSystemInstructionLoading, setAiSystemInstructionLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  const [waVerifyToken, setWaVerifyToken] = useState<string>('');
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState<string>('');
+  const [waAccessToken, setWaAccessToken] = useState<string>('');
+  const [waSettingsLoading, setWaSettingsLoading] = useState(false);
+  const [waMessage, setWaMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
   // SRI Settings States
   const [sriRuc, setSriRuc] = useState('');
   const [sriDirMatriz, setSriDirMatriz] = useState('');
@@ -925,7 +931,7 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('settings')
-        .select('ai_system_instruction')
+        .select('ai_system_instruction, whatsapp_verify_token, whatsapp_phone_number_id, whatsapp_access_token')
         .eq('restaurant_id', restaurant?.id || activeRestaurantId)
         .single();
       
@@ -933,6 +939,9 @@ export default function Dashboard() {
         console.error('Error fetching settings:', error);
       } else if (data) {
         setAiSystemInstruction(data.ai_system_instruction || '');
+        setWaVerifyToken(data.whatsapp_verify_token || '');
+        setWaPhoneNumberId(data.whatsapp_phone_number_id || '');
+        setWaAccessToken(data.whatsapp_access_token || '');
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
@@ -964,6 +973,32 @@ export default function Dashboard() {
       fetchStaff();
     }
   }, [activeTab, restaurant?.id, fetchSettings, fetchBranches, fetchStaff]);
+
+  const handleUpdateWaSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant?.id) return;
+    setWaSettingsLoading(true);
+    setWaMessage(null);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .update({ 
+          whatsapp_verify_token: waVerifyToken,
+          whatsapp_phone_number_id: waPhoneNumberId,
+          whatsapp_access_token: waAccessToken
+        })
+        .eq('restaurant_id', restaurant.id);
+      
+      if (error) throw error;
+      setWaMessage({ type: 'success', text: 'Credenciales de WhatsApp actualizadas correctamente.' });
+      setTimeout(() => setWaMessage(null), 3000);
+    } catch (err) {
+      console.error('Error updating WhatsApp settings:', err);
+      setWaMessage({ type: 'error', text: 'Error al actualizar las credenciales.' });
+    } finally {
+      setWaSettingsLoading(false);
+    }
+  };
 
   const handleUpdateAiInstruction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3342,48 +3377,70 @@ export default function Dashboard() {
                     <p className="text-xs text-zinc-500">Configura tus llaves de API para Meta WhatsApp Business y Google Gemini AI.</p>
                   </div>
 
-                  <div className="space-y-4 text-xs">
+                  {waMessage && (
+                    <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${
+                      waMessage.type === 'success' ? 'bg-emerald-950/15 border border-emerald-900/30 text-emerald-400' : 'bg-rose-950/15 border border-rose-900/30 text-rose-455'
+                    }`}>
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{waMessage.text}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleUpdateWaSettings} className="space-y-4 text-xs">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Verify Token (WhatsApp Webhook)</label>
                         <input 
                           type="text" 
-                          readOnly 
-                          value="mi_token_de_verificacion_prueba_123" 
-                          className="w-full bg-zinc-900/30 border border-zinc-850 p-2.5 rounded-xl text-zinc-500 select-all outline-none font-mono"
+                          value={waVerifyToken} 
+                          onChange={(e) => setWaVerifyToken(e.target.value)}
+                          className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none font-mono transition-all"
+                          placeholder="Tu Verify Token"
                         />
                       </div>
                       <div className="space-y-1">
                         <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Phone Number ID (WhatsApp API)</label>
                         <input 
                           type="text" 
-                          readOnly 
-                          value="123456789012345" 
-                          className="w-full bg-zinc-900/30 border border-zinc-850 p-2.5 rounded-xl text-zinc-550 select-all outline-none font-mono"
+                          value={waPhoneNumberId} 
+                          onChange={(e) => setWaPhoneNumberId(e.target.value)}
+                          className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none font-mono transition-all"
+                          placeholder="Tu Phone Number ID"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Gemini Model Utilizado</label>
+                      <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Access Token (WhatsApp API)</label>
                       <input 
-                        type="text" 
-                        readOnly 
-                        value="gemini-1.5-flash" 
-                        className="w-full bg-zinc-900/30 border border-zinc-850 p-2.5 rounded-xl text-zinc-550 outline-none font-mono"
+                        type="password" 
+                        value={waAccessToken} 
+                        onChange={(e) => setWaAccessToken(e.target.value)}
+                        className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none font-mono transition-all"
+                        placeholder="EAA..."
                       />
                     </div>
 
-                    <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl flex items-start gap-3 text-amber-550 leading-relaxed">
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={waSettingsLoading || activePermissions.settings === 'read'}
+                        className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-850 disabled:text-zinc-555 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg transition-all cursor-pointer text-xs w-full sm:w-auto mt-2"
+                      >
+                        {waSettingsLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar Credenciales'}
+                      </button>
+                    </div>
+
+                    <div className="bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl flex items-start gap-3 text-amber-550 leading-relaxed mt-4">
                       <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                       <div>
-                        <h5 className="font-bold text-xs uppercase tracking-wider text-amber-500">Entorno de Producción</h5>
+                        <h5 className="font-bold text-xs uppercase tracking-wider text-amber-500">Credenciales Personalizadas</h5>
                         <p className="text-[11px] mt-1 text-zinc-400">
-                          Los valores de API Key, tokens y llaves privadas se configuran localmente en el archivo <code className="text-amber-400 bg-zinc-900 px-1 py-0.5 rounded">.env.local</code>. El panel administrativo lee de estas variables de manera segura en el backend para evitar filtraciones en el cliente.
+                          Si configuras estas credenciales, se usarán para este restaurante en particular en lugar de usar los valores globales por defecto configurados en el servidor.
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </form>
                 </div>
               ) : (
                 <div className="bg-zinc-950/20 border border-zinc-900/60 p-6 rounded-2xl flex flex-col items-center justify-center text-center space-y-3 h-full">
