@@ -149,26 +149,28 @@ async function processMessageInBackground(
   let webhookLogId: string | null = null;
   let restaurantId: string | null = null;
   let customAiPrompt: string | null = null;
+  let customWaToken: string | null = null;
 
   try {
-    // Send typing indicator to let the user know we are processing
-    if (whatsappMsgId) {
-      await sendWhatsAppTypingIndicator(whatsappPhoneId, whatsappMsgId);
-    }
-
     // 2. Fetch or create a restaurant in a multi-tenant fashion
     const { data: settingsData } = await supabaseAdmin
       .from('settings')
-      .select('restaurant_id, ai_system_instruction')
+      .select('restaurant_id, ai_system_instruction, whatsapp_access_token')
       .eq('whatsapp_phone_number_id', whatsappPhoneId)
       .limit(1);
 
     if (settingsData && settingsData.length > 0) {
       restaurantId = settingsData[0].restaurant_id;
       customAiPrompt = settingsData[0].ai_system_instruction;
+      customWaToken = settingsData[0].whatsapp_access_token;
     } else {
       const restaurant = await getOrCreateRestaurant();
       restaurantId = restaurant.id;
+    }
+
+    // Send typing indicator to let the user know we are processing
+    if (whatsappMsgId) {
+      await sendWhatsAppTypingIndicator(whatsappPhoneId, whatsappMsgId, customWaToken || undefined);
     }
 
     // 2b. Check if the restaurant account is suspended
@@ -180,7 +182,7 @@ async function processMessageInBackground(
 
     if (restaurantObj && restaurantObj.status === 'suspended') {
       const suspensionMsg = `Estimado cliente, los servicios de este asistente virtual se encuentran temporalmente suspendidos. Por favor, comuníquese directamente con el local para realizar su pedido o consulta. ¡Lamentamos los inconvenientes!`;
-      await sendWhatsAppMessage(customerPhone, suspensionMsg, whatsappPhoneId);
+      await sendWhatsAppMessage(customerPhone, suspensionMsg, whatsappPhoneId, customWaToken || undefined);
       
       // Log this message as suspended
       if (whatsappMsgId) {
@@ -216,7 +218,7 @@ async function processMessageInBackground(
           
           try {
             const mediaId = message.image.id;
-            const waToken = process.env.WHATSAPP_ACCESS_TOKEN;
+            const waToken = customWaToken || process.env.WHATSAPP_ACCESS_TOKEN;
             if (waToken && mediaId) {
               // 1. Get media URL from Meta
               const metaRes = await fetch(`https://graph.facebook.com/v17.0/${mediaId}`, {
@@ -252,7 +254,7 @@ async function processMessageInBackground(
           if (!receiptUrl) {
             // Upload failed — ask customer to resend instead of storing fake data
             const retryMsg = `Lo sentimos, hubo un error al procesar tu comprobante. Por favor, envía la imagen nuevamente.`;
-            await sendWhatsAppMessage(customerPhone, retryMsg, whatsappPhoneId);
+            await sendWhatsAppMessage(customerPhone, retryMsg, whatsappPhoneId, customWaToken || undefined);
             return;
           }
 
@@ -274,12 +276,12 @@ async function processMessageInBackground(
 
           const orderCodeText = activePendingOrder.order_code ? ` para el pedido *${formatOrderCode(activePendingOrder.order_code)}*` : '';
           const replyMsg = `¡Comprobante de pago recibido con éxito! 📄✨\n\nEl administrador verificará tu depósito${orderCodeText} por un valor total de *Monto: $${Number(activePendingOrder.total_price).toFixed(2)}*. Una vez confirmado el pago, el pedido ingresará a la cocina y empezaremos a prepararlo. ¡Te avisaremos cuando el repartidor vaya en camino!`;
-          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
+          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId, customWaToken || undefined);
 
           return NextResponse.json({ success: true, status: 'receipt_uploaded', reply_message: replyMsg });
         } else {
           const replyMsg = `Recibimos tu imagen, pero en este momento no tenemos ningún pedido pendiente esperando comprobante. Si deseas realizar un pedido, por favor escríbelo en texto.`;
-          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
+          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId, customWaToken || undefined);
           return NextResponse.json({ status: 'ignored_image', reply_message: replyMsg });
         }
       }
@@ -312,13 +314,13 @@ async function processMessageInBackground(
           
           const orderCodeText = activePendingOrder.order_code ? ` *${formatOrderCode(activePendingOrder.order_code)}*` : '';
           const replyMsg = `¡Entendido! Hemos descartado tu pedido pendiente${orderCodeText}. Si deseas iniciar un nuevo pedido, escríbeme lo que te gustaría ordenar y con gusto te ayudaré. 🍽️✨`;
-          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
+          await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId, customWaToken || undefined);
           return NextResponse.json({ status: 'order_cancelled', reply_message: replyMsg });
         }
 
         const orderCodeText = activePendingOrder.order_code ? ` del pedido *${formatOrderCode(activePendingOrder.order_code)}*` : '';
         const replyMsg = `Aún estamos esperando que nos envíes la captura o foto del comprobante de transferencia bancaria${orderCodeText} por un total de *$${Number(activePendingOrder.total_price).toFixed(2)}* para poder confirmar el pedido y enviarlo a cocina. Por favor, envíanos la imagen. PERO SI NO LO NECESITAS ESCRIBE EXACTAMENTE: DESCARTAR EL PEDIDO ACTUAL`;
-        await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId);
+        await sendWhatsAppMessage(customerPhone, replyMsg, whatsappPhoneId, customWaToken || undefined);
         return NextResponse.json({ status: 'awaiting_receipt_image', reply_message: replyMsg });
       }
     }
@@ -401,11 +403,11 @@ async function processMessageInBackground(
         const clientName = targetOrder.customer_name || 'Cliente';
         const orderCodeText = targetOrder.order_code ? ` *${formatOrderCode(targetOrder.order_code)}*` : '';
         const customerMsg = `¡Hola, ${clientName}! ✨ Tu pedido${orderCodeText} ha sido entregado en tu domicilio. ¡Muchas gracias por tu compra! ❤️🍽️`;
-        await sendWhatsAppMessage(clientPhone, customerMsg, whatsappPhoneId);
+        await sendWhatsAppMessage(clientPhone, customerMsg, whatsappPhoneId, customWaToken || undefined);
 
         // 2. Reply to the driver
         const driverReply = `✅ ¡Entendido! El pedido *${orderCodeInput}* ha sido marcado como ENTREGADO y PAGADO en el sistema. Gracias por tu reporte. 🛵💨`;
-        await sendWhatsAppMessage(customerPhone, driverReply, whatsappPhoneId);
+        await sendWhatsAppMessage(customerPhone, driverReply, whatsappPhoneId, customWaToken || undefined);
 
         return NextResponse.json({
           success: true,
@@ -426,7 +428,7 @@ async function processMessageInBackground(
         }
 
         const driverReply = `❌ No encontramos ningún pedido con el código *${orderCodeInput}*. Por favor, verifica el código e inténtalo de nuevo.`;
-        await sendWhatsAppMessage(customerPhone, driverReply, whatsappPhoneId);
+        await sendWhatsAppMessage(customerPhone, driverReply, whatsappPhoneId, customWaToken || undefined);
 
         return NextResponse.json({
           status: 'invalid_driver_command',
@@ -604,7 +606,7 @@ async function processMessageInBackground(
     }
     // If it's just adding to order, save to logs and ask if they want more
     if (agentResult.intent === 'add_to_order' && agentResult.order) {
-      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId, customWaToken || undefined);
       if (webhookLogId) {
         await supabaseAdmin
           .from('whatsapp_webhook_logs')
@@ -637,7 +639,7 @@ async function processMessageInBackground(
           status: 'pending'
         });
 
-      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId, customWaToken || undefined);
 
       if (webhookLogId) {
         await supabaseAdmin
@@ -666,7 +668,7 @@ async function processMessageInBackground(
           status: 'pending'
         });
 
-      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId, customWaToken || undefined);
 
       // Notify admin if phone is configured
       const { data: restData } = await supabaseAdmin
@@ -678,7 +680,7 @@ async function processMessageInBackground(
       if (restData && restData.phone) {
         const adminMsg = `🚨 *Alerta de Evento Especial/Buffet* 🚨\n\nEl cliente *${customerName}* (+${customerPhone}) está solicitando cotización o información sobre comidas especiales o catering.\n\nMensaje del cliente: "${customerMessage}"`;
         try {
-          await sendWhatsAppMessage(restData.phone, adminMsg, whatsappPhoneId);
+          await sendWhatsAppMessage(restData.phone, adminMsg, whatsappPhoneId, customWaToken || undefined);
         } catch (waErr) {
           console.error('Failed to notify admin via WhatsApp:', waErr);
         }
@@ -699,7 +701,7 @@ async function processMessageInBackground(
 
     // If the agent decided this is NOT an order, just reply and exit
     if (agentResult.intent !== 'order' && agentResult.intent !== 'confirm_order' || !agentResult.order || agentResult.order.items.length === 0) {
-      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId);
+      await sendWhatsAppMessage(customerPhone, agentResult.human_response, whatsappPhoneId, customWaToken || undefined);
 
       if (webhookLogId) {
         await supabaseAdmin

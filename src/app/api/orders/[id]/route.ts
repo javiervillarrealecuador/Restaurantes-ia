@@ -135,14 +135,15 @@ export async function PATCH(
 
     // 3. Send WhatsApp notification based on the status change
     if (status !== undefined && previousStatus !== status) {
-      // Fetch WhatsApp Phone Number ID from restaurant settings
+      // Fetch WhatsApp Phone Number ID and Access Token from restaurant settings
       const { data: settings } = await supabaseAdmin
         .from('settings')
-        .select('whatsapp_phone_number_id')
+        .select('whatsapp_phone_number_id, whatsapp_access_token')
         .eq('restaurant_id', order.restaurant_id)
         .single();
 
       const phoneId = settings?.whatsapp_phone_number_id;
+      const customToken = settings?.whatsapp_access_token;
 
       // If no phone ID configured, skip WhatsApp notification (don't use fake fallback)
       if (!phoneId) {
@@ -178,7 +179,7 @@ export async function PATCH(
       // WhatsApp failure does NOT roll back the already-successful DB update.
       if (notificationText && clientPhone && phoneId) {
         try {
-          await sendWhatsAppMessage(clientPhone, notificationText, phoneId);
+          await sendWhatsAppMessage(clientPhone, notificationText, phoneId, customToken);
         } catch (waErr) {
           console.error('WhatsApp notification failed (order was updated successfully):', waErr);
         }

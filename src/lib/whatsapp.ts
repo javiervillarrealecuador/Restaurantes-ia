@@ -1,6 +1,5 @@
-// Helper to simulate or execute Meta WhatsApp Business Cloud API messages
-export async function sendWhatsAppMessage(to: string, text: string, phoneId: string) {
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+export async function sendWhatsAppMessage(to: string, text: string, phoneId: string, customToken?: string) {
+  const token = customToken || process.env.WHATSAPP_ACCESS_TOKEN;
 
   console.log(`--- SIMULATED OUTGOING WHATSAPP TO ${to} ---`);
   console.log(text);
@@ -72,8 +71,8 @@ export async function sendWhatsAppMessage(to: string, text: string, phoneId: str
 }
 
 // Helper to send "typing..." state to the WhatsApp customer
-export async function sendWhatsAppTypingIndicator(phoneId: string, messageId: string) {
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+export async function sendWhatsAppTypingIndicator(phoneId: string, messageId: string, customToken?: string) {
+  const token = customToken || process.env.WHATSAPP_ACCESS_TOKEN;
 
   console.log(`--- SENDING TYPING INDICATOR FOR MESSAGE ${messageId} ---`);
 
