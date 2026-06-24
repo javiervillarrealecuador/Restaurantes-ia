@@ -56,8 +56,6 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
   // Cart & Modifiers
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [editingItemNotes, setEditingItemNotes] = useState<{ index: number; value: string } | null>(null);
-
   // New states for Phase 4
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [allModifiers, setAllModifiers] = useState<MenuModifier[]>([]);
@@ -639,9 +637,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
     toast.error('Item eliminado del pedido');
   };
 
-  const updateItemNotes = (index: number, val: string) => {
-    setCart(prev => prev.map((item, idx) => idx === index ? { ...item, notes: val } : item));
-  };
+
 
   // Calculations
   const subtotal = cart.reduce((acc, curr) => {
@@ -1262,40 +1258,17 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                       </div>
 
                       {/* Item Notes */}
-                      {editingItemNotes?.index === idx ? (
-                        <div className="flex gap-1.5 items-center">
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editingItemNotes.value}
-                            onChange={(e) => setEditingItemNotes(prev => prev ? { ...prev, value: e.target.value } : null)}
-                            placeholder="Ej. sin hielo, bien cocido"
-                            className="w-full bg-zinc-950 border border-zinc-850 p-1.5 rounded-lg text-zinc-300 outline-none text-[11px]"
-                          />
-                          <button
-                            onClick={() => {
-                              updateItemNotes(idx, editingItemNotes.value);
-                              setEditingItemNotes(null);
-                            }}
-                            className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 cursor-pointer"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between text-[11px] gap-2">
-                          <span className="text-zinc-550 italic truncate max-w-[200px]">
-                            {item.notes ? `Nota: "${item.notes}"` : 'Sin especificaciones'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setEditingItemNotes({ index: idx, value: item.notes })}
-                            className="text-[10px] text-emerald-450 hover:underline cursor-pointer bg-transparent border-none outline-none font-semibold shrink-0"
-                          >
-                            {item.notes ? 'Editar nota' : 'Agregar nota'}
-                          </button>
-                        </div>
-                      )}
+                      <div className="pt-1">
+                        <input
+                          type="text"
+                          value={item.notes || ''}
+                          onChange={(e) => {
+                            setCart(prev => prev.map((it, i) => i === idx ? { ...it, notes: e.target.value } : it));
+                          }}
+                          placeholder="Notas (Ej. sin hielo, bien cocido)"
+                          className="w-full bg-zinc-950/80 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 p-2 rounded-lg text-zinc-300 outline-none text-[11px] placeholder:text-zinc-600 transition-all"
+                        />
+                      </div>
                     </div>
                   );
                 })
