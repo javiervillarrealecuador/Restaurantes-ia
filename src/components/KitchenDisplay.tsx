@@ -21,6 +21,13 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
   const [kitchens, setKitchens] = useState<Kitchen[]>([]);
   const [selectedKitchenId, setSelectedKitchenId] = useState<string | 'all'>(userKitchenId || 'all');
 
+  // Sync selectedKitchenId when userKitchenId becomes available (it arrives async from AuthContext)
+  useEffect(() => {
+    if (userKitchenId) {
+      setSelectedKitchenId(userKitchenId);
+    }
+  }, [userKitchenId]);
+
   // Fetch kitchens
   useEffect(() => {
     if (restaurantId) {
