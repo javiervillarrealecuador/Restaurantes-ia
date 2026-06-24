@@ -1,5 +1,5 @@
 'use client';
-
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, 
@@ -28,6 +28,23 @@ export default function SimulatorPanel({}: SimulatorPanelProps) {
   const [senderName, setSenderName] = useState('María López');
   const [senderPhone, setSenderPhone] = useState('593987654322');
   const [phoneId, setPhoneId] = useState('123456789012345');
+  const supabase = createClientComponentClient();
+  
+  // Fetch the actual restaurant's WhatsApp Phone ID to test with the correct config
+  useEffect(() => {
+    async function fetchPhoneId() {
+      const { data } = await supabase
+        .from('settings')
+        .select('whatsapp_phone_number_id')
+        .eq('restaurant_id', restaurantId)
+        .single();
+        
+      if (data?.whatsapp_phone_number_id) {
+        setPhoneId(data.whatsapp_phone_number_id);
+      }
+    }
+    if (restaurantId) fetchPhoneId();
+  }, [restaurantId, supabase]);
   
   // Chat log state
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -129,7 +146,7 @@ export default function SimulatorPanel({}: SimulatorPanelProps) {
     };
 
     try {
-      const response = await fetch('/api/webhook/whatsapp', {
+      const response = await fetch('/api/webhook/whatsapp?simulator=true', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

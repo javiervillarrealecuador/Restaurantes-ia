@@ -115,22 +115,36 @@ export async function POST(req: NextRequest) {
     const customerName = value?.contacts?.[0]?.profile?.name || 'Cliente WhatsApp';
     const whatsappPhoneId = value?.metadata?.phone_number_id || 'default_phone_id';
 
-    // TRIGGER BACKGROUND PROCESSING TO PREVENT VERCEL TIMEOUTS
-    waitUntil(
-      processMessageInBackground(
+    const isSimulator = req.nextUrl.searchParams.get('simulator') === 'true';
+
+    if (isSimulator) {
+      const simResult = await processMessageInBackground(
         payload,
         message,
         whatsappMsgId,
         customerPhone,
         customerName,
         whatsappPhoneId
-      ).catch((err) => {
-        console.error('Background Webhook Processing Error:', err);
-      })
-    );
+      );
+      return simResult || NextResponse.json({ status: 'processing_in_background' }, { status: 200 });
+    } else {
+      // TRIGGER BACKGROUND PROCESSING TO PREVENT VERCEL TIMEOUTS
+      waitUntil(
+        processMessageInBackground(
+          payload,
+          message,
+          whatsappMsgId,
+          customerPhone,
+          customerName,
+          whatsappPhoneId
+        ).catch((err) => {
+          console.error('Background Webhook Processing Error:', err);
+        })
+      );
 
-    // IMMEDIATELY RETURN 200 OK TO META
-    return NextResponse.json({ status: 'processing_in_background' }, { status: 200 });
+      // IMMEDIATELY RETURN 200 OK TO META
+      return NextResponse.json({ status: 'processing_in_background' }, { status: 200 });
+    }
 
   } catch (error: any) {
     console.error('Critical Webhook Entry Error:', error);
