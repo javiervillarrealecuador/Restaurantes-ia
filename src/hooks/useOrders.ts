@@ -34,7 +34,8 @@ export function useOrders(restaurantId: string | null) {
               name,
               description,
               price,
-              image_url
+              image_url,
+              kitchen_id
             )
           )
         `)
@@ -77,7 +78,8 @@ export function useOrders(restaurantId: string | null) {
               name,
               description,
               price,
-              image_url
+              image_url,
+              kitchen_id
             )
           )
         `)
