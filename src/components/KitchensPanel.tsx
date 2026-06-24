@@ -8,9 +8,11 @@ import { toast } from 'sonner';
 
 interface KitchensPanelProps {
   restaurantId: string;
+  staffList?: any[];
+  fetchStaff?: () => void;
 }
 
-export default function KitchensPanel({ restaurantId }: KitchensPanelProps) {
+export default function KitchensPanel({ restaurantId, staffList = [], fetchStaff }: KitchensPanelProps) {
   const [kitchens, setKitchens] = useState<Kitchen[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +22,7 @@ export default function KitchensPanel({ restaurantId }: KitchensPanelProps) {
   
   const [name, setName] = useState('');
   const [administrator, setAdministrator] = useState('');
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchKitchens = React.useCallback(async () => {
@@ -51,10 +54,13 @@ export default function KitchensPanel({ restaurantId }: KitchensPanelProps) {
       setEditingKitchen(kitchen);
       setName(kitchen.name);
       setAdministrator(kitchen.administrator || '');
+      const assigned = staffList.filter(s => s.kitchen_id === kitchen.id).map(s => s.profiles?.id || s.id);
+      setSelectedStaffIds(assigned);
     } else {
       setEditingKitchen(null);
       setName('');
       setAdministrator('');
+      setSelectedStaffIds([]);
     }
     setShowModal(true);
   };
@@ -65,20 +71,57 @@ export default function KitchensPanel({ restaurantId }: KitchensPanelProps) {
 
     setSubmitting(true);
     try {
+      let savedKitchenId = '';
+      
       if (editingKitchen) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('kitchens')
           .update({ name, administrator: administrator || null })
-          .eq('id', editingKitchen.id);
+          .eq('id', editingKitchen.id)
+          .select('id')
+          .single();
         if (error) throw error;
+        savedKitchenId = data.id;
         toast.success('Cocina actualizada');
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('kitchens')
-          .insert({ restaurant_id: restaurantId, name, administrator: administrator || null });
+          .insert({ restaurant_id: restaurantId, name, administrator: administrator || null })
+          .select('id')
+          .single();
         if (error) throw error;
+        savedKitchenId = data.id;
         toast.success('Cocina creada');
       }
+
+      // Update staff assignments
+      if (savedKitchenId && fetchStaff) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (token) {
+          // Identify staff to add and remove
+          const previouslyAssigned = staffList.filter(s => s.kitchen_id === savedKitchenId).map(s => s.profiles?.id || s.id);
+          const toAdd = selectedStaffIds.filter(id => !previouslyAssigned.includes(id));
+          const toRemove = previouslyAssigned.filter(id => !selectedStaffIds.includes(id));
+
+          for (const staffId of toAdd) {
+            await fetch(`/api/admin/users/${staffId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ restaurantId, kitchenId: savedKitchenId })
+            });
+          }
+          for (const staffId of toRemove) {
+            await fetch(`/api/admin/users/${staffId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ restaurantId, kitchenId: null })
+            });
+          }
+          fetchStaff();
+        }
+      }
+
       setShowModal(false);
       fetchKitchens();
     } catch (err: any) {
@@ -230,6 +273,41 @@ export default function KitchensPanel({ restaurantId }: KitchensPanelProps) {
                   placeholder="Ej. Juan Pérez"
                   className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
                 />
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Asignar Cocineros</label>
+                <div className="bg-zinc-900/40 border border-zinc-850 p-3 rounded-xl max-h-48 overflow-y-auto space-y-2">
+                  {staffList?.filter(s => s.role === 'cocinero').length === 0 ? (
+                    <p className="text-zinc-500 italic text-[11px]">No hay cocineros registrados.</p>
+                  ) : (
+                    staffList?.filter(s => s.role === 'cocinero').map((staff) => {
+                      const staffId = staff.profiles?.id || staff.id;
+                      const isChecked = selectedStaffIds.includes(staffId);
+                      const name = staff.profiles ? `${staff.profiles.first_name || ''} ${staff.profiles.last_name || ''}`.trim() : staff.email;
+                      return (
+                        <label key={staffId} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer p-1 rounded hover:bg-zinc-850 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedStaffIds([...selectedStaffIds, staffId]);
+                              } else {
+                                setSelectedStaffIds(selectedStaffIds.filter(id => id !== staffId));
+                              }
+                            }}
+                            className="rounded border-zinc-800 text-emerald-600 focus:ring-emerald-500 bg-zinc-900 h-4 w-4 cursor-pointer"
+                          />
+                          <span className="truncate text-xs">{name || staff.email}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-tight">
+                  Al marcar un cocinero, se le asignará esta cocina. Si ya estaba en otra cocina, se reasignará a esta.
+                </p>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-zinc-900 mt-6">

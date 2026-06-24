@@ -1002,6 +1002,7 @@ export default function Dashboard() {
       fetchSettings();
       fetchBranches();
       fetchStaff();
+      fetchKitchens();
     }
     if (activeTab === 'staff' && restaurant?.id) {
       fetchStaff();
@@ -3031,7 +3032,11 @@ export default function Dashboard() {
               {/* Kitchens Management Section */}
               {isUserAdmin && (
                 <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 lg:col-span-2">
-                  <KitchensPanel restaurantId={restaurant?.id || activeRestaurantId || ''} />
+                  <KitchensPanel 
+                    restaurantId={restaurant?.id || activeRestaurantId || ''} 
+                    staffList={staffList}
+                    fetchStaff={fetchStaff}
+                  />
                 </div>
               )}
 
