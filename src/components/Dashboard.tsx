@@ -52,7 +52,8 @@ import {
   MapPin,
   Phone,
   LayoutDashboard,
-  Terminal
+  Terminal,
+  ChefHat
 } from 'lucide-react';
 
 const formatOrderCode = (code: string | null): string => {
@@ -1951,11 +1952,7 @@ export default function Dashboard() {
             />
           )}
 
-          {activeTab === 'kitchens' && (
-            <KitchensPanel 
-              restaurantId={restaurant?.id || activeRestaurantId || ''} 
-            />
-          )}
+
 
           {activeTab === 'simulator' && activeRestaurantId && restaurant && (
             <SimulatorPanel 
@@ -3028,6 +3025,13 @@ export default function Dashboard() {
                       <p className="text-xs text-zinc-500">No hay sucursales registradas aún.</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Kitchens Management Section */}
+              {isUserAdmin && (
+                <div className="bg-zinc-950/40 border border-zinc-900 p-6 rounded-2xl space-y-6 animate-in fade-in-50 duration-200 lg:col-span-2">
+                  <KitchensPanel restaurantId={restaurant?.id || activeRestaurantId || ''} />
                 </div>
               )}
 
