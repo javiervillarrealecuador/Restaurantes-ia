@@ -152,7 +152,6 @@ export async function POST(req: NextRequest) {
       .single();
 
     // Insert staff branches relation if provided
-    const { branchIds } = body;
     if (!staffErr && staffData && branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
       const staffBranches = branchIds.map((bId: string) => ({
         staff_id: staffData.id,
