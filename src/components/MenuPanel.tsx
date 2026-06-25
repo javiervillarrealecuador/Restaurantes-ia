@@ -777,6 +777,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                     <option value="">Ninguno</option>
                     <option value="Tenedor y cuchillo">Tenedor y cuchillo</option>
                     <option value="Tenedor, cuchillo y cuchara">Tenedor, cuchillo y cuchara</option>
+                    <option value="Tenedor">Tenedor</option>
                     <option value="Cucharilla">Cucharilla</option>
                     <option value="Cuchara">Cuchara</option>
                   </select>
