@@ -12,6 +12,7 @@ import SimulatorPanel from './SimulatorPanel';
 import KitchenDisplay from './KitchenDisplay';
 import KitchensPanel from './KitchensPanel';
 import DeliveryDisplay from './DeliveryDisplay';
+import AuxiliarDisplay from './AuxiliarDisplay';
 import { useAuth, getDefaultPermissions, StaffPermissions } from '@/context/AuthContext';
 import SaaSAdminPanel from './SaaSAdminPanel';
 import TakeOrderPanel from './TakeOrderPanel';
@@ -862,7 +863,11 @@ export default function Dashboard() {
       return orders.filter(order => ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status));
     }
     if (role === 'repartidor') {
-      return orders.filter(order => order.type === 'delivery' && ['ready', 'delivering'].includes(order.status));
+      // Delivery orders for the delivery queue
+      const deliveryOrders = orders.filter(order => order.type === 'delivery' && ['ready', 'delivering'].includes(order.status));
+      // Dine-in orders for the auxiliar (cutlery delivery + table cleaning)
+      const dineInOrders = orders.filter(order => order.type === 'dine_in' && ['ready', 'delivered'].includes(order.status));
+      return [...dineInOrders, ...deliveryOrders];
     }
     return orders;
   }, [orders, role]);
@@ -1922,7 +1927,7 @@ export default function Dashboard() {
               restaurantId={activeRestaurantId || ''}
             />
           ) : activeTab === 'orders' && role === 'repartidor' ? (
-            <DeliveryDisplay
+            <AuxiliarDisplay
               orders={filteredOrdersByRole}
               onUpdateStatus={handleUpdateOrderStatus}
             />
