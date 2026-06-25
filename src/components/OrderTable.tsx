@@ -666,7 +666,13 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                 acc[cutleryStr] = (acc[cutleryStr] || 0) + item.quantity;
               }
               return acc;
-            }, {});
+            }, {}) || {};
+
+            const cutleryNotes = order.order_items?.filter(item => 
+              item.notes && /cubiert|cuchar|cuchill|tenedor|vaso|sorbete|copa/i.test(item.notes)
+            ).map(item => ({ name: item.menu_items?.name || 'Plato', note: item.notes })) || [];
+
+            const hasCutleryInfo = Object.keys(cutlerySummary).length > 0 || cutleryNotes.length > 0;
 
             return (
               <div 
@@ -1019,19 +1025,35 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
                       {/* Customer / Order Metadata */}
                       <div className="space-y-4 bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-850 p-4 rounded-xl shadow-sm">
-                        {cutlerySummary && Object.keys(cutlerySummary).length > 0 && (
+                        {hasCutleryInfo && (
                           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 p-3 rounded-lg mb-2">
                             <h5 className="text-xs font-bold text-amber-800 dark:text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                               <span>🍴</span> Cubiertos a Entregar
                             </h5>
-                            <ul className="space-y-1">
-                              {Object.entries(cutlerySummary).map(([cutlery, qty]) => (
-                                <li key={cutlery} className="text-sm font-semibold text-amber-900 dark:text-amber-400 flex items-center justify-between border-b border-amber-200/50 dark:border-amber-800/30 pb-1 last:border-0 last:pb-0">
-                                  <span>{cutlery as string}</span>
-                                  <span className="bg-amber-200 dark:bg-amber-800/50 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-md text-xs font-bold">x{qty as number}</span>
-                                </li>
-                              ))}
-                            </ul>
+                            
+                            {Object.keys(cutlerySummary).length > 0 && (
+                              <ul className="space-y-1">
+                                {Object.entries(cutlerySummary).map(([cutlery, qty]) => (
+                                  <li key={cutlery} className="text-sm font-semibold text-amber-900 dark:text-amber-400 flex items-center justify-between border-b border-amber-200/50 dark:border-amber-800/30 pb-1 last:border-0 last:pb-0">
+                                    <span>{cutlery as string}</span>
+                                    <span className="bg-amber-200 dark:bg-amber-800/50 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-md text-xs font-bold">x{qty as number}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            
+                            {cutleryNotes.length > 0 && (
+                              <div className={`${Object.keys(cutlerySummary).length > 0 ? 'mt-2 pt-2 border-t border-amber-200/50 dark:border-amber-800/50' : ''}`}>
+                                <span className="text-[10px] font-bold text-amber-700/80 dark:text-amber-500/80 uppercase tracking-wider mb-1 block">Notas Adicionales:</span>
+                                <ul className="space-y-1.5">
+                                  {cutleryNotes.map((cn, idx) => (
+                                    <li key={idx} className="text-xs text-amber-800 dark:text-amber-400 leading-tight">
+                                      <span className="font-semibold">{cn.name}:</span> {cn.note}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         )}
 
