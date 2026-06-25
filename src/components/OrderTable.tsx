@@ -354,30 +354,32 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   });
 
   const getStatusBadge = (status: OrderStatus) => {
-    const styles: Record<OrderStatus, string> = {
+    const colors: Record<OrderStatus, string> = {
+      draft: 'bg-gray-500/10 text-gray-400 border border-gray-500/20',
       pending: 'bg-amber-500/10 text-amber-500 border border-amber-500/20',
+      pending_payment: 'bg-red-500/10 text-red-500 border border-red-500/20',
       confirmed: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
       preparing: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20',
       ready: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
       delivering: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20',
       delivered: 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20',
       cancelled: 'bg-rose-500/10 text-rose-500 border border-rose-500/20',
-      draft: 'bg-gray-500/10 text-gray-400 border border-gray-500/20',
     };
 
     const labels: Record<OrderStatus, string> = {
+      draft: 'Borrador',
       pending: 'Pendiente',
+      pending_payment: 'Por Pagar',
       confirmed: 'Confirmado',
       preparing: 'Preparando',
       ready: 'Listo',
       delivering: 'En camino',
       delivered: 'Entregado',
       cancelled: 'Cancelado',
-      draft: 'Borrador',
     };
 
     return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${styles[status]}`}>
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${colors[status]}`}>
         {labels[status]}
       </span>
     );
@@ -471,6 +473,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     // Default admin_general or vendedor_cajero actions
     switch (order.status) {
       case 'pending':
+      case 'pending_payment':
         if (order.payment_method === 'undecided') {
           return (
             <span className="text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-850 px-2.5 py-1.5 rounded-lg font-medium select-none">
@@ -602,13 +605,14 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         </div>
 
         {/* Status Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {['all', 'pending', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'].map((tab) => {
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {['all', 'pending', 'pending_payment', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'].map((tab) => {
             const labels: Record<string, string> = {
               all: 'Todos',
               pending: 'Pendientes',
+              pending_payment: 'Falta Pago',
               confirmed: 'Confirmados',
-              preparing: 'Cocina',
+              preparing: 'Preparando',
               ready: 'Listos',
               delivering: 'En camino',
               delivered: 'Entregados',
@@ -672,9 +676,15 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                 >
                   {/* Left Block: Client & Time */}
                   <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shrink-0">
-                      {getTypeIcon(order.type)}
-                    </div>
+                    {order.type === 'dine_in' && order.table_number ? (
+                      <div className="min-w-[2.5rem] h-10 px-2 shrink-0 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-500 font-black text-xl rounded-xl border border-red-200 dark:border-red-800/50 flex items-center justify-center shadow-sm" title={`Mesa ${order.table_number}`}>
+                        {order.table_number}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shrink-0">
+                        {getTypeIcon(order.type)}
+                      </div>
+                    )}
                     <div>
                       <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center flex-wrap gap-1.5">
                         <span>{order.customer_name}</span>
@@ -907,6 +917,18 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                     (${Number(item.unit_price).toFixed(2)} c/u)
                                   </span>
                                 </div>
+                                {item.menu_items?.default_cutlery && (
+                                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex items-start gap-1">
+                                    <span>🍴</span>
+                                    <span>Cubiertos: {item.menu_items.default_cutlery}</span>
+                                  </p>
+                                )}
+                                {item.extras && (
+                                  <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-1 flex items-start gap-1">
+                                    <span className="shrink-0 mt-0.5">+</span>
+                                    <span>Extras: {item.extras}</span>
+                                  </p>
+                                )}
                                 {item.notes && (
                                   <p className="text-xs text-amber-600 dark:text-amber-500/80 italic mt-1 flex items-start gap-1">
                                     <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />

@@ -4,8 +4,8 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create custom types/enums
-CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled');
-CREATE TYPE order_type AS ENUM ('dine_in', 'delivery', 'pickup');
+CREATE TYPE order_status AS ENUM ('pending', 'pending_payment', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled');
+CREATE TYPE order_type AS ENUM ('pickup', 'delivery', 'dine_in');
 CREATE TYPE staff_role AS ENUM ('admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero', 'admin', 'manager', 'staff');
 
 -- 1. RESTAURANTS
@@ -63,6 +63,7 @@ CREATE TABLE menu_items (
     image_url TEXT,
     is_available BOOLEAN DEFAULT TRUE NOT NULL,
     estimated_prep_time INT DEFAULT 15, -- in minutes
+    default_cutlery VARCHAR(50),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -99,6 +100,7 @@ CREATE TABLE order_items (
     quantity INT NOT NULL CHECK (quantity > 0),
     unit_price DECIMAL(10, 2) NOT NULL,
     notes TEXT,
+    extras TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -113,6 +115,7 @@ CREATE TABLE settings (
     ai_system_instruction TEXT,
     opening_hours JSONB, -- JSON configuration for business hours
     is_ordering_enabled BOOLEAN DEFAULT TRUE NOT NULL,
+    pay_before_consume BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

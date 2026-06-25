@@ -32,6 +32,7 @@ interface CartItem {
   menuItem: MenuItem;
   quantity: number;
   notes: string;
+  extras: string;
   selectedModifiers?: MenuModifier[];
 }
 
@@ -70,6 +71,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const isAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
   const [showTableManager, setShowTableManager] = useState(false);
   const [targetTableQty, setTargetTableQty] = useState(12);
+  const [payBeforeConsume, setPayBeforeConsume] = useState<boolean>(false);
 
   // Audio synthesizer for ding-dong notification
   const playReadyChime = () => {
@@ -205,6 +207,16 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           .from('menu_modifiers')
           .select('*');
         setAllModifiers(modifierData || []);
+
+        // 6. Fetch settings for payBeforeConsume
+        const { data: settingsData } = await supabase
+          .from('settings')
+          .select('pay_before_consume')
+          .eq('restaurant_id', restaurantId)
+          .single();
+        if (settingsData) {
+          setPayBeforeConsume(settingsData.pay_before_consume || false);
+        }
 
       } catch (err) {
         console.error('Error loading order panel data:', err);
@@ -562,7 +574,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           return prev.map(i => i.menuItem.id === item.id && (!i.selectedModifiers || i.selectedModifiers.length === 0) 
             ? { ...i, quantity: i.quantity + 1 } : i);
         }
-        return [...prev, { menuItem: item, quantity: 1, notes: '', selectedModifiers: [] }];
+        return [...prev, { menuItem: item, quantity: 1, notes: '', extras: '', selectedModifiers: [] }];
       });
       toast.success(`${item.name} agregado al pedido`);
     }
@@ -598,7 +610,8 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         menuItem: customizingItem,
         quantity: 1,
         notes: customizingNotes.trim(),
-        selectedModifiers: [...selectedModifiers]
+        extras: '',
+        selectedModifiers: selectedModifiers
       }];
     });
 
@@ -726,7 +739,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             order_code: orderCode,
             restaurant_id: restaurantId,
             branch_id: selectedBranchId,
-            status: 'pending',
+            status: payBeforeConsume ? 'pending_payment' : 'pending',
             type: 'dine_in',
             source: 'waiter',
             customer_name: nameFinal,
@@ -751,6 +764,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           quantity: item.quantity,
           unit_price: item.menuItem.price,
           notes: item.notes.trim() || null,
+          extras: item.extras?.trim() || null,
           selected_modifiers: item.selectedModifiers ? item.selectedModifiers.map(m => ({ name: m.name, price: Number(m.price) })) : []
         }));
 
@@ -776,7 +790,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           .eq('branch_id', selectedBranchId)
           .eq('table_number', tableNumber);
 
-        toast.success('¡Pedido creado con éxito y enviado a cocina!');
+        toast.success(payBeforeConsume ? '¡Pedido creado! Pendiente de cobro en caja.' : '¡Pedido creado con éxito y enviado a cocina!');
         
         setCart([]);
         setTableNumber('');
@@ -1257,8 +1271,23 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                         </div>
                       </div>
 
-                      {/* Item Notes */}
-                      <div className="pt-1">
+                      {/* Cutlery, Extras and Notes */}
+                      <div className="pt-1 space-y-1.5">
+                        {item.menuItem.default_cutlery && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-medium bg-zinc-900/50 p-1.5 rounded-lg border border-zinc-850 w-fit">
+                            <span>🍴</span>
+                            <span>{item.menuItem.default_cutlery}</span>
+                          </div>
+                        )}
+                        <input
+                          type="text"
+                          value={item.extras || ''}
+                          onChange={(e) => {
+                            setCart(prev => prev.map((it, i) => i === idx ? { ...it, extras: e.target.value } : it));
+                          }}
+                          placeholder="Extras (Ej. doble porción, extra pan)"
+                          className="w-full bg-zinc-950/80 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 p-2 rounded-lg text-zinc-300 outline-none text-[11px] placeholder:text-zinc-600 transition-all"
+                        />
                         <input
                           type="text"
                           value={item.notes || ''}

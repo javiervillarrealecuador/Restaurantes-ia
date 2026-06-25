@@ -61,6 +61,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
   const [itemImageUrl, setItemImageUrl] = useState('');
   const [itemLoading, setItemLoading] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
+  const [itemDefaultCutlery, setItemDefaultCutlery] = useState('');
 
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,7 +238,8 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
       code: itemCode.trim() || null,
       estimated_prep_time: parseInt(itemPrepTime, 10) || 15,
       is_available: itemAvailable,
-      image_url: itemImageUrl.trim() || null
+      image_url: itemImageUrl.trim() || null,
+      default_cutlery: itemDefaultCutlery || null
     };
 
     try {
@@ -268,6 +270,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
       setItemKitchenId('');
       setItemImageUrl('');
       setItemAvailable(true);
+      setItemDefaultCutlery('');
       setEditingItem(null);
       setShowItemModal(false);
       await fetchMenuData();
@@ -292,6 +295,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     setItemKitchenId(item.kitchen_id || '');
     setItemImageUrl(item.image_url || '');
     setItemAvailable(item.is_available);
+    setItemDefaultCutlery(item.default_cutlery || '');
     setItemError(null);
     setShowItemModal(true);
   };
@@ -309,6 +313,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     setItemKitchenId('');
     setItemImageUrl('');
     setItemAvailable(true);
+    setItemDefaultCutlery('');
     setItemError(null);
     setShowItemModal(true);
   };
@@ -706,7 +711,7 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
                 <div className="space-y-1 text-xs">
                   <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Categoría</label>
                   <select
@@ -758,9 +763,23 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
                     required
                     value={itemPrepTime}
                     onChange={(e) => setItemPrepTime(e.target.value)}
-                    placeholder="15"
                     className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all"
                   />
+                </div>
+
+                <div className="space-y-1 text-xs">
+                  <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Cubiertos</label>
+                  <select
+                    value={itemDefaultCutlery}
+                    onChange={(e) => setItemDefaultCutlery(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none transition-all text-[11px]"
+                  >
+                    <option value="">Ninguno</option>
+                    <option value="Tenedor y cuchillo">Tenedor y cuchillo</option>
+                    <option value="Tenedor, cuchillo y cuchara">Tenedor, cuchillo y cuchara</option>
+                    <option value="Cucharilla">Cucharilla</option>
+                    <option value="Cuchara">Cuchara</option>
+                  </select>
                 </div>
               </div>
 

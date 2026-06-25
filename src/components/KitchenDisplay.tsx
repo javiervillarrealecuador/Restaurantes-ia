@@ -209,6 +209,18 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
                                 ))}
                               </div>
                             )}
+                            {item.menu_items?.default_cutlery && (
+                              <div className="mt-1 flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 w-fit">
+                                <span>🍴</span>
+                                <span>Cubiertos: {item.menu_items.default_cutlery}</span>
+                              </div>
+                            )}
+                            {item.extras && (
+                              <p className="text-sm text-purple-600 dark:text-purple-400 font-bold mt-1.5 flex items-start gap-1 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 dark:border-purple-800">
+                                <span className="uppercase tracking-wider text-[10px] bg-purple-200 dark:bg-purple-800 px-1 rounded mr-1">Extra</span>
+                                {item.extras}
+                              </p>
+                            )}
                             {item.notes && (
                               <p className="text-sm text-red-600 dark:text-red-400 font-semibold mt-1 flex items-start gap-1">
                                 <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />

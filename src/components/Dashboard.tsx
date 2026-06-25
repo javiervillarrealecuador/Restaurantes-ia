@@ -107,6 +107,8 @@ export default function Dashboard() {
   const [waSettingsLoading, setWaSettingsLoading] = useState(false);
   const [waMessage, setWaMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  const [payBeforeConsume, setPayBeforeConsume] = useState<boolean>(false);
+
   // SRI Settings States
   const [sriRuc, setSriRuc] = useState('');
   const [sriDirMatriz, setSriDirMatriz] = useState('');
@@ -951,7 +953,7 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('settings')
-        .select('ai_system_instruction, whatsapp_verify_token, whatsapp_phone_number_id, whatsapp_access_token')
+        .select('ai_system_instruction, whatsapp_verify_token, whatsapp_phone_number_id, whatsapp_access_token, pay_before_consume')
         .eq('restaurant_id', restaurant?.id || activeRestaurantId)
         .single();
       
@@ -962,6 +964,7 @@ export default function Dashboard() {
         setWaVerifyToken(data.whatsapp_verify_token || '');
         setWaPhoneNumberId(data.whatsapp_phone_number_id || '');
         setWaAccessToken(data.whatsapp_access_token || '');
+        setPayBeforeConsume(data.pay_before_consume || false);
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
@@ -1027,7 +1030,8 @@ export default function Dashboard() {
         .update({ 
           whatsapp_verify_token: waVerifyToken,
           whatsapp_phone_number_id: waPhoneNumberId,
-          whatsapp_access_token: waAccessToken
+          whatsapp_access_token: waAccessToken,
+          pay_before_consume: payBeforeConsume
         })
         .eq('restaurant_id', restaurant.id);
       
@@ -3540,6 +3544,26 @@ export default function Dashboard() {
                         className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none font-mono transition-all"
                         placeholder="EAA..."
                       />
+                    </div>
+
+                    <div className="pt-4 border-t border-zinc-900">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={payBeforeConsume}
+                          onChange={(e) => setPayBeforeConsume(e.target.checked)}
+                          disabled={waSettingsLoading || activePermissions.settings === 'read'}
+                          className="mt-1 h-4 w-4 rounded border-zinc-800 text-emerald-650 focus:ring-emerald-500 bg-zinc-900"
+                        />
+                        <div>
+                          <span className="text-sm font-semibold text-zinc-200">
+                            Cliente paga primero y luego consume
+                          </span>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            Si se activa, los pedidos de mesa quedarán "Por Pagar" y no se enviarán a cocina hasta que caja confirme el pago.
+                          </p>
+                        </div>
+                      </label>
                     </div>
 
                     <div className="flex justify-end">

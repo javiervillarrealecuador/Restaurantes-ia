@@ -1,4 +1,4 @@
-export type OrderStatus = 'draft' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivering' | 'delivered' | 'cancelled';
+export type OrderStatus = 'draft' | 'pending' | 'pending_payment' | 'confirmed' | 'preparing' | 'ready' | 'delivering' | 'delivered' | 'cancelled';
 export type OrderType = 'dine_in' | 'delivery' | 'pickup';
 export type StaffRole = 'admin' | 'manager' | 'staff';
 
@@ -72,6 +72,7 @@ export interface MenuItem {
   estimated_prep_time: number;
   code: string | null;
   created_at: string;
+  default_cutlery?: string | null;
 }
 
 export interface MenuCategory {
@@ -92,6 +93,7 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   notes: string | null;
+  extras?: string | null;
   menu_items?: MenuItem | null;
   selected_modifiers?: { name: string; price: number }[] | null;
   iva_rate?: number;

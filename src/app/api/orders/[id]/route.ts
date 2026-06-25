@@ -47,7 +47,7 @@ export async function PATCH(
     }
 
     // Validate status is a known enum value
-    const VALID_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'];
+    const VALID_STATUSES = ['pending', 'pending_payment', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'];
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` }, { status: 400 });
     }
@@ -85,7 +85,13 @@ export async function PATCH(
     } = { updated_at: new Date().toISOString() };
     
     if (status !== undefined) updatePayload.status = status;
-    if (is_paid !== undefined) updatePayload.is_paid = is_paid;
+    if (is_paid !== undefined) {
+      updatePayload.is_paid = is_paid;
+      // Auto-transition to pending if paid and currently pending_payment
+      if (is_paid === true && previousStatus === 'pending_payment' && status === undefined) {
+        updatePayload.status = 'pending';
+      }
+    }
     
     // Validate uniqueness of payment_reference if it's being updated
     if (payment_reference !== undefined) {
