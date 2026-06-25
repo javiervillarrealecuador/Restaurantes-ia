@@ -660,6 +660,14 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
             const orderTime = formatTime(order.created_at);
             const orderDate = formatFullDate(order.created_at);
 
+            const cutlerySummary = order.order_items?.reduce((acc: Record<string, number>, item) => {
+              if (item.menu_items?.default_cutlery) {
+                const cutleryStr = item.menu_items.default_cutlery.trim();
+                acc[cutleryStr] = (acc[cutleryStr] || 0) + item.quantity;
+              }
+              return acc;
+            }, {});
+
             return (
               <div 
                 key={order.id} 
@@ -1011,6 +1019,22 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
                       {/* Customer / Order Metadata */}
                       <div className="space-y-4 bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-850 p-4 rounded-xl shadow-sm">
+                        {cutlerySummary && Object.keys(cutlerySummary).length > 0 && (
+                          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 p-3 rounded-lg mb-2">
+                            <h5 className="text-xs font-bold text-amber-800 dark:text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                              <span>🍴</span> Cubiertos a Entregar
+                            </h5>
+                            <ul className="space-y-1">
+                              {Object.entries(cutlerySummary).map(([cutlery, qty]) => (
+                                <li key={cutlery} className="text-sm font-semibold text-amber-900 dark:text-amber-400 flex items-center justify-between border-b border-amber-200/50 dark:border-amber-800/30 pb-1 last:border-0 last:pb-0">
+                                  <span>{cutlery as string}</span>
+                                  <span className="bg-amber-200 dark:bg-amber-800/50 text-amber-900 dark:text-amber-200 px-2 py-0.5 rounded-md text-xs font-bold">x{qty as number}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         <div>
                           <h5 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
                             Detalles de Entrega
