@@ -668,11 +668,20 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
               return acc;
             }, {}) || {};
 
-            const cutleryNotes = order.order_items?.filter(item => 
-              item.notes && /cubiert|cuchar|cuchill|tenedor|vaso|sorbete|copa/i.test(item.notes)
-            ).map(item => ({ name: item.menu_items?.name || 'Plato', note: item.notes })) || [];
+            const cutleryKeywords = /cubiert|cuchar|cuchill|tenedor|vaso|sorbete|copa|cuchara/i;
+            const cutleryNotes = order.order_items?.flatMap(item => {
+              const entries: { name: string; note: string }[] = [];
+              if (item.notes && cutleryKeywords.test(item.notes)) {
+                entries.push({ name: item.menu_items?.name || 'Plato', note: `📝 Nota: ${item.notes}` });
+              }
+              if (item.extras && cutleryKeywords.test(item.extras)) {
+                entries.push({ name: item.menu_items?.name || 'Plato', note: `➕ Extra: ${item.extras}` });
+              }
+              return entries;
+            }) || [];
 
             const hasCutleryInfo = Object.keys(cutlerySummary).length > 0 || cutleryNotes.length > 0;
+
 
             return (
               <div 

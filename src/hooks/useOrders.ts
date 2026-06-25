@@ -29,13 +29,15 @@ export function useOrders(restaurantId: string | null) {
             quantity,
             unit_price,
             notes,
+            extras,
             menu_items (
               id,
               name,
               description,
               price,
               image_url,
-              kitchen_id
+              kitchen_id,
+              default_cutlery
             )
           )
         `)
@@ -73,13 +75,15 @@ export function useOrders(restaurantId: string | null) {
             quantity,
             unit_price,
             notes,
+            extras,
             menu_items (
               id,
               name,
               description,
               price,
               image_url,
-              kitchen_id
+              kitchen_id,
+              default_cutlery
             )
           )
         `)
