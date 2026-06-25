@@ -172,7 +172,9 @@ export async function generateFacturaForOrder(orderId: string, secuencialOverrid
   const lineas = (orderAny.order_items || []).map((l: any) => {
     const modifiers = Array.isArray(l.selected_modifiers) ? l.selected_modifiers : [];
     const modifiersPriceSum = modifiers.reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
-    const priceUnit = Number(l.unit_price) + modifiersPriceSum;
+    const priceUnitPvp = Number(l.unit_price) + modifiersPriceSum;
+    const ivaRate = l.iva_rate !== null && l.iva_rate !== undefined ? Number(l.iva_rate) : 15.00;
+    const priceUnitBase = priceUnitPvp / (1 + ivaRate / 100);
 
     let descripcion = l.menu_items?.name || 'Producto';
     if (modifiers.length > 0) {
@@ -183,9 +185,9 @@ export async function generateFacturaForOrder(orderId: string, secuencialOverrid
       codigo: l.menu_items?.code || `PROD-${l.menu_item_id?.slice(0, 8) || 'GEN'}`,
       descripcion,
       cantidad: Number(l.quantity),
-      precioUnitario: priceUnit,
+      precioUnitario: priceUnitBase,
       descuento: 0,
-      ivaRate: l.iva_rate !== null && l.iva_rate !== undefined ? Number(l.iva_rate) : 15.00,
+      ivaRate,
     };
   });
 

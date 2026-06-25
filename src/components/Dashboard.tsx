@@ -1784,7 +1784,7 @@ export default function Dashboard() {
                   {role === 'admin_general' && 'Administrador General'}
                   {role === 'vendedor_cajero' && 'Vendedor / Cajero'}
                   {role === 'cocinero' && 'Cocinero'}
-                  {role === 'repartidor' && 'Repartidor'}
+                  {role === 'repartidor' && 'Auxiliar de Servicio de Mesa'}
                   {role === 'camarero' && 'Camarero / Mesero'}
                 </p>
               </div>
@@ -2119,7 +2119,7 @@ export default function Dashboard() {
                           {member.role === 'admin_general' && 'Admin General'}
                           {member.role === 'vendedor_cajero' && 'Vendedor / Cajero'}
                           {member.role === 'cocinero' && 'Cocinero'}
-                          {member.role === 'repartidor' && 'Repartidor'}
+                          {member.role === 'repartidor' && 'Auxiliar de Servicio de Mesa'}
                           {member.role === 'camarero' && 'Camarero / Mesero'}
                         </span>
                       </div>
@@ -2242,7 +2242,7 @@ export default function Dashboard() {
                             <option value="admin_general">Administrador General</option>
                             <option value="vendedor_cajero">Vendedor / Cajero</option>
                             <option value="cocinero">Cocinero</option>
-                            <option value="repartidor">Repartidor</option>
+                            <option value="repartidor">Auxiliar de Servicio de Mesa</option>
                             <option value="camarero">Camarero / Mesero</option>
                           </select>
                         </div>
@@ -2402,7 +2402,7 @@ export default function Dashboard() {
                           <option value="admin_general">Administrador General</option>
                           <option value="vendedor_cajero">Vendedor / Cajero</option>
                           <option value="cocinero">Cocinero</option>
-                          <option value="repartidor">Repartidor</option>
+                          <option value="repartidor">Auxiliar de Servicio de Mesa</option>
                           <option value="camarero">Camarero / Mesero</option>
                         </select>
                       </div>
@@ -2858,7 +2858,7 @@ export default function Dashboard() {
                                 {staffList.map((staff) => {
                                   const isChecked = branchStaffIds.includes(staff.id);
                                   const name = staff.profiles ? `${staff.profiles.first_name || ''} ${staff.profiles.last_name || ''}`.trim() : staff.email;
-                                  const roleLabel = staff.role === 'admin_general' ? 'Admin' : staff.role === 'vendedor_cajero' ? 'Cajero' : staff.role === 'cocinero' ? 'Cocinero' : staff.role === 'repartidor' ? 'Repartidor' : 'Camarero';
+                                  const roleLabel = staff.role === 'admin_general' ? 'Admin' : staff.role === 'vendedor_cajero' ? 'Cajero' : staff.role === 'cocinero' ? 'Cocinero' : staff.role === 'repartidor' ? 'Auxiliar de Servicio de Mesa' : 'Camarero';
                                   return (
                                     <label key={staff.id} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer p-1 rounded hover:bg-zinc-850 transition-colors">
                                       <input

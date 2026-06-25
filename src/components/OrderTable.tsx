@@ -198,8 +198,11 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         // Calculate modifiers sum if any
         const modifiers = Array.isArray(item.selected_modifiers) ? item.selected_modifiers : [];
         const modifiersPriceSum = modifiers.reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
-        const priceUnit = Number(item.unit_price) + modifiersPriceSum;
-        const sub = priceUnit * Number(item.quantity);
+        const priceUnitPvp = Number(item.unit_price) + modifiersPriceSum;
+        
+        const rate = Number(item.iva_rate || 15);
+        const priceUnitBase = priceUnitPvp / (1 + rate / 100);
+        const sub = priceUnitBase * Number(item.quantity);
 
         let desc = item.menu_items?.name || 'Producto';
         if (modifiers.length > 0) {
@@ -210,7 +213,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
           codigo: item.menu_items?.code || `P-${item.menu_item_id?.slice(0, 8)}`,
           descripcion: desc,
           cantidad: Number(item.quantity),
-          precioUnitario: priceUnit,
+          precioUnitario: priceUnitBase,
           descuento: 0,
           subtotal: sub
         };
@@ -231,16 +234,18 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       (order.order_items || []).forEach((item) => {
         const modifiers = Array.isArray(item.selected_modifiers) ? item.selected_modifiers : [];
         const modifiersPriceSum = modifiers.reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
-        const priceUnit = Number(item.unit_price) + modifiersPriceSum;
-        const itemSub = priceUnit * Number(item.quantity);
+        const priceUnitPvp = Number(item.unit_price) + modifiersPriceSum;
+        const itemTotalPvp = priceUnitPvp * Number(item.quantity);
         
-        const rate = Number(item.iva_rate || 0);
+        const rate = Number(item.iva_rate || 15);
+        const itemSubBase = itemTotalPvp / (1 + rate / 100);
+
         if (rate >= 15) {
-          subtotal15 += itemSub;
+          subtotal15 += itemSubBase;
         } else if (rate === 5) {
-          subtotal5 += itemSub;
+          subtotal5 += itemSubBase;
         } else {
-          subtotal0 += itemSub;
+          subtotal0 += itemSubBase;
         }
       });
 

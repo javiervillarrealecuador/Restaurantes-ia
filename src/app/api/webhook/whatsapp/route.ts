@@ -795,9 +795,11 @@ async function processMessageInBackground(
     const currentIvaRate = restaurant ? getActiveIvaRate(restaurant as any) : 15.00;
 
     const taxRate = currentIvaRate / 100;
-    const tax = Number((subtotal * taxRate).toFixed(2));
+    const totalItemsPvp = subtotal; // subtotal here is the sum of PVP items
+    subtotal = Number((totalItemsPvp / (1 + taxRate)).toFixed(2));
+    const tax = Number((totalItemsPvp - subtotal).toFixed(2));
     const deliveryFee = parsedOrder.order_type === 'delivery' ? 2.50 : 0.00;
-    const total = Number((subtotal + tax + deliveryFee).toFixed(2));
+    const total = Number((totalItemsPvp + deliveryFee).toFixed(2));
 
     const isDelivery = parsedOrder.order_type === 'delivery';
 

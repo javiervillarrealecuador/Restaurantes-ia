@@ -310,9 +310,10 @@ export async function POST(request: Request) {
           for (const l of (od.order_items || [])) {
             const modifiers = Array.isArray(l.selected_modifiers) ? l.selected_modifiers : [];
             const modifiersPriceSum = modifiers.reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
-            const priceUnit = Number(l.unit_price) + modifiersPriceSum;
-            const sub = Number(l.quantity) * priceUnit;
-            const rate = Number(l.iva_rate);
+            const priceUnitPvp = Number(l.unit_price) + modifiersPriceSum;
+            const rate = Number(l.iva_rate || 15);
+            const priceUnitBase = priceUnitPvp / (1 + rate / 100);
+            const sub = Number(l.quantity) * priceUnitBase;
 
             if (rate >= 15) subtotal15 += sub;
             else if (rate === 5) subtotal5 += sub;
@@ -327,7 +328,7 @@ export async function POST(request: Request) {
               codigo: l.menu_items?.code || `P-${l.menu_item_id?.slice(0, 8)}`,
               descripcion: desc,
               cantidad: Number(l.quantity),
-              precioUnitario: priceUnit,
+              precioUnitario: priceUnitBase,
               descuento: 0,
               subtotal: sub
             });

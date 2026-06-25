@@ -67,8 +67,8 @@ export const ReceiptPrinter = forwardRef<HTMLDivElement, ReceiptPrinterProps>(
           </table>
 
           <div className="text-right space-y-1 mb-4">
-            <p>Subtotal: ${Number(order.subtotal).toFixed(2)}</p>
-            {Number(order.tax) > 0 && <p>IVA: ${Number(order.tax).toFixed(2)}</p>}
+            <p>Subtotal (Sin IVA): ${Number(order.subtotal).toFixed(2)}</p>
+            {Number(order.tax) > 0 && <p>IVA (15%): ${Number(order.tax).toFixed(2)}</p>}
             {Number(order.delivery_fee) > 0 && <p>Envío: ${Number(order.delivery_fee).toFixed(2)}</p>}
             <p className="font-bold text-base mt-2">TOTAL: ${Number(order.total_price).toFixed(2)}</p>
           </div>

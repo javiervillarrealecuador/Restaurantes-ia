@@ -652,13 +652,13 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
 
 
-  // Calculations
-  const subtotal = cart.reduce((acc, curr) => {
+  // Calculations (Prices are PVP - 15% VAT included)
+  const total = cart.reduce((acc, curr) => {
     const itemModifiersPrice = curr.selectedModifiers?.reduce((sum, m) => sum + Number(m.price), 0) || 0;
     return acc + ((Number(curr.menuItem.price) + itemModifiersPrice) * curr.quantity);
   }, 0);
-  const tax = Number((subtotal * 0.10).toFixed(2));
-  const total = Number((subtotal + tax).toFixed(2));
+  const subtotal = Number((total / 1.15).toFixed(2));
+  const tax = Number((total - subtotal).toFixed(2));
 
   // Submit Order
   const handleSubmitOrder = async () => {
