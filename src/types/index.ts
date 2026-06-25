@@ -123,6 +123,7 @@ export interface Order {
   updated_at: string;
   order_items?: OrderItem[];
   source?: 'whatsapp' | 'waiter' | 'caja';
+  waiter_name?: string | null;
   branch_id?: string | null;
   // SRI billing fields
   invoice_ref?: string | null;

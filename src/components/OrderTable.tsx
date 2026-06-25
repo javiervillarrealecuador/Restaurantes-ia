@@ -714,7 +714,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                             ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-250 dark:border-amber-850/40'
                             : 'bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-250 dark:border-green-850/40'
                         }`}>
-                          {order.source === 'waiter' ? 'Camarero' : order.source === 'caja' ? 'Caja' : 'WhatsApp'}
+                          {order.source === 'waiter' ? (order.waiter_name || 'Camarero') : order.source === 'caja' ? 'Caja' : 'WhatsApp'}
                         </span>
 
                         {/* SRI Invoicing Status Badge */}

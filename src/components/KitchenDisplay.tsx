@@ -177,7 +177,7 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
                             ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
                             : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                         }`}>
-                          {order.source === 'waiter' ? 'Mesero' : order.source === 'caja' ? 'Caja' : 'WhatsApp'}
+                          {order.source === 'waiter' ? (order.waiter_name || 'Mesero') : order.source === 'caja' ? 'Caja' : 'WhatsApp'}
                         </span>
                       </p>
                     </div>
@@ -216,8 +216,8 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
                               </div>
                             )}
                             {item.extras && (
-                              <p className="text-sm text-purple-600 dark:text-purple-400 font-bold mt-1.5 flex items-start gap-1 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded border border-purple-200 dark:border-purple-800">
-                                <span className="uppercase tracking-wider text-[10px] bg-purple-200 dark:bg-purple-800 px-1 rounded mr-1">Extra</span>
+                              <p className="text-sm text-sky-600 dark:text-sky-400 font-bold mt-1.5 flex items-start gap-1 bg-sky-50 dark:bg-sky-900/20 px-2 py-1 rounded border border-sky-200 dark:border-sky-800">
+                                <span className="uppercase tracking-wider text-[10px] bg-sky-200 dark:bg-sky-800 px-1 rounded mr-1">Cubiertos Extras</span>
                                 {item.extras}
                               </p>
                             )}

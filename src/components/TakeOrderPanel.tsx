@@ -67,7 +67,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [seeding, setSeeding] = useState(false);
   const [loadingActiveOrder, setLoadingActiveOrder] = useState(false);
 
-  const { role, isSuperAdmin } = useAuth();
+  const { role, isSuperAdmin, profile } = useAuth();
   const isAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
   const [showTableManager, setShowTableManager] = useState(false);
   const [targetTableQty, setTargetTableQty] = useState(12);
@@ -732,6 +732,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
         const nameFinal = customerName.trim() || `Mesa ${tableNumber}`;
         const phoneFinal = customerPhone.trim() || '0999999999';
+        const waiterName = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Mesero';
 
         const { data: order, error: orderErr } = await supabase
           .from('orders')
@@ -742,6 +743,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             status: payBeforeConsume ? 'pending_payment' : 'pending',
             type: 'dine_in',
             source: 'waiter',
+            waiter_name: waiterName,
             customer_name: nameFinal,
             customer_phone: phoneFinal,
             table_number: tableNumber,
@@ -1285,7 +1287,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                           onChange={(e) => {
                             setCart(prev => prev.map((it, i) => i === idx ? { ...it, extras: e.target.value } : it));
                           }}
-                          placeholder="Extras (Ej. doble porción, extra pan)"
+                          placeholder="Notas de cubiertos (Ej. 2 tenedores extra)"
                           className="w-full bg-zinc-950/80 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 p-2 rounded-lg text-zinc-300 outline-none text-[11px] placeholder:text-zinc-600 transition-all"
                         />
                         <input
