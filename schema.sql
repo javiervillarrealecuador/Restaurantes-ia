@@ -88,6 +88,7 @@ CREATE TABLE orders (
     payment_method VARCHAR(50) DEFAULT 'cash',
     is_paid BOOLEAN DEFAULT FALSE NOT NULL,
     payment_receipt_url TEXT,
+    cutlery_delivered BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

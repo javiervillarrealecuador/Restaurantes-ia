@@ -7,12 +7,14 @@ import { UtensilsCrossed, CheckCircle, Clock, Coffee, Sparkles, AlertCircle } fr
 interface AuxiliarDisplayProps {
   orders: Order[];
   onUpdateStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
+  onUpdateCutleryStatus?: (orderId: string, delivered: boolean) => Promise<boolean>;
+  role?: string | null;
 }
 
-export default function AuxiliarDisplay({ orders, onUpdateStatus }: AuxiliarDisplayProps) {
-  // Pedidos listos para servir cubiertos (ready + dine_in con cubiertos)
+export default function AuxiliarDisplay({ orders, onUpdateStatus, onUpdateCutleryStatus, role }: AuxiliarDisplayProps) {
+  // Pedidos listos para servir cubiertos (pagado o listo, y aún no entregado)
   const readyDineIn = orders.filter(
-    (o) => o.type === 'dine_in' && o.status === 'ready'
+    (o) => o.type === 'dine_in' && !o.cutlery_delivered && (o.is_paid || o.status === 'ready') && o.status !== 'delivered' && o.status !== 'cancelled'
   );
 
   // Pedidos entregados donde hay que recoger y limpiar la mesa (delivered)
@@ -115,7 +117,7 @@ export default function AuxiliarDisplay({ orders, onUpdateStatus }: AuxiliarDisp
         {/* Action button */}
         <div className="px-4 pb-4">
           <button
-            onClick={() => onUpdateStatus(order.id, 'delivered')}
+            onClick={() => onUpdateCutleryStatus ? onUpdateCutleryStatus(order.id, true) : null}
             className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl font-bold shadow-sm transition-all text-base cursor-pointer"
           >
             <CheckCircle className="h-5 w-5" />
@@ -155,13 +157,15 @@ export default function AuxiliarDisplay({ orders, onUpdateStatus }: AuxiliarDisp
         </div>
 
         <div className="px-4 pb-4">
-          <button
-            onClick={() => onUpdateStatus(order.id, 'cancelled')}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-violet-600 hover:bg-violet-500 active:scale-95 text-white rounded-xl font-bold shadow-sm transition-all text-base cursor-pointer"
-          >
-            <Sparkles className="h-5 w-5" />
-            Mesa lista ✓
-          </button>
+          {role === 'admin' && (
+            <button
+              onClick={() => onUpdateStatus(order.id, 'cancelled')}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-violet-600 hover:bg-violet-500 active:scale-95 text-white rounded-xl font-bold shadow-sm transition-all text-base cursor-pointer"
+            >
+              <Sparkles className="h-5 w-5" />
+              Mesa lista ✓
+            </button>
+          )}
         </div>
       </div>
     );

@@ -11,10 +11,11 @@ import { useAuth } from '@/context/AuthContext';
 interface KitchenDisplayProps {
   orders: Order[];
   onUpdateStatus: (orderId: string, status: OrderStatus) => Promise<boolean>;
+  onUpdateItemsStatus?: (orderId: string, kitchenId: string, status: 'preparing' | 'ready') => Promise<boolean>;
   restaurantId?: string;
 }
 
-export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }: KitchenDisplayProps) {
+export default function KitchenDisplay({ orders, onUpdateStatus, onUpdateItemsStatus, restaurantId }: KitchenDisplayProps) {
   const { kitchenId: userKitchenId } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -49,21 +50,45 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
     return () => clearInterval(timer);
   }, []);
 
-  const handleStatusChange = async (orderId: string, currentStatus: OrderStatus) => {
+  const handleStatusChange = async (
+    orderId: string, 
+    currentStatus: OrderStatus, 
+    kitchenStatus?: 'pending' | 'preparing' | 'ready',
+    kitchenId?: string
+  ) => {
     setUpdatingId(orderId);
-    let nextStatus: OrderStatus = 'preparing';
+    let nextStatus: 'preparing' | 'ready' = 'preparing';
     
-    if (currentStatus === 'pending' || currentStatus === 'confirmed') {
-      nextStatus = 'preparing';
-    } else if (currentStatus === 'preparing') {
-      nextStatus = 'ready';
-    } else if (currentStatus === 'ready') {
-      toast.success('El pedido ya está listo para entrega');
-      setUpdatingId(null);
-      return;
+    // Determine next status based on kitchen items status if available
+    if (kitchenStatus) {
+      if (kitchenStatus === 'pending') nextStatus = 'preparing';
+      else if (kitchenStatus === 'preparing') nextStatus = 'ready';
+      else if (kitchenStatus === 'ready') {
+        toast.success('El pedido ya está listo para entrega');
+        setUpdatingId(null);
+        return;
+      }
+    } else {
+      // Fallback to order status
+      if (currentStatus === 'pending' || currentStatus === 'confirmed') nextStatus = 'preparing';
+      else if (currentStatus === 'preparing') nextStatus = 'ready';
+      else if (currentStatus === 'ready') {
+        toast.success('El pedido ya está listo para entrega');
+        setUpdatingId(null);
+        return;
+      }
     }
 
-    const success = await onUpdateStatus(orderId, nextStatus);
+    let success = false;
+    
+    // If a specific kitchen is selected and we have the new callback, update just the items
+    if (kitchenId && kitchenId !== 'all' && onUpdateItemsStatus) {
+      success = await onUpdateItemsStatus(orderId, kitchenId, nextStatus);
+    } else {
+      // Fallback for 'all' kitchens or missing callback (updates entire order)
+      success = await onUpdateStatus(orderId, nextStatus as OrderStatus);
+    }
+    
     if (success) {
       if (nextStatus === 'preparing') toast.success('Pedido en preparación');
       if (nextStatus === 'ready') toast.success('¡Pedido listo!');
@@ -73,7 +98,7 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
 
   // Filter orders relevant for kitchen AND the selected kitchen
   const kitchenOrders = orders
-    .filter(o => ['pending', 'confirmed', 'preparing'].includes(o.status))
+    .filter(o => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)) // Allow 'ready' orders to be checked for pending items
     .map(order => {
       // If a specific kitchen is selected, filter the order items
       if (selectedKitchenId !== 'all') {
@@ -84,8 +109,16 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
       }
       return order;
     })
-    // Only keep orders that have at least one item after filtering
-    .filter(order => order.order_items && order.order_items.length > 0)
+    // Only keep orders that have at least one item after filtering AND at least one item is not ready
+    .filter(order => {
+       if (!order.order_items || order.order_items.length === 0) return false;
+       if (selectedKitchenId !== 'all') {
+         // Specific kitchen: only show if this kitchen has items that are not ready
+         return order.order_items.some(item => item.status !== 'ready');
+       }
+       // For 'all' kitchens view, fallback to old logic or check if any item is not ready
+       return ['pending', 'confirmed', 'preparing'].includes(order.status);
+    })
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   const getWaitTimeMinutes = (createdAt: string) => {
@@ -234,31 +267,48 @@ export default function KitchenDisplay({ orders, onUpdateStatus, restaurantId }:
                   </div>
 
                   {/* Action Button */}
-                  <button
-                    disabled={isUpdating}
-                    onClick={() => handleStatusChange(order.id, order.status)}
-                    className={`w-full py-4 rounded-lg font-bold text-lg text-white shadow-sm transition-all flex justify-center items-center gap-2
-                      ${isUpdating ? 'opacity-70 cursor-not-allowed' : 'hover:scale-[1.02]'}
-                      ${order.status === 'preparing' 
-                        ? 'bg-emerald-600 hover:bg-emerald-700' 
-                        : 'bg-blue-600 hover:bg-blue-700'
-                      }
-                    `}
-                  >
-                    {isUpdating ? (
-                      <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : order.status === 'preparing' ? (
-                      <>
-                        <CheckCircle className="w-6 h-6" />
-                        ¡PLATO LISTO!
-                      </>
-                    ) : (
-                      <>
-                        <ChefHat className="w-6 h-6" />
-                        INICIAR PREPARACIÓN
-                      </>
-                    )}
-                  </button>
+                  {(() => {
+                    let kitchenStatus: 'pending' | 'preparing' | 'ready' = 'pending';
+                    if (selectedKitchenId !== 'all' && order.order_items && order.order_items.length > 0) {
+                      // Determine status based on this kitchen's items
+                      const allReady = order.order_items.every(item => item.status === 'ready');
+                      const somePreparing = order.order_items.some(item => item.status === 'preparing');
+                      
+                      if (allReady) kitchenStatus = 'ready';
+                      else if (somePreparing || order.status === 'preparing') kitchenStatus = 'preparing';
+                      else kitchenStatus = 'pending';
+                    } else {
+                      kitchenStatus = order.status === 'preparing' ? 'preparing' : 'pending';
+                    }
+
+                    return (
+                      <button
+                        disabled={isUpdating}
+                        onClick={() => handleStatusChange(order.id, order.status, kitchenStatus, selectedKitchenId)}
+                        className={`w-full py-4 rounded-lg font-bold text-lg text-white shadow-sm transition-all flex justify-center items-center gap-2
+                          ${isUpdating ? 'opacity-70 cursor-not-allowed' : 'hover:scale-[1.02]'}
+                          ${kitchenStatus === 'preparing' 
+                            ? 'bg-emerald-600 hover:bg-emerald-700' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                          }
+                        `}
+                      >
+                        {isUpdating ? (
+                          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : kitchenStatus === 'preparing' ? (
+                          <>
+                            <CheckCircle className="w-6 h-6" />
+                            ¡PLATO LISTO!
+                          </>
+                        ) : (
+                          <>
+                            <ChefHat className="w-6 h-6" />
+                            INICIAR PREPARACIÓN
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
                 </motion.div>
               );
             })}

@@ -218,6 +218,51 @@ export function useOrders(restaurantId: string | null) {
     }
   }, []);
 
+  // Update cutlery delivered status
+  const updateOrderCutleryStatus = useCallback(async (orderId: string, delivered: boolean): Promise<boolean> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ 
+          cutlery_delivered: delivered
+        })
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to update cutlery status');
+      }
+
+      // Optimistically update local state
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === orderId
+            ? { 
+                ...order, 
+                cutlery_delivered: delivered, 
+                updated_at: new Date().toISOString() 
+              }
+            : order
+        )
+      );
+      return true;
+    } catch (err: unknown) {
+      console.error(`Error updating cutlery status for order ${orderId}:`, err);
+      if (err instanceof Error) {
+        toast.error(err.message);
+      } else {
+        toast.error('Error al actualizar el estado de los cubiertos');
+      }
+      return false;
+    }
+  }, []);
+
   // Set up real-time listeners (orders + order_items) and polling fallback
   useEffect(() => {
     if (!restaurantId) return;
@@ -357,12 +402,65 @@ export function useOrders(restaurantId: string | null) {
     };
   }, [restaurantId, fetchOrders, fetchDetailedOrder]);
 
+  // Update order items status (for a specific kitchen)
+  const updateOrderItemsStatus = useCallback(async (orderId: string, kitchenId: string, status: 'preparing' | 'ready'): Promise<boolean> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res = await fetch(`/api/orders/${orderId}/items`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ kitchenId, status }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`API returned error code ${res.status}`);
+      }
+      
+      const resData = await res.json();
+
+      // Optimistically update local state
+      setOrders((prevOrders) =>
+        prevOrders.map((order) => {
+          if (order.id !== orderId) return order;
+          
+          let newGlobalStatus = order.status;
+          if (resData.globalStatusUpdated) {
+             if (resData.allReady) newGlobalStatus = 'ready';
+             else if (status === 'preparing') newGlobalStatus = 'preparing';
+          }
+
+          return {
+            ...order,
+            status: newGlobalStatus,
+            updated_at: new Date().toISOString(),
+            order_items: order.order_items?.map(item => 
+              item.menu_items?.kitchen_id === kitchenId 
+                ? { ...item, status } 
+                : item
+            )
+          };
+        })
+      );
+      return true;
+    } catch (err: unknown) {
+      console.error(`Error updating items status for order ${orderId}:`, err);
+      return false;
+    }
+  }, []);
+
   return {
     orders,
     loading,
     error,
     updateOrderStatus,
+    updateOrderItemsStatus,
     updateOrderPaymentStatus,
+    updateOrderCutleryStatus,
     freeTableForOrder,
     refreshOrders: fetchOrders,
   };

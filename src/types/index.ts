@@ -97,6 +97,7 @@ export interface OrderItem {
   menu_items?: MenuItem | null;
   selected_modifiers?: { name: string; price: number }[] | null;
   iva_rate?: number;
+  status?: 'pending' | 'preparing' | 'ready';
 }
 
 export interface Order {
@@ -139,6 +140,7 @@ export interface Order {
   billing_name?: string | null;
   billing_email?: string | null;
   billing_address?: string | null;
+  cutlery_delivered?: boolean;
 }
 
 export interface WebhookLog {

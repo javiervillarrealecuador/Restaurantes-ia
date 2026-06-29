@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { MenuItem, MenuCategory, Branch, MenuModifier, RestaurantTable } from '@/types';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import DeunaPaymentModal from '@/components/DeunaPaymentModal';
 import { 
   Search, 
   Utensils, 
@@ -53,7 +54,11 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [tableNumber, setTableNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card' | 'deuna'>('cash');
+
+  // Deuna payment modal
+  const [showDeunaModal, setShowDeunaModal] = useState(false);
+  const [pendingOrderCode, setPendingOrderCode] = useState('');
 
   // Cart & Modifiers
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -66,6 +71,8 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const [customizingNotes, setCustomizingNotes] = useState('');
   const [seeding, setSeeding] = useState(false);
   const [loadingActiveOrder, setLoadingActiveOrder] = useState(false);
+  const [isChangingTable, setIsChangingTable] = useState(false);
+  const [submittingTableChange, setSubmittingTableChange] = useState(false);
 
   const { role, isSuperAdmin, profile } = useAuth();
   const isAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
@@ -120,6 +127,9 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       if (error) throw error;
       
       const sorted = (data || []).sort((a, b) => {
+        if (a.table_number === 'PARA LLEVAR') return -1;
+        if (b.table_number === 'PARA LLEVAR') return 1;
+        
         const numA = parseInt(a.table_number, 10);
         const numB = parseInt(b.table_number, 10);
         if (isNaN(numA) || isNaN(numB)) {
@@ -127,9 +137,27 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         }
         return numA - numB;
       });
+
+      // Ensure "PARA LLEVAR" exists
+      const paraLlevarExists = sorted.some(t => t.table_number === 'PARA LLEVAR');
+      if (!paraLlevarExists && restaurantId && selectedBranchId) {
+        supabase
+          .from('restaurant_tables')
+          .insert({
+            restaurant_id: restaurantId,
+            branch_id: selectedBranchId,
+            table_number: 'PARA LLEVAR',
+            status: 'free',
+            x_pos: 0,
+            y_pos: 0,
+          }).then(() => {
+            // Realtime subscription will re-fetch
+          });
+      }
+
       setTables(sorted);
       if (sorted && sorted.length > 0) {
-        setTargetTableQty(sorted.length);
+        setTargetTableQty(sorted.filter(t => t.table_number !== 'PARA LLEVAR').length || 12);
       }
 
       // If the currently selected table has changed status to free, reset the active order selection
@@ -425,6 +453,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
       // Identify tables to delete if target is less than current
       const tablesToDelete = (currentTables || []).filter(t => {
+        if (t.table_number === 'PARA LLEVAR') return false;
         const num = parseInt(t.table_number, 10);
         return !isNaN(num) && num > targetTableQty;
       });
@@ -794,6 +823,12 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
         toast.success(payBeforeConsume ? '¡Pedido creado! Pendiente de cobro en caja.' : '¡Pedido creado con éxito y enviado a cocina!');
         
+        // Si el método de pago es Deuna, mostrar el modal QR
+        if (paymentMethod === 'deuna') {
+          setPendingOrderCode(orderCode);
+          setShowDeunaModal(true);
+        }
+
         setCart([]);
         setTableNumber('');
         setCustomerName('');
@@ -988,9 +1023,9 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                       isSelected 
                         ? 'ring-2 ring-emerald-500 bg-zinc-900/60 border-emerald-500 scale-[1.03] shadow-lg shadow-black/40' 
                         : ''
-                    } ${statusColors[table.status || 'free']}`}
+                    } ${statusColors[table.status || 'free']} ${table.table_number === 'PARA LLEVAR' ? 'col-span-3 sm:col-span-4 md:col-span-6 bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 py-4' : ''}`}
                   >
-                    <span className="text-xs font-bold block">Mesa {table.table_number}</span>
+                    <span className="text-xs font-bold block">{table.table_number === 'PARA LLEVAR' ? '🛍️ PEDIDOS PARA LLEVAR' : `Mesa ${table.table_number}`}</span>
                     <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-90 block">
                       {table.status === 'free' && '🟢 Libre'}
                       {table.status === 'occupied' && '🔴 Ocupada'}
@@ -1118,6 +1153,13 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                     <span className="text-xs font-extrabold text-rose-400 block">#{activeOrder.order_number} ({activeOrder.status === 'payment_requested' ? 'Cuenta pedida' : activeOrder.status})</span>
                   </div>
                   <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsChangingTable(true)}
+                      className="px-2.5 py-1.5 bg-blue-500/15 border border-blue-500/30 hover:bg-blue-500/25 text-blue-400 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+                    >
+                      Cambiar Mesa
+                    </button>
                     {activeOrder.status !== 'ready' && activeOrder.status !== 'delivered' && (
                       <button
                         type="button"
@@ -1219,7 +1261,8 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                 className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs cursor-pointer font-medium"
               >
                 <option value="cash">Efectivo</option>
-                <option value="transfer">Transferencia</option>
+                <option value="deuna">🟦 Deuna (QR)</option>
+                <option value="transfer">Transferencia bancaria</option>
                 <option value="card">Tarjeta de Crédito/Débito</option>
               </select>
             </div>
@@ -1331,6 +1374,21 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           </div>
         </div>
 
+        {/* Deuna info banner — shown when deuna is selected */}
+        {paymentMethod === 'deuna' && (
+          <div className="mt-3 flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/20 rounded-xl p-3">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shrink-0 mt-0.5">
+              <span className="text-white font-black text-xs">D</span>
+            </div>
+            <div>
+              <p className="text-teal-300 text-[11px] font-bold">Pago con Deuna</p>
+              <p className="text-teal-500 text-[10px] mt-0.5 leading-relaxed">
+                Se mostrará el QR de Deuna al confirmar el pedido. El cliente lo escanea desde su app y tú confirmas el pago.
+              </p>
+            </div>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={handleSubmitOrder}
@@ -1352,6 +1410,23 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           )}
         </button>
       </div>
+
+      {/* Deuna Payment Modal */}
+      {showDeunaModal && (
+        <DeunaPaymentModal
+          total={total}
+          orderCode={pendingOrderCode}
+          onConfirm={() => {
+            setShowDeunaModal(false);
+            setPendingOrderCode('');
+            toast.success('¡Pago Deuna confirmado! Pedido enviado a cocina.');
+          }}
+          onCancel={() => {
+            setShowDeunaModal(false);
+            setPendingOrderCode('');
+          }}
+        />
+      )}
 
       {/* Modifiers / Customization Modal */}
       {customizingItem && (
@@ -1438,6 +1513,82 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Table Modal */}
+      {isChangingTable && activeOrder && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-6 max-w-md w-full space-y-5 shadow-2xl relative">
+            <div>
+              <h3 className="text-base font-bold text-zinc-100">Cambiar de Mesa</h3>
+              <p className="text-xs text-zinc-555">Selecciona la nueva mesa para el pedido #{activeOrder.order_number}</p>
+            </div>
+            <div className="grid grid-cols-4 gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+              {tables.filter(t => t.status === 'free').length > 0 ? (
+                tables.filter(t => t.status === 'free').map(table => (
+                  <button
+                    key={table.id}
+                    disabled={submittingTableChange}
+                    onClick={async () => {
+                      setSubmittingTableChange(true);
+                      try {
+                        // 1. Update old table
+                        await supabase
+                          .from('restaurant_tables')
+                          .update({ status: 'free', current_order_id: null })
+                          .eq('branch_id', selectedBranchId)
+                          .eq('table_number', tableNumber);
+                        
+                        // 2. Update new table
+                        await supabase
+                          .from('restaurant_tables')
+                          .update({ 
+                            status: activeOrder.status === 'payment_requested' ? 'payment_requested' : 'occupied', 
+                            current_order_id: activeOrder.id 
+                          })
+                          .eq('branch_id', selectedBranchId)
+                          .eq('table_number', table.table_number);
+                          
+                        // 3. Update order
+                        await supabase
+                          .from('orders')
+                          .update({ table_number: table.table_number, updated_at: new Date().toISOString() })
+                          .eq('id', activeOrder.id);
+                          
+                        toast.success(`Mesa cambiada de ${tableNumber} a ${table.table_number} exitosamente`);
+                        
+                        setTableNumber(table.table_number);
+                        setIsChangingTable(false);
+                        fetchTables();
+                      } catch (err) {
+                        console.error('Error changing table:', err);
+                        toast.error('Error al cambiar de mesa');
+                      } finally {
+                        setSubmittingTableChange(false);
+                      }
+                    }}
+                    className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center gap-1 disabled:opacity-50"
+                  >
+                    Mesa {table.table_number}
+                  </button>
+                ))
+              ) : (
+                <div className="col-span-4 text-center py-4">
+                  <span className="text-xs text-zinc-500">No hay mesas libres disponibles</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsChangingTable(false)}
+                className="flex-1 py-2.5 border border-zinc-850 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
               </button>
             </div>
           </div>

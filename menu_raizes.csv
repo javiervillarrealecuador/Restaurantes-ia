@@ -1,0 +1,35 @@
+categoria,nombre,descripcion,precio
+"Postres","Quesillo & Miel","",1.50
+"Postres","Morocho","",2.00
+"Postres","Piña al Grill","Piña caramelizada a la parrilla, servida con crema chantilly y helado de la casa.",2.50
+"Bebidas","Jarra de Limonada","",4.00
+"Bebidas","1/2 Jarra de Limonada","",2.00
+"Bebidas","Jarra de Naranja","",5.00
+"Bebidas","Jarra de Tamarindo","",5.00
+"Bebidas","Jarra de Maracuyá","",5.00
+"Bebidas","Jarra de Mora","",5.00
+"Bebidas","1/2 Jarra de Naranja","",3.00
+"Bebidas","1/2 Jarra de Tamarindo","",3.00
+"Bebidas","1/2 Jarra de Maracuyá","",3.00
+"Bebidas","1/2 Jarra de Mora","",3.00
+"Bebidas","Gaseosa 300 ml","",1.00
+"Bebidas","Gaseosa 1.35 L","",2.50
+"Bebidas","Cerveza Club","",4.00
+"Bebidas","Cerveza Pilsener","",3.50
+"A la Olla","Caldo de Gallina","Caldo tradicional, acompañado de 1/8 de gallina y papa cocinada.",4.50
+"A la Olla","Sancocho de Gallina","Sopa espesa con 1/8 de gallina, choclo tierno, yuca, plátano verde cocido, acompañada de arroz y aguacate fresco.",5.00
+"A la Olla","Consomé Caldo de Gallina","",2.50
+"A la Olla","Consomé Sancocho de Gallina","",2.50
+"A fuego lento","Pollo Ahumado","1/4 de pollo ahumado, papas a la francesa y ensalada fresca.",5.00
+"A fuego lento","Gallina Asada","Jugosa porción de 1/8 de gallina asada al carbón, servido con mote, papa cocinada y ensalada fresca.",6.00
+"A fuego lento","Carne Ahumada","Filete de cerdo ahumado a la parrilla, servido con mote, papa cocinada y ensalada fresca.",6.00
+"A fuego lento","Costilla al Barril","Costilla de cerdo al barril, acompañada de papas a elección (francesas o cocinadas), chorizo y ensalada fresca.",8.00
+"A fuego lento","Bandeja Raízes","Costilla al barril, 1/4 de pollo ahumado, chorizo, papas, choclo, habas, mellocos cocinados, queso y ensalada fresca.",15.00
+"Extras","Mellocos","",1.50
+"Extras","Habas","",1.50
+"Extras","Mix (Melloco y habas)","",1.50
+"Extras","Choclo & Queso","",2.00
+"Raízes","Fritada","Carne de cerdo acompañada de mote, papa cocinada, maduro frito y tostado.",5.00
+"Raízes","Tortilla Fritada Raízes","Crujientes tortillas de papa rellenas de queso, carne de cerdo y ensalada fresca.",6.00
+"Raízes","Combo Fritada","Carne de cerdo, acompañada de papa, choclo, habas, mellocos cocinados, queso y tostado.",7.00
+"Kids","Salchipapa","Papas fritas crocantes con salchichas, salsas al gusto.",2.50

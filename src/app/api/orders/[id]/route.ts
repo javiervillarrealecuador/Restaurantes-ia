@@ -40,10 +40,10 @@ export async function PATCH(
   try {
     const orderId = params.id;
     const body = await req.json();
-    const { status, is_paid, payment_reference, payment_receipt_url } = body;
+    const { status, is_paid, payment_reference, payment_receipt_url, cutlery_delivered } = body;
 
-    if (status === undefined && is_paid === undefined && payment_reference === undefined && payment_receipt_url === undefined) {
-      return NextResponse.json({ error: 'At least one field to update (status, is_paid, payment_reference, payment_receipt_url) is required' }, { status: 400 });
+    if (status === undefined && is_paid === undefined && payment_reference === undefined && payment_receipt_url === undefined && cutlery_delivered === undefined) {
+      return NextResponse.json({ error: 'At least one field to update is required' }, { status: 400 });
     }
 
     // Validate status is a known enum value
@@ -82,6 +82,7 @@ export async function PATCH(
       is_paid?: boolean;
       payment_reference?: string | null;
       payment_receipt_url?: string | null;
+      cutlery_delivered?: boolean;
     } = { updated_at: new Date().toISOString() };
     
     if (status !== undefined) updatePayload.status = status;
@@ -110,8 +111,8 @@ export async function PATCH(
       }
       updatePayload.payment_reference = payment_reference;
     }
-    
     if (payment_receipt_url !== undefined) updatePayload.payment_receipt_url = payment_receipt_url;
+    if (cutlery_delivered !== undefined) updatePayload.cutlery_delivered = cutlery_delivered;
 
     // 2. Update order status in database
     const { data: updatedOrder, error: updateErr } = await supabaseAdmin

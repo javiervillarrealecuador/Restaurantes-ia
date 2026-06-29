@@ -103,8 +103,25 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [seqEdited, setSeqEdited] = useState(false);
   const [seqLoading, setSeqLoading] = useState(false);
 
-  const handleOpenSriModal = (e: React.MouseEvent, order: Order) => {
+  // Split Billing states
+  const [splitItems, setSplitItems] = useState<Record<string, Record<string, number>>>({});
+  const [isSplitting, setIsSplitting] = useState(false);
+
+  const handleSplitSelection = (orderId: string, orderItemId: string, quantity: number) => {
+    setSplitItems(prev => {
+      const orderSplits = { ...prev[orderId] };
+      if (quantity <= 0) {
+        delete orderSplits[orderItemId];
+      } else {
+        orderSplits[orderItemId] = quantity;
+      }
+      return { ...prev, [orderId]: orderSplits };
+    });
+  };
+
+  const handleOpenSriModal = (e: React.MouseEvent, order: Order, splitting = false) => {
     e.stopPropagation();
+    setIsSplitting(splitting);
     setSriModalOrder(order);
     setBillingVat(order.billing_vat || '9999999999999');
     setBillingName(order.billing_name || 'CONSUMIDOR FINAL');
@@ -140,11 +157,41 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     setSriError(null);
 
     try {
+      let finalOrderId = sriModalOrder.id;
+
+      if (isSplitting) {
+        const itemsToSplit = Object.entries(splitItems[sriModalOrder.id] || {})
+          .filter(([_, qty]) => qty > 0)
+          .map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+
+        if (itemsToSplit.length > 0) {
+          const splitRes = await fetch('/api/orders/split', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: sriModalOrder.id,
+              itemsToSplit,
+              billingDetails: {
+                billing_vat: billingVat,
+                billing_name: billingName,
+                billing_email: billingEmail,
+                billing_address: billingAddress,
+                forma_pago: formaPago,
+                sri_requiere_factura: true
+              }
+            })
+          });
+          const splitData = await splitRes.json();
+          if (!splitRes.ok) throw new Error(splitData.error || 'Error al dividir la orden.');
+          finalOrderId = splitData.newOrderId;
+        }
+      }
+
       const res = await fetch('/api/sri/invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: sriModalOrder.id,
+          orderId: finalOrderId,
           formaPago,
           billingName,
           billingVat,
@@ -501,12 +548,14 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                   Esperando Captura
                 </span>
               )}
-              <button 
-                onClick={() => handleStatusChange(order.id, 'cancelled')}
-                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {role === 'admin' && (
+                <button 
+                  onClick={() => handleStatusChange(order.id, 'cancelled')}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
           );
         }
@@ -518,12 +567,14 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
             >
               <Check className="h-3 w-3" /> Aceptar
             </button>
-            <button 
-              onClick={() => handleStatusChange(order.id, 'cancelled')}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/40 text-rose-400 text-xs font-medium transition-all"
-            >
-              <X className="h-3 w-3" /> Rechazar
-            </button>
+            {role === 'admin' && (
+              <button 
+                onClick={() => handleStatusChange(order.id, 'cancelled')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/40 text-rose-400 text-xs font-medium transition-all"
+              >
+                <X className="h-3 w-3" /> Rechazar
+              </button>
+            )}
           </div>
         );
       case 'confirmed':
@@ -932,18 +983,48 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                       
                       {/* Items details */}
                       <div className="md:col-span-2 space-y-3">
-                        <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest border-b border-zinc-200 dark:border-zinc-850 pb-2">
-                          Detalle del Pedido
-                        </h5>
+                        <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-850 pb-2">
+                          <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest">
+                            Detalle del Pedido
+                          </h5>
+                          {Object.keys(splitItems[order.id] || {}).length > 0 && (
+                            <button
+                              onClick={(e) => handleOpenSriModal(e, order, true)}
+                              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-all animate-in zoom-in duration-200"
+                            >
+                              <FileText className="h-3 w-3" />
+                              Facturar Seleccionados
+                            </button>
+                          )}
+                        </div>
                         <div className="divide-y divide-zinc-200 dark:divide-zinc-850/60">
-                          {order.order_items?.map((item) => (
-                            <div key={item.id} className="py-2.5 flex justify-between items-start text-sm">
-                              <div>
-                                <div className="font-medium text-zinc-800 dark:text-zinc-100">
-                                  {item.quantity}x {item.menu_items?.name || 'Plato del Menú'}
-                                  <span className="text-zinc-500 dark:text-zinc-550 ml-2 font-normal">
+                          {order.order_items?.map((item) => {
+                            const splitQty = splitItems[order.id]?.[item.id] || 0;
+                            return (
+                            <div key={item.id} className="py-2.5 flex items-start text-sm">
+                              <div className="mr-3 mt-0.5">
+                                <input 
+                                  type="checkbox" 
+                                  className="rounded border-zinc-300 dark:border-zinc-700 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-zinc-800 cursor-pointer h-4 w-4"
+                                  checked={splitQty > 0}
+                                  onChange={(e) => {
+                                    handleSplitSelection(order.id, item.id, e.target.checked ? 1 : 0);
+                                  }}
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-zinc-800 dark:text-zinc-100 flex items-center flex-wrap gap-1.5">
+                                  <span>{item.quantity}x {item.menu_items?.name || 'Plato del Menú'}</span>
+                                  <span className="text-zinc-500 dark:text-zinc-550 font-normal">
                                     (${Number(item.unit_price).toFixed(2)} c/u)
                                   </span>
+                                  {splitQty > 0 && item.quantity > 1 && (
+                                    <div className="flex items-center ml-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-md px-1 py-0.5 text-xs border border-zinc-200 dark:border-zinc-700">
+                                      <button onClick={() => handleSplitSelection(order.id, item.id, Math.max(1, splitQty - 1))} className="px-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">-</button>
+                                      <span className="px-1 font-semibold text-zinc-700 dark:text-zinc-300">{splitQty}</span>
+                                      <button onClick={() => handleSplitSelection(order.id, item.id, Math.min(item.quantity, splitQty + 1))} className="px-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">+</button>
+                                    </div>
+                                  )}
                                 </div>
                                 {item.menu_items?.default_cutlery && (
                                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 flex items-start gap-1">
@@ -964,11 +1045,18 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                   </p>
                                 )}
                               </div>
-                              <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                ${(item.quantity * Number(item.unit_price)).toFixed(2)}
-                              </span>
+                              <div className="text-right pl-3">
+                                <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">
+                                  ${(item.quantity * Number(item.unit_price)).toFixed(2)}
+                                </span>
+                                {splitQty > 0 && (
+                                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium block mt-0.5">
+                                    Separado: ${(splitQty * Number(item.unit_price)).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          ))}
+                          );})}
                         </div>
 
                         {/* SRI Billing Details Section */}

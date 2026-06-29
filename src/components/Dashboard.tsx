@@ -483,11 +483,14 @@ export default function Dashboard() {
   // Hook into orders real-time stream
   const { 
     orders, 
-    loading: ordersLoading, 
     updateOrderStatus, 
+    updateOrderItemsStatus,
     updateOrderPaymentStatus,
+    updateOrderCutleryStatus,
+    loading: ordersLoading, 
+    freeTableForOrder,
     refreshOrders 
-  } = useOrders(restaurant?.id || null);
+  } = useOrders(restaurant?.id || activeRestaurantId || null);
 
   // Wrappers to log activity
   const logActivity = async (action: string, details: string) => {
@@ -866,7 +869,7 @@ export default function Dashboard() {
       // Delivery orders for the delivery queue
       const deliveryOrders = orders.filter(order => order.type === 'delivery' && ['ready', 'delivering'].includes(order.status));
       // Dine-in orders for the auxiliar (cutlery delivery + table cleaning)
-      const dineInOrders = orders.filter(order => order.type === 'dine_in' && ['ready', 'delivered'].includes(order.status));
+      const dineInOrders = orders.filter(order => order.type === 'dine_in' && order.status !== 'cancelled');
       return [...dineInOrders, ...deliveryOrders];
     }
     return orders;
@@ -1924,12 +1927,15 @@ export default function Dashboard() {
             <KitchenDisplay 
               orders={filteredOrdersByRole} 
               onUpdateStatus={handleUpdateOrderStatus} 
+              onUpdateItemsStatus={updateOrderItemsStatus}
               restaurantId={activeRestaurantId || ''}
             />
           ) : activeTab === 'orders' && role === 'repartidor' ? (
             <AuxiliarDisplay
               orders={filteredOrdersByRole}
               onUpdateStatus={handleUpdateOrderStatus}
+              onUpdateCutleryStatus={updateOrderCutleryStatus}
+              role={role}
             />
           ) : activeTab === 'orders' ? (
             <OrderTable 
