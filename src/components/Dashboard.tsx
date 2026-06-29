@@ -1090,9 +1090,16 @@ export default function Dashboard() {
       // Si se subio nueva firma, extraer metadatos via API (no lanzar error si falla - es opcional)
       if (newP12Uploaded && sriP12B64 && sriP12Pwd) {
         try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
           const res = await fetch('/api/sri/metadata', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...authHeaders
+            },
             body: JSON.stringify({ p12B64: sriP12B64, pwd: sriP12Pwd })
           });
           const json = await res.json();
@@ -1177,9 +1184,16 @@ export default function Dashboard() {
     setSriTesting(true);
     setSriMessage(null);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const res = await fetch('/api/sri/test-connection', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({ p12B64: sriP12B64, pwd: sriP12Pwd, ambiente: sriAmbiente })
       });
       const data = await res.json();

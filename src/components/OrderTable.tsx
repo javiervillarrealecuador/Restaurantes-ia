@@ -131,6 +131,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
     setSimplePaymentSubmitting(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       let finalOrderId = paymentModalOrder.id;
       
       // If splitting, we call the split endpoint first
@@ -144,7 +148,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
         const splitRes = await fetch('/api/orders/split', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...authHeaders
+          },
           body: JSON.stringify({
             orderId: paymentModalOrder.id,
             itemsToSplit
@@ -181,7 +188,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       // Now update the payment method and mark as paid on the finalOrderId
       const updateRes = await fetch(`/api/orders/${finalOrderId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           is_paid: true,
           payment_method: simplePaymentMethod,
@@ -215,9 +225,16 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const handleConfirmDeunaPayment = async () => {
     if (!deunaFinalOrderId) return;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const updateRes = await fetch(`/api/orders/${deunaFinalOrderId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           is_paid: true,
           payment_method: 'deuna',
@@ -249,9 +266,16 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const handleConfirmKushkiPayment = async (ticketNumber: string) => {
     if (!kushkiFinalOrderId) return;
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       const updateRes = await fetch(`/api/orders/${kushkiFinalOrderId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           is_paid: true,
           payment_method: 'card',
@@ -294,7 +318,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     });
   };
 
-  const handleOpenSriModal = (e: React.MouseEvent, order: Order, splitting = false) => {
+  const handleOpenSriModal = async (e: React.MouseEvent, order: Order, splitting = false) => {
     e.stopPropagation();
     setIsSplitting(splitting);
     setSriModalOrder(order);
@@ -310,18 +334,27 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     setSeqOverride('');
     setSeqEdited(false);
     setSeqLoading(true);
-    fetch(`/api/sri/next-seq?restaurantId=${order.restaurant_id}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.nextNumber) {
-          setNextSeq(d.nextNumber);
-          setSeqEstab(d.estab || '001');
-          setSeqPtoEmi(d.ptoEmi || '001');
-          setSeqOverride(String(d.nextNumber));
-        }
-      })
-      .catch(() => {})
-      .finally(() => setSeqLoading(false));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const r = await fetch(`/api/sri/next-seq?restaurantId=${order.restaurant_id}`, {
+        headers: authHeaders
+      });
+      const d = await r.json();
+      if (d.nextNumber) {
+        setNextSeq(d.nextNumber);
+        setSeqEstab(d.estab || '001');
+        setSeqPtoEmi(d.ptoEmi || '001');
+        setSeqOverride(String(d.nextNumber));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSeqLoading(false);
+    }
   };
 
   const handleIssueInvoice = async (e: React.FormEvent) => {
@@ -332,6 +365,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
     setSriError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+
       let finalOrderId = sriModalOrder.id;
 
       if (isSplitting) {
@@ -342,7 +379,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         if (itemsToSplit.length > 0) {
           const splitRes = await fetch('/api/orders/split', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...authHeaders
+            },
             body: JSON.stringify({
               orderId: sriModalOrder.id,
               itemsToSplit,
@@ -364,7 +404,10 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
 
       const res = await fetch('/api/sri/invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           orderId: finalOrderId,
           formaPago,
