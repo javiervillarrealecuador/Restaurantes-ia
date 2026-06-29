@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { buildRideFactura } from '@/lib/sri/ride';
 import DeunaPaymentModal from './DeunaPaymentModal';
+import KushkiPaymentModal from './KushkiPaymentModal';
 
 
 const getMapDestination = (address: string) => {
@@ -114,6 +115,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [simplePaymentSubmitting, setSimplePaymentSubmitting] = useState(false);
   const [showDeunaModal, setShowDeunaModal] = useState(false);
   const [deunaFinalOrderId, setDeunaFinalOrderId] = useState<string | null>(null);
+  const [showKushkiModal, setShowKushkiModal] = useState(false);
+  const [kushkiFinalOrderId, setKushkiFinalOrderId] = useState<string | null>(null);
 
   const handleOpenPaymentModal = (e: React.MouseEvent, order: Order, splitting = false) => {
     e.stopPropagation();
@@ -154,7 +157,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         }
 
         const splitData = await splitRes.json();
-        finalOrderId = splitData.newOrder.id;
+        finalOrderId = splitData.newOrderId;
       }
 
       if (simplePaymentMethod === 'deuna') {
@@ -162,6 +165,15 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         setDeunaFinalOrderId(finalOrderId);
         setShowDeunaModal(true);
         // Cerramos el modal de pago simple para no encimar pantallas
+        setPaymentModalOrder(null);
+        return;
+      }
+
+      if (simplePaymentMethod === 'card') {
+        // Si es Tarjeta, guardamos el final ID y abrimos el modal interactivo de Kushki
+        setKushkiFinalOrderId(finalOrderId);
+        setShowKushkiModal(true);
+        // Cerramos el modal de pago simple
         setPaymentModalOrder(null);
         return;
       }
@@ -174,7 +186,9 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
           is_paid: true,
           payment_method: simplePaymentMethod,
           sri_requiere_factura: false,
-          sri_estado: 'NO_REQUIERE'
+          sri_estado: 'NO_REQUIERE',
+          payment_reference: paymentReferences[paymentModalOrder.id] || null,
+          payment_receipt_url: tempReceiptUrls[paymentModalOrder.id] || null
         })
       });
 
@@ -229,6 +243,42 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       }
     } catch (err: any) {
       alert(err.message || 'Ocurrió un error inesperado al procesar Deuna');
+    }
+  };
+
+  const handleConfirmKushkiPayment = async (ticketNumber: string) => {
+    if (!kushkiFinalOrderId) return;
+    try {
+      const updateRes = await fetch(`/api/orders/${kushkiFinalOrderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_paid: true,
+          payment_method: 'card',
+          sri_requiere_factura: false,
+          sri_estado: 'NO_REQUIERE',
+          payment_reference: ticketNumber
+        })
+      });
+
+      if (!updateRes.ok) {
+        throw new Error('Error al registrar el pago en nuestro sistema');
+      }
+
+      toast.success('Pago con tarjeta registrado correctamente.');
+      if (onRefresh) onRefresh();
+      setShowKushkiModal(false);
+      setKushkiFinalOrderId(null);
+
+      if (isSplitting && paymentModalOrder) {
+        setSplitItems(prev => {
+          const next = { ...prev };
+          delete next[paymentModalOrder.id];
+          return next;
+        });
+      }
+    } catch (err: any) {
+      alert(err.message || 'Ocurrió un error inesperado al guardar el pago de Kushki');
     }
   };
 
@@ -1164,9 +1214,33 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                       {/* Items details */}
                       <div className="md:col-span-2 space-y-3">
                         <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-850 pb-2">
-                          <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest">
-                            Detalle del Pedido
-                          </h5>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              className="rounded border-zinc-300 dark:border-zinc-700 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-zinc-800 cursor-pointer h-4 w-4"
+                              checked={(order.order_items || []).length > 0 && order.order_items?.every(item => (splitItems[order.id]?.[item.id] || 0) === item.quantity)}
+                              onChange={(e) => {
+                                const isChecked = e.target.checked;
+                                setSplitItems(prev => {
+                                  const next = { ...prev };
+                                  if (isChecked) {
+                                    const allItems: Record<string, number> = {};
+                                    order.order_items?.forEach(item => {
+                                      allItems[item.id] = item.quantity;
+                                    });
+                                    next[order.id] = allItems;
+                                  } else {
+                                    delete next[order.id];
+                                  }
+                                  return next;
+                                });
+                              }}
+                              title="Seleccionar/Deseleccionar todos"
+                            />
+                            <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest">
+                              Detalle del Pedido
+                            </h5>
+                          </div>
                           
                           <div className="flex gap-2">
                             {Object.keys(splitItems[order.id] || {}).length > 0 ? (
@@ -1854,6 +1928,89 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                   <option value="transfer">Transferencia Bancaria</option>
                 </select>
               </div>
+
+              {simplePaymentMethod === 'transfer' && (
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-1">
+                    <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">N° Referencia (Opcional)</label>
+                    <input
+                      type="text"
+                      value={paymentReferences[paymentModalOrder.id] || ''}
+                      onChange={(e) => setPaymentReferences(prev => ({ ...prev, [paymentModalOrder.id]: e.target.value }))}
+                      placeholder="Ej. 123456789"
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2 rounded-xl text-zinc-100 outline-none text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                      Foto del Comprobante (Evidencia)
+                    </label>
+                    {tempReceiptUrls[paymentModalOrder.id] ? (
+                      <div className="relative w-full h-24 rounded-lg overflow-hidden border border-zinc-800">
+                        <img src={tempReceiptUrls[paymentModalOrder.id]} className="w-full h-full object-cover" />
+                        <button 
+                          type="button"
+                          onClick={() => setTempReceiptUrls(prev => { const copy = {...prev}; delete copy[paymentModalOrder.id]; return copy; })}
+                          className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full hover:bg-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          capture="environment"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file || !paymentModalOrder.restaurant_id) return;
+                            setUploadingReceiptId(paymentModalOrder.id);
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('restaurant_id', paymentModalOrder.restaurant_id);
+                            formData.append('order_id', paymentModalOrder.id);
+                            fetch('/api/upload-receipt', {
+                              method: 'POST',
+                              body: formData,
+                            })
+                              .then(res => res.json())
+                              .then(data => {
+                                if (data.error) throw new Error(data.error);
+                                setTempReceiptUrls(prev => ({ ...prev, [paymentModalOrder.id]: data.url }));
+                                toast.success('Evidencia de comprobante subida con éxito.');
+                              })
+                              .catch(err => {
+                                console.error(err);
+                                toast.error('Error al subir la imagen del comprobante.');
+                              })
+                              .finally(() => {
+                                setUploadingReceiptId(null);
+                              });
+                          }}
+                          disabled={uploadingReceiptId === paymentModalOrder.id}
+                          className="hidden"
+                          id={`simple-receipt-upload-${paymentModalOrder.id}`}
+                        />
+                        <label 
+                          htmlFor={`simple-receipt-upload-${paymentModalOrder.id}`}
+                          className={`flex items-center justify-center gap-2 w-full p-3 rounded-xl border border-dashed text-xs font-medium cursor-pointer transition-colors ${
+                            uploadingReceiptId === paymentModalOrder.id 
+                              ? 'bg-zinc-800/50 border-zinc-700 text-zinc-500' 
+                              : 'border-zinc-700 text-blue-400 hover:bg-blue-950/20 hover:border-blue-500'
+                          }`}
+                        >
+                          {uploadingReceiptId === paymentModalOrder.id ? (
+                            <><Loader2 className="h-4 w-4 animate-spin" /> Subiendo...</>
+                          ) : (
+                            <>Tomar foto o subir archivo</>
+                          )}
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-4">
                 <button
                   type="button"
@@ -1891,6 +2048,23 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
             onCancel={() => {
               setShowDeunaModal(false);
               setDeunaFinalOrderId(null);
+            }}
+          />
+        );
+      })()}
+
+      {/* Kushki Payment Modal */}
+      {showKushkiModal && kushkiFinalOrderId && (() => {
+        const orderToPay = orders.find(o => o.id === kushkiFinalOrderId);
+        const totalAmount = orderToPay ? Number(orderToPay.total_price) : 0;
+        return (
+          <KushkiPaymentModal
+            total={totalAmount}
+            orderId={kushkiFinalOrderId}
+            onSuccess={handleConfirmKushkiPayment}
+            onCancel={() => {
+              setShowKushkiModal(false);
+              setKushkiFinalOrderId(null);
             }}
           />
         );
