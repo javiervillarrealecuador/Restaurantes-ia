@@ -107,6 +107,60 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [splitItems, setSplitItems] = useState<Record<string, Record<string, number>>>({});
   const [isSplitting, setIsSplitting] = useState(false);
 
+  // Diner assignments: orderId -> orderItemId -> dinerName -> quantity
+  const [dinerAssignments, setDinerAssignments] = useState<Record<string, Record<string, Record<string, number>>>>({});
+
+  const handleUpdateDinerQty = (orderId: string, orderItemId: string, dinerName: string, quantity: number) => {
+    setDinerAssignments(prev => {
+      const orderData = { ...(prev[orderId] || {}) };
+      const itemData = { ...(orderData[orderItemId] || {}) };
+      
+      if (quantity <= 0) {
+        delete itemData[dinerName];
+      } else {
+        itemData[dinerName] = quantity;
+      }
+      
+      orderData[orderItemId] = itemData;
+      return { ...prev, [orderId]: orderData };
+    });
+  };
+
+  const getAssignedQty = (orderId: string, orderItemId: string) => {
+    const itemData = dinerAssignments[orderId]?.[orderItemId] || {};
+    return Object.values(itemData).reduce((sum, qty) => sum + qty, 0);
+  };
+
+  const getGroupedTotals = (order: Order) => {
+    const totals: Record<string, number> = {};
+    const orderData = dinerAssignments[order.id] || {};
+    order.order_items?.forEach(item => {
+      const itemAssignments = orderData[item.id] || {};
+      const unitPrice = Number(item.unit_price);
+      Object.entries(itemAssignments).forEach(([dinerName, qty]) => {
+        if (!totals[dinerName]) totals[dinerName] = 0;
+        totals[dinerName] += qty * unitPrice;
+      });
+    });
+    return totals;
+  };
+
+  const handleFacturarDiner = (e: React.MouseEvent, order: Order, dinerName: string) => {
+    e.stopPropagation();
+    const orderData = dinerAssignments[order.id] || {};
+    const newSplitItems: Record<string, number> = {};
+    
+    order.order_items?.forEach(item => {
+      const qty = orderData[item.id]?.[dinerName];
+      if (qty && qty > 0) {
+        newSplitItems[item.id] = qty;
+      }
+    });
+    
+    setSplitItems(prev => ({ ...prev, [order.id]: newSplitItems }));
+    handleOpenSriModal(e, order, true);
+  };
+
   const handleSplitSelection = (orderId: string, orderItemId: string, quantity: number) => {
     setSplitItems(prev => {
       const orderSplits = { ...prev[orderId] };
@@ -579,49 +633,104 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
         );
       case 'confirmed':
         return (
-          <button 
-            onClick={() => handleStatusChange(order.id, 'preparing')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-all shadow-md"
-          >
-            <Loader2 className="h-3 w-3 animate-spin" /> Preparar
-          </button>
+          <div className="flex gap-1.5">
+            <button 
+              onClick={() => handleStatusChange(order.id, 'preparing')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-all shadow-md"
+            >
+              <Loader2 className="h-3 w-3 animate-spin" /> Preparar
+            </button>
+            {(role === 'admin' || role === 'admin_general') && (
+              <button 
+                onClick={() => handleStatusChange(order.id, 'cancelled')}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
+                title="Anular Pedido"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         );
       case 'preparing':
         return (
-          <button 
-            onClick={() => handleStatusChange(order.id, 'ready')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-md"
-          >
-            <Check className="h-3.5 w-3.5" /> Listo
-          </button>
+          <div className="flex gap-1.5">
+            <button 
+              onClick={() => handleStatusChange(order.id, 'ready')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-md"
+            >
+              <Check className="h-3.5 w-3.5" /> Listo
+            </button>
+            {(role === 'admin' || role === 'admin_general') && (
+              <button 
+                onClick={() => handleStatusChange(order.id, 'cancelled')}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
+                title="Anular Pedido"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         );
       case 'ready':
         if (order.type === 'delivery') {
           return (
-            <button 
-              onClick={() => handleStatusChange(order.id, 'delivering')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all shadow-md shadow-cyan-950/20"
-            >
-              <Check className="h-3.5 w-3.5" /> Despachar
-            </button>
+            <div className="flex gap-1.5">
+              <button 
+                onClick={() => handleStatusChange(order.id, 'delivering')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all shadow-md shadow-cyan-950/20"
+              >
+                <Check className="h-3.5 w-3.5" /> Despachar
+              </button>
+              {(role === 'admin' || role === 'admin_general') && (
+                <button 
+                  onClick={() => handleStatusChange(order.id, 'cancelled')}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
+                  title="Anular Pedido"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           );
         }
         return (
-          <button 
-            onClick={() => handleStatusChange(order.id, 'delivered')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all shadow-md"
-          >
-            <Check className="h-3.5 w-3.5" /> Entregar
-          </button>
+          <div className="flex gap-1.5">
+            <button 
+              onClick={() => handleStatusChange(order.id, 'delivered')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all shadow-md"
+            >
+              <Check className="h-3.5 w-3.5" /> Entregar
+            </button>
+            {(role === 'admin' || role === 'admin_general') && (
+              <button 
+                onClick={() => handleStatusChange(order.id, 'cancelled')}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
+                title="Anular Pedido"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         );
       case 'delivering':
         return (
-          <button 
-            onClick={() => handleStatusChange(order.id, 'delivered')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all shadow-md"
-          >
-            <Check className="h-3.5 w-3.5" /> Entregar
-          </button>
+          <div className="flex gap-1.5">
+            <button 
+              onClick={() => handleStatusChange(order.id, 'delivered')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-all shadow-md"
+            >
+              <Check className="h-3.5 w-3.5" /> Entregar
+            </button>
+            {(role === 'admin' || role === 'admin_general') && (
+              <button 
+                onClick={() => handleStatusChange(order.id, 'cancelled')}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
+                title="Anular Pedido"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         );
       default:
         return null;
@@ -987,42 +1096,47 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                           <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest">
                             Detalle del Pedido
                           </h5>
-                          {Object.keys(splitItems[order.id] || {}).length > 0 && (
-                            <button
-                              onClick={(e) => handleOpenSriModal(e, order, true)}
-                              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-all animate-in zoom-in duration-200"
-                            >
-                              <FileText className="h-3 w-3" />
-                              Facturar Seleccionados
-                            </button>
-                          )}
                         </div>
                         <div className="divide-y divide-zinc-200 dark:divide-zinc-850/60">
                           {order.order_items?.map((item) => {
-                            const splitQty = splitItems[order.id]?.[item.id] || 0;
+                            const unassignedQty = item.quantity - getAssignedQty(order.id, item.id);
                             return (
                             <div key={item.id} className="py-2.5 flex items-start text-sm">
-                              <div className="mr-3 mt-0.5">
-                                <input 
-                                  type="checkbox" 
-                                  className="rounded border-zinc-300 dark:border-zinc-700 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-zinc-800 cursor-pointer h-4 w-4"
-                                  checked={splitQty > 0}
-                                  onChange={(e) => {
-                                    handleSplitSelection(order.id, item.id, e.target.checked ? 1 : 0);
-                                  }}
-                                />
-                              </div>
                               <div className="flex-1">
                                 <div className="font-medium text-zinc-800 dark:text-zinc-100 flex items-center flex-wrap gap-1.5">
                                   <span>{item.quantity}x {item.menu_items?.name || 'Plato del Menú'}</span>
                                   <span className="text-zinc-500 dark:text-zinc-550 font-normal">
                                     (${Number(item.unit_price).toFixed(2)} c/u)
                                   </span>
-                                  {splitQty > 0 && item.quantity > 1 && (
-                                    <div className="flex items-center ml-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-md px-1 py-0.5 text-xs border border-zinc-200 dark:border-zinc-700">
-                                      <button onClick={() => handleSplitSelection(order.id, item.id, Math.max(1, splitQty - 1))} className="px-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">-</button>
-                                      <span className="px-1 font-semibold text-zinc-700 dark:text-zinc-300">{splitQty}</span>
-                                      <button onClick={() => handleSplitSelection(order.id, item.id, Math.min(item.quantity, splitQty + 1))} className="px-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">+</button>
+                                </div>
+                                <div className="mt-1.5 space-y-1.5">
+                                  {Object.entries(dinerAssignments[order.id]?.[item.id] || {}).map(([dinerName, qty]) => (
+                                    <div key={dinerName} className="flex items-center gap-2 text-xs">
+                                      <span className="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded-full font-medium border border-indigo-200 dark:border-indigo-900/40">
+                                        {dinerName}
+                                      </span>
+                                      <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 px-1">
+                                        <button onClick={(e) => { e.stopPropagation(); handleUpdateDinerQty(order.id, item.id, dinerName, qty - 1); }} className="px-1 hover:text-indigo-600">-</button>
+                                        <span className="font-semibold">{qty}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); handleUpdateDinerQty(order.id, item.id, dinerName, qty + 1); }} disabled={unassignedQty === 0} className={`px-1 ${unassignedQty === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:text-indigo-600'}`}>+</button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {unassignedQty > 0 && (
+                                    <div className="flex items-center gap-2">
+                                      <input 
+                                        type="text" 
+                                        placeholder="Asignar a persona..." 
+                                        className="text-xs border border-zinc-300 dark:border-zinc-700 rounded-md px-2 py-1 w-36 bg-white dark:bg-zinc-900"
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                            e.preventDefault();
+                                            handleUpdateDinerQty(order.id, item.id, e.currentTarget.value.trim(), 1);
+                                            e.currentTarget.value = '';
+                                          }
+                                        }}
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -1049,15 +1163,39 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                 <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">
                                   ${(item.quantity * Number(item.unit_price)).toFixed(2)}
                                 </span>
-                                {splitQty > 0 && (
-                                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium block mt-0.5">
-                                    Separado: ${(splitQty * Number(item.unit_price)).toFixed(2)}
-                                  </span>
-                                )}
                               </div>
                             </div>
                           );})}
                         </div>
+
+                        {/* Diner Individual Accounts */}
+                        {(() => {
+                          const groupedTotals = getGroupedTotals(order);
+                          if (Object.keys(groupedTotals).length === 0) return null;
+                          return (
+                            <div className="border-t border-zinc-200 dark:border-zinc-850 pt-3">
+                              <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest mb-3">
+                                Cuentas Individuales
+                              </h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {Object.entries(groupedTotals).map(([dinerName, total]) => (
+                                  <div key={dinerName} className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30 flex flex-col justify-between">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">{dinerName}</span>
+                                      <span className="font-bold text-indigo-700 dark:text-indigo-400">${total.toFixed(2)}</span>
+                                    </div>
+                                    <button 
+                                      onClick={(e) => handleFacturarDiner(e, order, dinerName)}
+                                      className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-all shadow-sm"
+                                    >
+                                      <FileText className="h-3 w-3" /> Facturar a {dinerName}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* SRI Billing Details Section */}
                         {order.sri_requiere_factura && (
