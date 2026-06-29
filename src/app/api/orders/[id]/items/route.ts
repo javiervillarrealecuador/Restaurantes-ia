@@ -23,6 +23,14 @@ async function verifyStaff(req: NextRequest, restaurantId: string): Promise<bool
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return false;
 
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.is_super_admin) return true;
+
   const { data: staff } = await supabaseAdmin
     .from('restaurant_staff')
     .select('role')
