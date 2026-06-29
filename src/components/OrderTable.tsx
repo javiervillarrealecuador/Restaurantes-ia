@@ -203,7 +203,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       });
 
       if (!updateRes.ok) {
-        throw new Error('Error al registrar el pago');
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al registrar el pago');
       }
 
       if (onRefresh) onRefresh();
@@ -244,7 +245,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       });
 
       if (!updateRes.ok) {
-        throw new Error('Error al registrar el pago de Deuna');
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al registrar el pago de Deuna');
       }
 
       if (onRefresh) onRefresh();
@@ -286,7 +288,8 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       });
 
       if (!updateRes.ok) {
-        throw new Error('Error al registrar el pago en nuestro sistema');
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al registrar el pago en nuestro sistema');
       }
 
       toast.success('Pago con tarjeta registrado correctamente.');

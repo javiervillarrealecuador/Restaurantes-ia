@@ -48,9 +48,9 @@ export async function PATCH(
   try {
     const orderId = params.id;
     const body = await req.json();
-    const { status, is_paid, payment_reference, payment_receipt_url, cutlery_delivered } = body;
+    const { status, is_paid, payment_reference, payment_receipt_url, cutlery_delivered, payment_method } = body;
 
-    if (status === undefined && is_paid === undefined && payment_reference === undefined && payment_receipt_url === undefined && cutlery_delivered === undefined) {
+    if (status === undefined && is_paid === undefined && payment_reference === undefined && payment_receipt_url === undefined && cutlery_delivered === undefined && payment_method === undefined) {
       return NextResponse.json({ error: 'At least one field to update is required' }, { status: 400 });
     }
 
@@ -88,6 +88,7 @@ export async function PATCH(
       updated_at: string; 
       status?: string; 
       is_paid?: boolean;
+      payment_method?: string;
       payment_reference?: string | null;
       payment_receipt_url?: string | null;
       cutlery_delivered?: boolean;
@@ -101,6 +102,7 @@ export async function PATCH(
         updatePayload.status = 'pending';
       }
     }
+    if (payment_method !== undefined) updatePayload.payment_method = payment_method;
     
     // Validate uniqueness of payment_reference if it's being updated
     if (payment_reference !== undefined) {
