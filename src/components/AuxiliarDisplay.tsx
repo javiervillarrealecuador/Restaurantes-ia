@@ -157,7 +157,7 @@ export default function AuxiliarDisplay({ orders, onUpdateStatus, onUpdateCutler
         </div>
 
         <div className="px-4 pb-4">
-          {role === 'admin' && (
+          {(role === 'admin' || role === 'admin_general') && (
             <button
               onClick={() => onUpdateStatus(order.id, 'cancelled')}
               className="w-full flex items-center justify-center gap-2 py-3 bg-violet-600 hover:bg-violet-500 active:scale-95 text-white rounded-xl font-bold shadow-sm transition-all text-base cursor-pointer"

@@ -1242,31 +1242,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5 text-xs">
-              <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1">Teléfono (Opcional)</label>
-              <input
-                type="text"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="0999999999"
-                className="w-full bg-zinc-900/60 border border-zinc-850 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs"
-              />
-            </div>
-            <div className="space-y-1.5 text-xs">
-              <label className="font-bold text-zinc-450 uppercase tracking-wider text-[10px] ml-1">Pago</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="w-full bg-zinc-900 border border-zinc-850 focus:border-emerald-500 p-2.5 rounded-xl text-zinc-200 outline-none text-xs cursor-pointer font-medium"
-              >
-                <option value="cash">Efectivo</option>
-                <option value="deuna">🟦 Deuna (QR)</option>
-                <option value="transfer">Transferencia bancaria</option>
-                <option value="card">Tarjeta de Crédito/Débito</option>
-              </select>
-            </div>
-          </div>
+
 
           {/* Cart List */}
           <div className="space-y-3">

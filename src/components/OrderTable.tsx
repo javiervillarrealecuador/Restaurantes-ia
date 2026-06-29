@@ -548,7 +548,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                   Esperando Captura
                 </span>
               )}
-              {role === 'admin' && (
+              {(role === 'admin' || role === 'admin_general') && (
                 <button 
                   onClick={() => handleStatusChange(order.id, 'cancelled')}
                   className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/45 text-rose-455 text-xs font-medium transition-all"
@@ -567,7 +567,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
             >
               <Check className="h-3 w-3" /> Aceptar
             </button>
-            {role === 'admin' && (
+            {(role === 'admin' || role === 'admin_general') && (
               <button 
                 onClick={() => handleStatusChange(order.id, 'cancelled')}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-rose-950/40 text-rose-400 text-xs font-medium transition-all"
