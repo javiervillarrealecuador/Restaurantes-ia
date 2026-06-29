@@ -30,6 +30,7 @@ import { ReceiptPrinter } from './ReceiptPrinter';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { buildRideFactura } from '@/lib/sri/ride';
+import DeunaPaymentModal from './DeunaPaymentModal';
 
 
 const getMapDestination = (address: string) => {
@@ -107,58 +108,128 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   const [splitItems, setSplitItems] = useState<Record<string, Record<string, number>>>({});
   const [isSplitting, setIsSplitting] = useState(false);
 
-  // Diner assignments: orderId -> orderItemId -> dinerName -> quantity
-  const [dinerAssignments, setDinerAssignments] = useState<Record<string, Record<string, Record<string, number>>>>({});
+  // Simple Payment Modal States
+  const [paymentModalOrder, setPaymentModalOrder] = useState<Order | null>(null);
+  const [simplePaymentMethod, setSimplePaymentMethod] = useState<'cash' | 'transfer' | 'card' | 'deuna'>('cash');
+  const [simplePaymentSubmitting, setSimplePaymentSubmitting] = useState(false);
+  const [showDeunaModal, setShowDeunaModal] = useState(false);
+  const [deunaFinalOrderId, setDeunaFinalOrderId] = useState<string | null>(null);
 
-  const handleUpdateDinerQty = (orderId: string, orderItemId: string, dinerName: string, quantity: number) => {
-    setDinerAssignments(prev => {
-      const orderData = { ...(prev[orderId] || {}) };
-      const itemData = { ...(orderData[orderItemId] || {}) };
-      
-      if (quantity <= 0) {
-        delete itemData[dinerName];
-      } else {
-        itemData[dinerName] = quantity;
-      }
-      
-      orderData[orderItemId] = itemData;
-      return { ...prev, [orderId]: orderData };
-    });
-  };
-
-  const getAssignedQty = (orderId: string, orderItemId: string) => {
-    const itemData = dinerAssignments[orderId]?.[orderItemId] || {};
-    return Object.values(itemData).reduce((sum, qty) => sum + qty, 0);
-  };
-
-  const getGroupedTotals = (order: Order) => {
-    const totals: Record<string, number> = {};
-    const orderData = dinerAssignments[order.id] || {};
-    order.order_items?.forEach(item => {
-      const itemAssignments = orderData[item.id] || {};
-      const unitPrice = Number(item.unit_price);
-      Object.entries(itemAssignments).forEach(([dinerName, qty]) => {
-        if (!totals[dinerName]) totals[dinerName] = 0;
-        totals[dinerName] += qty * unitPrice;
-      });
-    });
-    return totals;
-  };
-
-  const handleFacturarDiner = (e: React.MouseEvent, order: Order, dinerName: string) => {
+  const handleOpenPaymentModal = (e: React.MouseEvent, order: Order, splitting = false) => {
     e.stopPropagation();
-    const orderData = dinerAssignments[order.id] || {};
-    const newSplitItems: Record<string, number> = {};
-    
-    order.order_items?.forEach(item => {
-      const qty = orderData[item.id]?.[dinerName];
-      if (qty && qty > 0) {
-        newSplitItems[item.id] = qty;
+    setIsSplitting(splitting);
+    setPaymentModalOrder(order);
+    setSimplePaymentMethod('cash');
+  };
+
+  const handleProcessSimplePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentModalOrder) return;
+
+    setSimplePaymentSubmitting(true);
+    try {
+      let finalOrderId = paymentModalOrder.id;
+      
+      // If splitting, we call the split endpoint first
+      if (isSplitting) {
+        const itemsToSplit = Object.entries(splitItems[paymentModalOrder.id] || {})
+          .map(([itemId, qty]) => ({ orderItemId: itemId, quantity: qty }));
+          
+        if (itemsToSplit.length === 0) {
+          throw new Error('Seleccione al menos un producto para cobrar');
+        }
+
+        const splitRes = await fetch('/api/orders/split', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: paymentModalOrder.id,
+            itemsToSplit
+          })
+        });
+
+        if (!splitRes.ok) {
+          const err = await splitRes.json();
+          throw new Error(err.error || 'Error dividiendo la cuenta');
+        }
+
+        const splitData = await splitRes.json();
+        finalOrderId = splitData.newOrder.id;
       }
-    });
-    
-    setSplitItems(prev => ({ ...prev, [order.id]: newSplitItems }));
-    handleOpenSriModal(e, order, true);
+
+      if (simplePaymentMethod === 'deuna') {
+        // Si es Deuna, guardamos el final ID y abrimos el modal interactivo
+        setDeunaFinalOrderId(finalOrderId);
+        setShowDeunaModal(true);
+        // Cerramos el modal de pago simple para no encimar pantallas
+        setPaymentModalOrder(null);
+        return;
+      }
+      
+      // Now update the payment method and mark as paid on the finalOrderId
+      const updateRes = await fetch(`/api/orders/${finalOrderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_paid: true,
+          payment_method: simplePaymentMethod,
+          sri_requiere_factura: false,
+          sri_estado: 'NO_REQUIERE'
+        })
+      });
+
+      if (!updateRes.ok) {
+        throw new Error('Error al registrar el pago');
+      }
+
+      if (onRefresh) onRefresh();
+      setPaymentModalOrder(null);
+      if (isSplitting) {
+        setSplitItems(prev => {
+          const next = { ...prev };
+          delete next[paymentModalOrder.id];
+          return next;
+        });
+      }
+    } catch (err: any) {
+      alert(err.message || 'Ocurrió un error inesperado');
+    } finally {
+      setSimplePaymentSubmitting(false);
+    }
+  };
+
+  const handleConfirmDeunaPayment = async () => {
+    if (!deunaFinalOrderId) return;
+    try {
+      const updateRes = await fetch(`/api/orders/${deunaFinalOrderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_paid: true,
+          payment_method: 'deuna',
+          sri_requiere_factura: false,
+          sri_estado: 'NO_REQUIERE'
+        })
+      });
+
+      if (!updateRes.ok) {
+        throw new Error('Error al registrar el pago de Deuna');
+      }
+
+      if (onRefresh) onRefresh();
+      setShowDeunaModal(false);
+      setDeunaFinalOrderId(null);
+      
+      if (isSplitting && paymentModalOrder) {
+        setSplitItems(prev => {
+          const next = { ...prev };
+          delete next[paymentModalOrder.id];
+          return next;
+        });
+      }
+    } catch (err: any) {
+      alert(err.message || 'Ocurrió un error inesperado al procesar Deuna');
+    }
   };
 
   const handleSplitSelection = (orderId: string, orderItemId: string, quantity: number) => {
@@ -1096,47 +1167,75 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                           <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest">
                             Detalle del Pedido
                           </h5>
+                          
+                          <div className="flex gap-2">
+                            {Object.keys(splitItems[order.id] || {}).length > 0 ? (
+                              <>
+                                <button
+                                  onClick={(e) => handleOpenSriModal(e, order, true)}
+                                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-all animate-in zoom-in duration-200"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Cobrar separadamente y facturar
+                                </button>
+                                <button
+                                  onClick={(e) => handleOpenPaymentModal(e, order, true)}
+                                  className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-all animate-in zoom-in duration-200"
+                                >
+                                  <Banknote className="h-3 w-3" />
+                                  Únicamente cobrar (Sin Factura)
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                {!order.sri_requiere_factura && !order.is_paid && (
+                                  <>
+                                    <button
+                                      onClick={(e) => handleOpenSriModal(e, order, false)}
+                                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-all duration-200"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                      Facturar todo
+                                    </button>
+                                    <button
+                                      onClick={(e) => handleOpenPaymentModal(e, order, false)}
+                                      className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-all duration-200"
+                                    >
+                                      <Banknote className="h-3 w-3" />
+                                      Cobrar todo (Sin Factura)
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div className="divide-y divide-zinc-200 dark:divide-zinc-850/60">
                           {order.order_items?.map((item) => {
-                            const unassignedQty = item.quantity - getAssignedQty(order.id, item.id);
+                            const splitQty = splitItems[order.id]?.[item.id] || 0;
                             return (
                             <div key={item.id} className="py-2.5 flex items-start text-sm">
+                              <div className="mr-3 mt-0.5">
+                                <input 
+                                  type="checkbox" 
+                                  className="rounded border-zinc-300 dark:border-zinc-700 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-zinc-800 cursor-pointer h-4 w-4"
+                                  checked={splitQty > 0}
+                                  onChange={(e) => {
+                                    handleSplitSelection(order.id, item.id, e.target.checked ? 1 : 0);
+                                  }}
+                                />
+                              </div>
                               <div className="flex-1">
                                 <div className="font-medium text-zinc-800 dark:text-zinc-100 flex items-center flex-wrap gap-1.5">
                                   <span>{item.quantity}x {item.menu_items?.name || 'Plato del Menú'}</span>
                                   <span className="text-zinc-500 dark:text-zinc-550 font-normal">
                                     (${Number(item.unit_price).toFixed(2)} c/u)
                                   </span>
-                                </div>
-                                <div className="mt-1.5 space-y-1.5">
-                                  {Object.entries(dinerAssignments[order.id]?.[item.id] || {}).map(([dinerName, qty]) => (
-                                    <div key={dinerName} className="flex items-center gap-2 text-xs">
-                                      <span className="bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded-full font-medium border border-indigo-200 dark:border-indigo-900/40">
-                                        {dinerName}
-                                      </span>
-                                      <div className="flex items-center gap-1 border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 px-1">
-                                        <button onClick={(e) => { e.stopPropagation(); handleUpdateDinerQty(order.id, item.id, dinerName, qty - 1); }} className="px-1 hover:text-indigo-600">-</button>
-                                        <span className="font-semibold">{qty}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); handleUpdateDinerQty(order.id, item.id, dinerName, qty + 1); }} disabled={unassignedQty === 0} className={`px-1 ${unassignedQty === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:text-indigo-600'}`}>+</button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {unassignedQty > 0 && (
-                                    <div className="flex items-center gap-2">
-                                      <input 
-                                        type="text" 
-                                        placeholder="Asignar a persona..." 
-                                        className="text-xs border border-zinc-300 dark:border-zinc-700 rounded-md px-2 py-1 w-36 bg-white dark:bg-zinc-900"
-                                        onClick={(e) => e.stopPropagation()}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                                            e.preventDefault();
-                                            handleUpdateDinerQty(order.id, item.id, e.currentTarget.value.trim(), 1);
-                                            e.currentTarget.value = '';
-                                          }
-                                        }}
-                                      />
+                                  {splitQty > 0 && item.quantity > 1 && (
+                                    <div className="flex items-center ml-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-md px-1 py-0.5 text-xs border border-zinc-200 dark:border-zinc-700">
+                                      <button onClick={() => handleSplitSelection(order.id, item.id, Math.max(1, splitQty - 1))} className="px-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">-</button>
+                                      <span className="px-1 font-semibold text-zinc-700 dark:text-zinc-300">{splitQty}</span>
+                                      <button onClick={() => handleSplitSelection(order.id, item.id, Math.min(item.quantity, splitQty + 1))} className="px-1.5 hover:text-indigo-600 dark:hover:text-indigo-400">+</button>
                                     </div>
                                   )}
                                 </div>
@@ -1163,39 +1262,17 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                 <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">
                                   ${(item.quantity * Number(item.unit_price)).toFixed(2)}
                                 </span>
+                                {splitQty > 0 && (
+                                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium block mt-0.5">
+                                    Separado: ${(splitQty * Number(item.unit_price)).toFixed(2)}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           );})}
                         </div>
 
-                        {/* Diner Individual Accounts */}
-                        {(() => {
-                          const groupedTotals = getGroupedTotals(order);
-                          if (Object.keys(groupedTotals).length === 0) return null;
-                          return (
-                            <div className="border-t border-zinc-200 dark:border-zinc-850 pt-3">
-                              <h5 className="text-xs font-bold text-zinc-555 dark:text-zinc-400 uppercase tracking-widest mb-3">
-                                Cuentas Individuales
-                              </h5>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {Object.entries(groupedTotals).map(([dinerName, total]) => (
-                                  <div key={dinerName} className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30 flex flex-col justify-between">
-                                    <div className="flex justify-between items-center mb-2">
-                                      <span className="font-semibold text-zinc-800 dark:text-zinc-200">{dinerName}</span>
-                                      <span className="font-bold text-indigo-700 dark:text-indigo-400">${total.toFixed(2)}</span>
-                                    </div>
-                                    <button 
-                                      onClick={(e) => handleFacturarDiner(e, order, dinerName)}
-                                      className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-all shadow-sm"
-                                    >
-                                      <FileText className="h-3 w-3" /> Facturar a {dinerName}
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })()}
+
 
                         {/* SRI Billing Details Section */}
                         {order.sri_requiere_factura && (
@@ -1747,6 +1824,77 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
           </div>
         </div>
       )}
+
+      {/* Simple Payment Modal (No SRI) */}
+      {paymentModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setPaymentModalOrder(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+              <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-wider flex items-center gap-2">
+                <Banknote className="h-4.5 w-4.5 text-blue-500" /> Registrar Pago
+              </h3>
+              <button
+                onClick={() => setPaymentModalOrder(null)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-250 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleProcessSimplePayment} className="p-6 space-y-4">
+              <div className="space-y-1 text-xs">
+                <label className="font-bold text-zinc-400 uppercase tracking-wider text-[10px]">Método de Pago</label>
+                <select
+                  value={simplePaymentMethod}
+                  onChange={(e) => setSimplePaymentMethod(e.target.value as 'cash' | 'transfer' | 'card' | 'deuna')}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2.5 rounded-xl text-zinc-100 outline-none text-xs"
+                >
+                  <option value="cash">Efectivo</option>
+                  <option value="deuna">🟦 Deuna (QR)</option>
+                  <option value="card">Tarjeta de Crédito / Débito</option>
+                  <option value="transfer">Transferencia Bancaria</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalOrder(null)}
+                  className="px-4 py-2 border border-zinc-800 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 rounded-xl text-xs font-bold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={simplePaymentSubmitting}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {simplePaymentSubmitting ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Procesando...</>
+                  ) : (
+                    'Cobrar'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Deuna Payment Modal */}
+      {showDeunaModal && deunaFinalOrderId && (() => {
+        const orderToPay = orders.find(o => o.id === deunaFinalOrderId);
+        const totalAmount = orderToPay ? Number(orderToPay.total_price) : 0;
+        const code = orderToPay ? formatOrderCode(orderToPay.order_code) : 'MES-000000';
+        return (
+          <DeunaPaymentModal
+            total={totalAmount}
+            orderCode={code}
+            onConfirm={handleConfirmDeunaPayment}
+            onCancel={() => {
+              setShowDeunaModal(false);
+              setDeunaFinalOrderId(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
