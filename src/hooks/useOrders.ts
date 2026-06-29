@@ -28,6 +28,7 @@ export function useOrders(restaurantId: string | null) {
             menu_item_id,
             quantity,
             unit_price,
+            status,
             notes,
             extras,
             menu_items (
@@ -74,6 +75,7 @@ export function useOrders(restaurantId: string | null) {
             menu_item_id,
             quantity,
             unit_price,
+            status,
             notes,
             extras,
             menu_items (
