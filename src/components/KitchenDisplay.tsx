@@ -187,13 +187,25 @@ export default function KitchenDisplay({ orders, onUpdateStatus, onUpdateItemsSt
               const waitTime = getWaitTimeMinutes(order.created_at);
               const isUpdating = updatingId === order.id;
 
+              let kitchenStatus: 'pending' | 'preparing' | 'ready' = 'pending';
+              if (selectedKitchenId !== 'all' && order.order_items && order.order_items.length > 0) {
+                // Determine status based on this kitchen's items
+                const allReady = order.order_items.every(item => item.status === 'ready');
+                const somePreparing = order.order_items.some(item => item.status === 'preparing');
+                if (allReady) kitchenStatus = 'ready';
+                else if (somePreparing) kitchenStatus = 'preparing';
+                else kitchenStatus = 'pending';
+              } else {
+                kitchenStatus = order.status === 'preparing' ? 'preparing' : 'pending';
+              }
+
               return (
                 <motion.div
                   key={order.id}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={`flex flex-col rounded-xl border-2 p-4 shadow-sm transition-colors ${getCardColor(waitTime, order.status)}`}
+                  className={`flex flex-col rounded-xl border-2 p-4 shadow-sm transition-colors ${getCardColor(waitTime, kitchenStatus)}`}
                 >
                   {/* Header */}
                   <div className="flex justify-between items-start mb-4">
@@ -268,19 +280,6 @@ export default function KitchenDisplay({ orders, onUpdateStatus, onUpdateItemsSt
 
                   {/* Action Button */}
                   {(() => {
-                    let kitchenStatus: 'pending' | 'preparing' | 'ready' = 'pending';
-                    if (selectedKitchenId !== 'all' && order.order_items && order.order_items.length > 0) {
-                      // Determine status based on this kitchen's items
-                      const allReady = order.order_items.every(item => item.status === 'ready');
-                      const somePreparing = order.order_items.some(item => item.status === 'preparing');
-                      
-                      if (allReady) kitchenStatus = 'ready';
-                      else if (somePreparing || order.status === 'preparing') kitchenStatus = 'preparing';
-                      else kitchenStatus = 'pending';
-                    } else {
-                      kitchenStatus = order.status === 'preparing' ? 'preparing' : 'pending';
-                    }
-
                     return (
                       <button
                         disabled={isUpdating}
