@@ -186,21 +186,27 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       }
       
       // Now update the payment method and mark as paid on the finalOrderId
-      const updateRes = await fetch(`/api/orders/${finalOrderId}`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...authHeaders
-        },
-        body: JSON.stringify({
-          is_paid: true,
-          payment_method: simplePaymentMethod,
-          sri_requiere_factura: false,
-          sri_estado: 'NO_REQUIERE',
-          payment_reference: paymentReferences[paymentModalOrder.id] || null,
-          payment_receipt_url: tempReceiptUrls[paymentModalOrder.id] || null
-        })
-      });
+      const paymentAbortCtrl = new AbortController();
+      const paymentTimeout = setTimeout(() => paymentAbortCtrl.abort(), 30000);
+      let updateRes: Response;
+      try {
+        updateRes = await fetch(`/api/orders/${finalOrderId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders
+          },
+          body: JSON.stringify({
+            is_paid: true,
+            payment_method: simplePaymentMethod,
+            payment_reference: paymentReferences[paymentModalOrder.id] || null,
+            payment_receipt_url: tempReceiptUrls[paymentModalOrder.id] || null
+          }),
+          signal: paymentAbortCtrl.signal,
+        });
+      } finally {
+        clearTimeout(paymentTimeout);
+      }
 
       if (!updateRes.ok) {
         const errData = await updateRes.json().catch(() => ({}));
@@ -598,7 +604,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
   };
 
   const handlePaymentToggle = async (orderId: string, currentPaid: boolean, reference?: string | null, receiptUrl?: string | null) => {
-    if (role === 'cocinero' || role === 'repartidor') {
+    if (role === 'cocinero' || role === 'repartidor' || role === 'repartidor_domicilio') {
       console.warn('Unauthorized payment status modification.');
       return;
     }
@@ -719,7 +725,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
       return null;
     }
 
-    if (role === 'repartidor') {
+    if (role === 'repartidor' || role === 'repartidor_domicilio') {
       if (order.status === 'ready' && order.type === 'delivery') {
         return (
           <button 
@@ -1162,7 +1168,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                     <div className="text-right shrink-0">
                       <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">${Number(order.total_price).toFixed(2)}</div>
                       <button
-                        disabled={readOnly || role === 'cocinero' || role === 'repartidor'}
+                        disabled={readOnly || role === 'cocinero' || role === 'repartidor' || role === 'repartidor_domicilio'}
                         onClick={(e) => {
                           e.stopPropagation();
                           handlePaymentToggle(order.id, order.is_paid);
@@ -1171,7 +1177,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                           order.is_paid 
                             ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' 
                             : 'bg-rose-50 dark:bg-rose-955/40 text-rose-600 dark:text-rose-455 border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 dark:hover:bg-rose-900/30'
-                        } ${ (readOnly || role === 'cocinero' || role === 'repartidor') ? 'opacity-50 cursor-not-allowed' : '' }`}
+                        } ${ (readOnly || role === 'cocinero' || role === 'repartidor' || role === 'repartidor_domicilio') ? 'opacity-50 cursor-not-allowed' : '' }`}
                       >
                         {order.is_paid ? 'Pagado' : 'Por Pagar'}
                       </button>
@@ -1215,7 +1221,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                       )}
                       {getActionButton(order)}
                       {/* FACTURAR button: only when invoiceable and not yet authorized */}
-                      {!order.sri_requiere_factura && !readOnly && role !== 'cocinero' && role !== 'repartidor' && (
+                      {!order.sri_requiere_factura && !readOnly && role !== 'cocinero' && role !== 'repartidor' && role !== 'repartidor_domicilio' && (
                         <button
                           onClick={(e) => handleOpenSriModal(e, order)}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-emerald-700 text-zinc-300 hover:text-white border border-zinc-700 hover:border-emerald-600 text-xs font-semibold transition-all shadow-sm"
@@ -1597,7 +1603,7 @@ export default function OrderTable({ orders, onUpdateStatus, onUpdatePayment, lo
                                     )}
 
                                     {/* Verification Form */}
-                                    {role !== 'cocinero' && role !== 'repartidor' && (
+                                    {role !== 'cocinero' && role !== 'repartidor' && role !== 'repartidor_domicilio' && (
                                       <div className="space-y-3 pt-1">
                                         {/* Optional image upload for physical evidence */}
                                         {!order.payment_receipt_url && (

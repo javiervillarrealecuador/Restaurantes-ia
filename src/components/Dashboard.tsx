@@ -202,7 +202,7 @@ export default function Dashboard() {
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [staffFullName, setStaffFullName] = useState('');
-  const [staffRole, setStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero'>('vendedor_cajero');
+  const [staffRole, setStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero' | 'repartidor_domicilio'>('vendedor_cajero');
   const [staffPermissions, setStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
   const [staffBranchIds, setStaffBranchIds] = useState<string[]>([]);
   const [staffKitchenId, setStaffKitchenId] = useState<string>('');
@@ -213,7 +213,7 @@ export default function Dashboard() {
   const [editingStaffMember, setEditingStaffMember] = useState<any | null>(null);
   const [showEditStaffModal, setShowEditStaffModal] = useState(false);
   const [editStaffFullName, setEditStaffFullName] = useState('');
-  const [editStaffRole, setEditStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero'>('vendedor_cajero');
+  const [editStaffRole, setEditStaffRole] = useState<'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero' | 'repartidor_domicilio'>('vendedor_cajero');
   const [editStaffPassword, setEditStaffPassword] = useState('');
   const [editStaffPermissions, setEditStaffPermissions] = useState<StaffPermissions>(getDefaultPermissions('vendedor_cajero'));
   const [editStaffLoading, setEditStaffLoading] = useState(false);
@@ -865,7 +865,7 @@ export default function Dashboard() {
     if (role === 'cocinero') {
       return orders.filter(order => ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status));
     }
-    if (role === 'repartidor') {
+    if (role === 'repartidor' || role === 'repartidor_domicilio') {
       // Delivery orders for the delivery queue
       const deliveryOrders = orders.filter(order => order.type === 'delivery' && ['ready', 'delivering'].includes(order.status));
       // Dine-in orders for the auxiliar (cutlery delivery + table cleaning)
@@ -1667,9 +1667,9 @@ export default function Dashboard() {
               >
                 <ClipboardList className="h-4.5 w-4.5" />
                 <span>
-                  {role === 'cocinero' ? 'Cola de Cocina' : role === 'repartidor' ? 'Cola de Repartos' : 'Gestión Pedidos'}
+                  {role === 'cocinero' ? 'Cola de Cocina' : (role === 'repartidor' || role === 'repartidor_domicilio') ? 'Cola de Repartos' : 'Gestión Pedidos'}
                 </span>
-                {stats.activeCount > 0 && role !== 'repartidor' && (
+                {stats.activeCount > 0 && role !== 'repartidor' && role !== 'repartidor_domicilio' && (
                   <span className="ml-auto bg-emerald-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded-md">
                     {stats.activeCount}
                   </span>
@@ -1807,6 +1807,7 @@ export default function Dashboard() {
                   {role === 'vendedor_cajero' && 'Vendedor / Cajero'}
                   {role === 'cocinero' && 'Cocinero'}
                   {role === 'repartidor' && 'Auxiliar de Servicio de Mesa'}
+                  {role === 'repartidor_domicilio' && 'Repartidor a Domicilio'}
                   {role === 'camarero' && 'Camarero / Mesero'}
                 </p>
               </div>
@@ -1944,7 +1945,7 @@ export default function Dashboard() {
               onUpdateItemsStatus={updateOrderItemsStatus}
               restaurantId={activeRestaurantId || ''}
             />
-          ) : activeTab === 'orders' && role === 'repartidor' ? (
+          ) : activeTab === 'orders' && (role === 'repartidor' || role === 'repartidor_domicilio') ? (
             <AuxiliarDisplay
               orders={filteredOrdersByRole}
               onUpdateStatus={handleUpdateOrderStatus}
@@ -2145,6 +2146,7 @@ export default function Dashboard() {
                           {member.role === 'vendedor_cajero' && 'Vendedor / Cajero'}
                           {member.role === 'cocinero' && 'Cocinero'}
                           {member.role === 'repartidor' && 'Auxiliar de Servicio de Mesa'}
+                          {member.role === 'repartidor_domicilio' && 'Repartidor a Domicilio'}
                           {member.role === 'camarero' && 'Camarero / Mesero'}
                         </span>
                       </div>
@@ -2268,6 +2270,7 @@ export default function Dashboard() {
                             <option value="vendedor_cajero">Vendedor / Cajero</option>
                             <option value="cocinero">Cocinero</option>
                             <option value="repartidor">Auxiliar de Servicio de Mesa</option>
+                            <option value="repartidor_domicilio">Repartidor a Domicilio</option>
                             <option value="camarero">Camarero / Mesero</option>
                           </select>
                         </div>
@@ -2428,6 +2431,7 @@ export default function Dashboard() {
                           <option value="vendedor_cajero">Vendedor / Cajero</option>
                           <option value="cocinero">Cocinero</option>
                           <option value="repartidor">Auxiliar de Servicio de Mesa</option>
+                          <option value="repartidor_domicilio">Repartidor a Domicilio</option>
                           <option value="camarero">Camarero / Mesero</option>
                         </select>
                       </div>
@@ -2883,7 +2887,7 @@ export default function Dashboard() {
                                 {staffList.map((staff) => {
                                   const isChecked = branchStaffIds.includes(staff.id);
                                   const name = staff.profiles ? `${staff.profiles.first_name || ''} ${staff.profiles.last_name || ''}`.trim() : staff.email;
-                                  const roleLabel = staff.role === 'admin_general' ? 'Admin' : staff.role === 'vendedor_cajero' ? 'Cajero' : staff.role === 'cocinero' ? 'Cocinero' : staff.role === 'repartidor' ? 'Auxiliar de Servicio de Mesa' : 'Camarero';
+                                  const roleLabel = staff.role === 'admin_general' ? 'Admin' : staff.role === 'vendedor_cajero' ? 'Cajero' : staff.role === 'cocinero' ? 'Cocinero' : staff.role === 'repartidor' ? 'Auxiliar de Servicio de Mesa' : staff.role === 'repartidor_domicilio' ? 'Repartidor a Domicilio' : 'Camarero';
                                   return (
                                     <label key={staff.id} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 cursor-pointer p-1 rounded hover:bg-zinc-850 transition-colors">
                                       <input

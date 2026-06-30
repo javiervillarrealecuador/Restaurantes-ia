@@ -46,6 +46,12 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    // 0. Quick auth header check before any DB queries — fail fast if no credentials
+    const authHeaderCheck = req.headers.get('Authorization');
+    if (!authHeaderCheck) {
+      return NextResponse.json({ error: 'Unauthorized. Se requiere autenticación.' }, { status: 401 });
+    }
+
     const orderId = params.id;
     const body = await req.json();
     const { status, is_paid, payment_reference, payment_receipt_url, cutlery_delivered, payment_method } = body;

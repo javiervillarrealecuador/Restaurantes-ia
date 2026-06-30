@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Create custom types/enums
 CREATE TYPE order_status AS ENUM ('pending', 'pending_payment', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled');
 CREATE TYPE order_type AS ENUM ('pickup', 'delivery', 'dine_in');
-CREATE TYPE staff_role AS ENUM ('admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero', 'admin', 'manager', 'staff');
+CREATE TYPE staff_role AS ENUM ('admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero', 'admin', 'manager', 'staff', 'repartidor_domicilio');
 
 -- 1. RESTAURANTS
 CREATE TABLE restaurants (

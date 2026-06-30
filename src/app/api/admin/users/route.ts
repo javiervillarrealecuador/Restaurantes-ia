@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate role is a known enum value
-    const VALID_ROLES = ['admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero'];
+    const VALID_ROLES = ['admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero', 'repartidor_domicilio'];
     if (!VALID_ROLES.includes(role)) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` }, { status: 400 });
     }

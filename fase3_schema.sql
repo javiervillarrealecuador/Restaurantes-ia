@@ -8,6 +8,7 @@ ALTER TYPE staff_role ADD VALUE IF NOT EXISTS 'admin_general';
 ALTER TYPE staff_role ADD VALUE IF NOT EXISTS 'vendedor_cajero';
 ALTER TYPE staff_role ADD VALUE IF NOT EXISTS 'cocinero';
 ALTER TYPE staff_role ADD VALUE IF NOT EXISTS 'repartidor';
+ALTER TYPE staff_role ADD VALUE IF NOT EXISTS 'repartidor_domicilio';
 ALTER TYPE staff_role ADD VALUE IF NOT EXISTS 'camarero';
 
 -- =========================================================================
@@ -80,7 +81,7 @@ ALTER TABLE restaurant_staff ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES 
 
 -- Actualizar constraint de roles en el personal para permitir 'camarero'
 ALTER TABLE restaurant_staff DROP CONSTRAINT IF EXISTS chk_restaurant_staff_role;
-ALTER TABLE restaurant_staff ADD CONSTRAINT chk_restaurant_staff_role CHECK (role::text IN ('admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero'));
+ALTER TABLE restaurant_staff ADD CONSTRAINT chk_restaurant_staff_role CHECK (role::text IN ('admin_general', 'vendedor_cajero', 'cocinero', 'repartidor', 'camarero', 'repartidor_domicilio'));
 
 -- Agregar control del bot en clientes (Handoff a humano)
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS bot_active BOOLEAN DEFAULT TRUE NOT NULL;

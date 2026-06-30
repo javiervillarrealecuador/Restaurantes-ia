@@ -12,7 +12,7 @@ interface Profile {
   is_super_admin?: boolean;
 }
 
-export type UserRole = 'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero';
+export type UserRole = 'admin_general' | 'vendedor_cajero' | 'cocinero' | 'repartidor' | 'camarero' | 'repartidor_domicilio';
 
 export interface StaffPermissions {
   orders: 'write' | 'read' | 'none';
@@ -62,6 +62,17 @@ export const getDefaultPermissions = (role: UserRole | null): StaffPermissions =
       kitchens: 'read'
     },
     repartidor: {
+      orders: 'write',
+      customers: 'none',
+      menu: 'none',
+      simulator: 'none',
+      logs: 'none',
+      reports: 'none',
+      staff: 'none',
+      settings: 'read',
+      kitchens: 'none'
+    },
+    repartidor_domicilio: {
       orders: 'write',
       customers: 'none',
       menu: 'none',
