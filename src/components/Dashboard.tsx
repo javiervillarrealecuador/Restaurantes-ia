@@ -865,12 +865,16 @@ export default function Dashboard() {
     if (role === 'cocinero') {
       return orders.filter(order => ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status));
     }
-    if (role === 'repartidor' || role === 'repartidor_domicilio') {
+    if (role === 'repartidor') {
       // Delivery orders for the delivery queue
       const deliveryOrders = orders.filter(order => order.type === 'delivery' && ['ready', 'delivering'].includes(order.status));
       // Dine-in orders for the auxiliar (cutlery delivery + table cleaning)
       const dineInOrders = orders.filter(order => order.type === 'dine_in' && order.status !== 'cancelled');
       return [...dineInOrders, ...deliveryOrders];
+    }
+    if (role === 'repartidor_domicilio') {
+      // Solo pedidos de delivery
+      return orders.filter(order => order.type === 'delivery' && ['ready', 'delivering'].includes(order.status));
     }
     return orders;
   }, [orders, role]);
@@ -1945,12 +1949,17 @@ export default function Dashboard() {
               onUpdateItemsStatus={updateOrderItemsStatus}
               restaurantId={activeRestaurantId || ''}
             />
-          ) : activeTab === 'orders' && (role === 'repartidor' || role === 'repartidor_domicilio') ? (
+          ) : activeTab === 'orders' && role === 'repartidor' ? (
             <AuxiliarDisplay
               orders={filteredOrdersByRole}
               onUpdateStatus={handleUpdateOrderStatus}
               onUpdateCutleryStatus={updateOrderCutleryStatus}
               role={role}
+            />
+          ) : activeTab === 'orders' && role === 'repartidor_domicilio' ? (
+            <DeliveryDisplay
+              orders={filteredOrdersByRole}
+              onUpdateStatus={handleUpdateOrderStatus}
             />
           ) : activeTab === 'orders' ? (
             <OrderTable 
