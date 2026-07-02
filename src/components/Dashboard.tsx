@@ -1345,7 +1345,8 @@ export default function Dashboard() {
           .eq('branch_id', editingBranch.id);
         if (tablesFetchErr) throw tablesFetchErr;
 
-        const currentCount = currentTables ? currentTables.length : 0;
+        const dineInTables = (currentTables || []).filter(t => t.table_number !== 'PARA LLEVAR' && !t.table_number.startsWith('PARA LLEVAR '));
+        const currentCount = dineInTables.length;
         const newTablesCount = branchTablesCount - currentCount;
         if (newTablesCount > 0) {
           const newTables = Array.from({ length: newTablesCount }, (_, i) => {
@@ -1362,7 +1363,7 @@ export default function Dashboard() {
           const { error: insertErr } = await supabase.from('restaurant_tables').insert(newTables);
           if (insertErr) throw insertErr;
         } else if (branchTablesCount < currentCount) {
-          const tablesToDelete = (currentTables || []).filter(t => {
+          const tablesToDelete = dineInTables.filter(t => {
             const num = parseInt(t.table_number, 10);
             return !isNaN(num) && num > branchTablesCount;
           });
@@ -3039,12 +3040,13 @@ export default function Dashboard() {
 
                                 // Fetch count of tables
                                 setBranchTablesCount(0);
-                                const { count, error } = await supabase
+                                const { data: tData, error: tErr } = await supabase
                                   .from('restaurant_tables')
-                                  .select('*', { count: 'exact', head: true })
+                                  .select('table_number')
                                   .eq('branch_id', b.id);
-                                if (!error && count !== null) {
-                                  setBranchTablesCount(count);
+                                if (!tErr && tData) {
+                                  const dineInCount = tData.filter(t => t.table_number !== 'PARA LLEVAR' && !t.table_number.startsWith('PARA LLEVAR ')).length;
+                                  setBranchTablesCount(dineInCount);
                                 }
 
                                 // Initialize assigned staff ids

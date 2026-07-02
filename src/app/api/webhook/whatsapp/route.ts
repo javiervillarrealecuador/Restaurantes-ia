@@ -541,7 +541,7 @@ async function processMessageInBackground(
       .eq('sender_phone', customerPhone)
       .eq('restaurant_id', restaurantId) // Critical: isolate history by restaurant
       .order('created_at', { ascending: false })
-      .limit(6);
+      .limit(15);
       
     let historyContext = 'No hay mensajes previos.';
     let cartContext = 'El carrito está vacío.';
@@ -566,9 +566,16 @@ async function processMessageInBackground(
       });
       
       if (lastCartLog) {
-        const cartOrder = (lastCartLog.ai_parsed_response as AgentResult).order;
-        if (cartOrder) {
-           cartContext = JSON.stringify(cartOrder.items);
+        const cartAgeMs = new Date().getTime() - new Date(lastCartLog.created_at).getTime();
+        const hoursPassed = cartAgeMs / (1000 * 60 * 60);
+        
+        // If the cart is less than 2 hours old, we consider it active
+        // This prevents the bot from pulling up abandoned carts from previous days
+        if (hoursPassed < 2) {
+          const cartOrder = (lastCartLog.ai_parsed_response as AgentResult).order;
+          if (cartOrder) {
+             cartContext = JSON.stringify(cartOrder.items);
+          }
         }
       }
     }

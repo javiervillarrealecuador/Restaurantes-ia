@@ -179,6 +179,35 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
     }
   };
 
+  // Handle Delete Category
+  const handleDeleteCategory = async (id: string, name: string) => {
+    const itemCount = menuItems.filter(i => i.category_id === id).length;
+    if (itemCount > 0) {
+      alert(`No puedes eliminar la categoría "${name}" porque tiene ${itemCount} platos asociados. Cambia de categoría o elimina los platos primero.`);
+      return;
+    }
+    if (!confirm(`¿Estás seguro de que deseas eliminar la categoría "${name}"?`)) return;
+
+    try {
+      const { error: delErr } = await supabase
+        .from('menu_categories')
+        .delete()
+        .eq('id', id)
+        .eq('restaurant_id', restaurantId);
+
+      if (delErr) throw delErr;
+      
+      if (activeCategoryId === id) {
+        setActiveCategoryId('all');
+      }
+      toast.success('Categoría eliminada');
+      await fetchMenuData();
+    } catch (err) {
+      console.error('Error deleting category:', err);
+      alert('No se pudo eliminar la categoría.');
+    }
+  };
+
   // Handle Image Upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -454,17 +483,34 @@ export default function MenuPanel({ restaurantId, readOnly = false }: MenuPanelP
             {categories.map((cat) => {
               const count = menuItems.filter(i => i.category_id === cat.id).length;
               return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategoryId(cat.id)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 transition-all cursor-pointer ${
+                <div 
+                  key={cat.id} 
+                  className={`flex items-center gap-0.5 pl-3 pr-1 py-1 rounded-lg border transition-all shrink-0 ${
                     activeCategoryId === cat.id
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-zinc-50 dark:bg-zinc-900/40 text-zinc-550 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200'
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-zinc-50 dark:bg-zinc-900/40 text-zinc-550 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:text-zinc-800 dark:hover:text-zinc-200'
                   }`}
                 >
-                  {cat.name} ({count})
-                </button>
+                  <button
+                    onClick={() => setActiveCategoryId(cat.id)}
+                    className="text-[11px] font-bold uppercase tracking-wider cursor-pointer py-0.5"
+                  >
+                    {cat.name} ({count})
+                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                      className={`p-1 ml-1 rounded transition-colors ${
+                        activeCategoryId === cat.id 
+                          ? 'hover:bg-emerald-500 text-emerald-200 hover:text-white' 
+                          : 'hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-400 hover:text-rose-500'
+                      }`}
+                      title="Eliminar categoría"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

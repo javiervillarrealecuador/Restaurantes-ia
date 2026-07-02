@@ -78,6 +78,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
   const isAdmin = role === 'admin_general' || (role as any) === 'admin' || isSuperAdmin;
   const [showTableManager, setShowTableManager] = useState(false);
   const [targetTableQty, setTargetTableQty] = useState(12);
+  const [targetTakeawayQty, setTargetTakeawayQty] = useState(1);
   const [payBeforeConsume, setPayBeforeConsume] = useState<boolean>(false);
 
   // Audio synthesizer for ding-dong notification
@@ -127,8 +128,14 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       if (error) throw error;
       
       const sorted = (data || []).sort((a, b) => {
-        if (a.table_number === 'PARA LLEVAR') return -1;
-        if (b.table_number === 'PARA LLEVAR') return 1;
+        const isTakeawayA = a.table_number === 'PARA LLEVAR' || a.table_number.startsWith('PARA LLEVAR ');
+        const isTakeawayB = b.table_number === 'PARA LLEVAR' || b.table_number.startsWith('PARA LLEVAR ');
+
+        if (isTakeawayA && !isTakeawayB) return -1;
+        if (!isTakeawayA && isTakeawayB) return 1;
+        if (isTakeawayA && isTakeawayB) {
+          return a.table_number.localeCompare(b.table_number, undefined, { numeric: true, sensitivity: 'base' });
+        }
         
         const numA = parseInt(a.table_number, 10);
         const numB = parseInt(b.table_number, 10);
@@ -157,7 +164,10 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
 
       setTables(sorted);
       if (sorted && sorted.length > 0) {
-        setTargetTableQty(sorted.filter(t => t.table_number !== 'PARA LLEVAR').length || 12);
+        const dineInQty = sorted.filter(t => t.table_number !== 'PARA LLEVAR' && !t.table_number.startsWith('PARA LLEVAR ')).length;
+        setTargetTableQty(dineInQty || 12);
+        const takeawayQty = sorted.filter(t => t.table_number === 'PARA LLEVAR' || t.table_number.startsWith('PARA LLEVAR ')).length;
+        setTargetTakeawayQty(takeawayQty || 1);
       }
 
       // If the currently selected table has changed status to free, reset the active order selection
@@ -423,6 +433,10 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       toast.error('La cantidad de mesas debe ser al menos 1');
       return;
     }
+    if (targetTakeawayQty < 1) {
+      toast.error('La cantidad de pedidos para llevar debe ser al menos 1');
+      return;
+    }
     setSeeding(true);
     try {
       // Fetch current tables
@@ -436,7 +450,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       const existingNumbers = new Set(currentTables?.map(t => t.table_number) || []);
       const newTables = [];
 
-      // Add tables if target exceeds current
+      // Add dine-in tables if target exceeds current
       for (let i = 1; i <= targetTableQty; i++) {
         const numStr = `${i}`;
         if (!existingNumbers.has(numStr)) {
@@ -451,17 +465,51 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         }
       }
 
-      // Identify tables to delete if target is less than current
-      const tablesToDelete = (currentTables || []).filter(t => {
-        if (t.table_number === 'PARA LLEVAR') return false;
+      // Add takeaway tables if target exceeds current
+      for (let i = 1; i <= targetTakeawayQty; i++) {
+        const name = i === 1 ? 'PARA LLEVAR' : `PARA LLEVAR ${i}`;
+        if (!existingNumbers.has(name)) {
+          newTables.push({
+            restaurant_id: restaurantId,
+            branch_id: selectedBranchId,
+            table_number: name,
+            status: 'free',
+            x_pos: 0,
+            y_pos: 0,
+          });
+        }
+      }
+
+      // Identify dine-in tables to delete
+      const dineInToDelete = (currentTables || []).filter(t => {
+        if (t.table_number === 'PARA LLEVAR' || t.table_number.startsWith('PARA LLEVAR ')) return false;
         const num = parseInt(t.table_number, 10);
         return !isNaN(num) && num > targetTableQty;
       });
 
+      // Identify takeaway tables to delete
+      const takeawayToDelete = (currentTables || []).filter(t => {
+        if (t.table_number === 'PARA LLEVAR') {
+          return targetTakeawayQty < 1;
+        }
+        const match = t.table_number.match(/^PARA LLEVAR (\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > targetTakeawayQty;
+        }
+        return false;
+      });
+
+      const tablesToDelete = [...dineInToDelete, ...takeawayToDelete];
+
       const occupiedTablesToDelete = tablesToDelete.filter(t => t.status !== 'free');
       if (occupiedTablesToDelete.length > 0) {
-        const tableNums = occupiedTablesToDelete.map(t => t.table_number).join(', ');
-        toast.error(`No se pueden eliminar las siguientes mesas porque están ocupadas: Mesa ${tableNums}. Libéralas o finaliza sus pedidos antes de reducir la cantidad.`);
+        const tableNums = occupiedTablesToDelete.map(t => {
+          if (t.table_number === 'PARA LLEVAR') return 'Para Llevar 1';
+          if (t.table_number.startsWith('PARA LLEVAR ')) return `Para Llevar ${t.table_number.replace('PARA LLEVAR ', '')}`;
+          return `Mesa ${t.table_number}`;
+        }).join(', ');
+        toast.error(`No se pueden eliminar las siguientes mesas porque están ocupadas o tienen pedidos activos: ${tableNums}. Libéralas antes de reducir la cantidad.`);
         setSeeding(false);
         return;
       }
@@ -470,7 +518,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
       if (newTables.length > 0) {
         const { error: insertErr } = await supabase.from('restaurant_tables').insert(newTables);
         if (insertErr) throw insertErr;
-        message += `Se crearon ${newTables.length} mesas nuevas. `;
+        message += `Se crearon ${newTables.length} mesas/slots nuevos. `;
       }
 
       if (tablesToDelete.length > 0) {
@@ -480,13 +528,13 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           .delete()
           .in('id', idsToDelete);
         if (deleteErr) throw deleteErr;
-        message += `Se eliminaron ${tablesToDelete.length} mesas sobrantes.`;
+        message += `Se eliminaron ${tablesToDelete.length} mesas/slots sobrantes.`;
       }
 
       if (message) {
         toast.success(message.trim());
       } else {
-        toast.info('La cantidad de mesas ya es la solicitada.');
+        toast.info('La configuración de mesas ya es la solicitada.');
       }
       
       fetchTables();
@@ -509,7 +557,8 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
         .from('restaurant_tables')
         .delete()
         .eq('branch_id', selectedBranchId)
-        .eq('status', 'free');
+        .eq('status', 'free')
+        .neq('table_number', 'PARA LLEVAR');
       if (error) throw error;
       toast.success('Se eliminaron las mesas libres con éxito.');
       fetchTables();
@@ -770,7 +819,7 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
             restaurant_id: restaurantId,
             branch_id: selectedBranchId,
             status: payBeforeConsume ? 'pending_payment' : 'pending',
-            type: 'dine_in',
+            type: (tableNumber === 'PARA LLEVAR' || tableNumber.startsWith('PARA LLEVAR ')) ? 'pickup' : 'dine_in',
             source: 'waiter',
             waiter_name: waiterName,
             customer_name: nameFinal,
@@ -985,6 +1034,17 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
                     className="w-16 bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-1.5 rounded-lg text-zinc-150 outline-none text-xs text-center font-bold"
                   />
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400">Mesas para llevar:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={targetTakeawayQty}
+                    onChange={(e) => setTargetTakeawayQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 bg-zinc-950 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 p-1.5 rounded-lg text-zinc-150 outline-none text-xs text-center font-bold"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={handleAdjustTables}
@@ -1007,33 +1067,85 @@ export default function TakeOrderPanel({ restaurantId, activeBranchId }: TakeOrd
           )}
 
           {tables.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-              {tables.map(table => {
-                const isSelected = tableNumber === table.table_number;
-                const statusColors = {
-                  free: 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30',
-                  occupied: 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30',
-                  payment_requested: 'bg-amber-500/5 border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/30',
-                };
+            <div className="space-y-4">
+              {/* Pedidos Para Llevar Section */}
+              {(() => {
+                const takeawayTables = tables.filter(t => t.table_number === 'PARA LLEVAR' || t.table_number.startsWith('PARA LLEVAR '));
+                if (takeawayTables.length === 0) return null;
                 return (
-                  <button
-                    key={table.id}
-                    onClick={() => handleSelectTable(table)}
-                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
-                      isSelected 
-                        ? 'ring-2 ring-emerald-500 bg-zinc-900/60 border-emerald-500 scale-[1.03] shadow-lg shadow-black/40' 
-                        : ''
-                    } ${statusColors[table.status || 'free']} ${table.table_number === 'PARA LLEVAR' ? 'col-span-3 sm:col-span-4 md:col-span-6 bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20 py-4' : ''}`}
-                  >
-                    <span className="text-xs font-bold block">{table.table_number === 'PARA LLEVAR' ? '🛍️ PEDIDOS PARA LLEVAR' : `Mesa ${table.table_number}`}</span>
-                    <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-90 block">
-                      {table.status === 'free' && '🟢 Libre'}
-                      {table.status === 'occupied' && '🔴 Ocupada'}
-                      {table.status === 'payment_requested' && '🟡 Cuenta'}
-                    </span>
-                  </button>
+                  <div className="space-y-2 pb-2 border-b border-zinc-900/60">
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-blue-400 block mb-2">🛍️ Pedidos para Llevar</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {takeawayTables.map(table => {
+                        const isSelected = tableNumber === table.table_number;
+                        const statusColors = {
+                          free: 'bg-blue-500/5 border-blue-500/20 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/30',
+                          occupied: 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30',
+                          payment_requested: 'bg-amber-500/5 border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/30',
+                        };
+                        const displayName = table.table_number === 'PARA LLEVAR' ? 'PEDIDOS PARA LLEVAR' : `PEDIDOS PARA LLEVAR ${table.table_number.replace('PARA LLEVAR ', '')}`;
+                        return (
+                          <button
+                            key={table.id}
+                            onClick={() => handleSelectTable(table)}
+                            className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
+                              isSelected 
+                                ? 'ring-2 ring-blue-500 bg-zinc-900/60 border-blue-500 scale-[1.03] shadow-lg shadow-black/40' 
+                                : ''
+                            } ${statusColors[table.status || 'free']}`}
+                          >
+                            <span className="text-xs font-bold block">🛍️ {displayName}</span>
+                            <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-90 block">
+                              {table.status === 'free' && '🟢 Libre'}
+                              {table.status === 'occupied' && '🔴 Ocupada'}
+                              {table.status === 'payment_requested' && '🟡 Cuenta'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
-              })}
+              })()}
+
+              {/* Mesas Comer Allí Section */}
+              {(() => {
+                const dineInTables = tables.filter(t => t.table_number !== 'PARA LLEVAR' && !t.table_number.startsWith('PARA LLEVAR '));
+                if (dineInTables.length === 0) return null;
+                return (
+                  <div className="space-y-2 pt-2">
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-emerald-400 block mb-2">🍽️ Mesas para Comer Allí</span>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                      {dineInTables.map(table => {
+                        const isSelected = tableNumber === table.table_number;
+                        const statusColors = {
+                          free: 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30',
+                          occupied: 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30',
+                          payment_requested: 'bg-amber-500/5 border-amber-500/20 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/30',
+                        };
+                        return (
+                          <button
+                            key={table.id}
+                            onClick={() => handleSelectTable(table)}
+                            className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 ${
+                              isSelected 
+                                ? 'ring-2 ring-emerald-500 bg-zinc-900/60 border-emerald-500 scale-[1.03] shadow-lg shadow-black/40' 
+                                : ''
+                            } ${statusColors[table.status || 'free']}`}
+                          >
+                            <span className="text-xs font-bold block">{`Mesa ${table.table_number}`}</span>
+                            <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-90 block">
+                              {table.status === 'free' && '🟢 Libre'}
+                              {table.status === 'occupied' && '🔴 Ocupada'}
+                              {table.status === 'payment_requested' && '🟡 Cuenta'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="py-6 text-center flex flex-col items-center justify-center gap-2 border border-dashed border-zinc-900 rounded-2xl">
